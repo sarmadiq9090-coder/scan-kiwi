@@ -39,13 +39,9 @@ class DocumentStore(root: File) {
     fun save(doc: ScanDocument): ScanDocument {
         val d = dir(doc.id).apply { mkdirs() }
         val updated = doc.copy(modified = System.currentTimeMillis())
-        val tmp = File(d, "doc.json.tmp")
-        tmp.writeText(updated.toJson().toString())
-        val target = metaFile(doc.id)
-        if (!tmp.renameTo(target)) {
-            target.delete()
-            tmp.renameTo(target)
-        }
+        // Atomic and synced: a crash never leaves a half-written doc.json (which
+        // would hide the whole document).
+        writeAtomically(File(d, "doc.json")) { it.write(updated.toJson().toString().toByteArray(Charsets.UTF_8)) }
         return updated
     }
 
@@ -79,18 +75,26 @@ class DocumentStore(root: File) {
 
     /**
      * Deletes page files that no document references any more (pages deleted
-     * or retaken in an earlier session; kept until now so Undo could restore them).
+     * or retaken in an earlier session; kept until now so Undo could restore them)
+     * and temporary files left by an interrupted write.
+     *
+     * Only files last modified before [olderThan] are touched: a page that an
+     * import or capture started in this session is writing (not yet listed in
+     * doc.json) must never be taken for garbage.
      */
     @Synchronized
-    fun collectGarbage(): Int {
+    fun collectGarbage(olderThan: Long = Long.MAX_VALUE): Int {
         var removed = 0
         for (dir in base.listFiles() ?: emptyArray()) {
             if (!dir.isDirectory) continue
             val doc = runCatching { load(dir.name) }.getOrNull() ?: continue
             val live = doc.pages.map { it.id }.toSet()
             for (f in dir.listFiles() ?: emptyArray()) {
+                if (f.lastModified() >= olderThan) continue
+                if (f.name == "doc.json.tmp") { if (f.delete()) removed++; continue }
                 val m = PAGE_FILE.matchEntire(f.name) ?: continue
-                if (m.groupValues[1] !in live && f.delete()) removed++
+                val leftover = m.groupValues[4].isNotEmpty()
+                if ((leftover || m.groupValues[1] !in live) && f.delete()) removed++
             }
         }
         return removed
@@ -105,7 +109,7 @@ class DocumentStore(root: File) {
         val arr = JSONArray()
         for (w in words) arr.put(JSONArray().put(w.text).put(w.left).put(w.top).put(w.right).put(w.bottom))
         val o = JSONObject().put("revision", page.revision).put("words", arr)
-        ocrFile(docId, page.id).writeText(o.toString())
+        writeAtomically(ocrFile(docId, page.id)) { it.write(o.toString().toByteArray(Charsets.UTF_8)) }
     }
 
     /** Cached OCR words if they match the page's current revision. */
@@ -128,7 +132,8 @@ class DocumentStore(root: File) {
         doc.pages.joinToString(" ") { p -> loadOcr(doc.id, p)?.joinToString(" ") { it.text } ?: "" }
 
     companion object {
-        private val PAGE_FILE = Regex("p_([0-9a-f]+)(_out|_thumb|_ocr)?\\.(jpg|json|tmp)")
+        /** Page files, plus the ".tmp" an interrupted atomic write leaves behind (group 4). */
+        private val PAGE_FILE = Regex("p_([0-9a-f]+)(_out|_thumb|_ocr)?\\.(jpg|json)(\\.tmp)?")
 
         fun newId(): String = UUID.randomUUID().toString().replace("-", "").take(16)
     }

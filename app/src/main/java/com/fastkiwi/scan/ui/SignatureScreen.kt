@@ -65,6 +65,7 @@ import com.fastkiwi.scan.R
 import com.fastkiwi.scan.data.Stamp
 import com.fastkiwi.scan.imaging.BitmapIO
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.max
 import kotlin.math.min
@@ -74,6 +75,7 @@ import kotlin.math.min
 @Composable
 fun SignatureScreen(vm: AppViewModel, docId: String, pageId: String) {
     var version by remember { mutableIntStateOf(0) }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
     var drawing by remember { mutableStateOf(!vm.store.signatureFile.exists()) }
     val signature by produceState<ImageBitmap?>(null, version) {
         value = withContext(Dispatchers.IO) { BitmapIO.decodePng(vm.store.signatureFile)?.asImageBitmap() }
@@ -89,10 +91,13 @@ fun SignatureScreen(vm: AppViewModel, docId: String, pageId: String) {
         Column(Modifier.padding(padding).fillMaxSize().padding(16.dp)) {
             if (drawing || signature == null) {
                 SignaturePad(onCancel = if (signature != null) ({ drawing = false }) else null) { bmp ->
-                    BitmapIO.savePng(bmp, vm.store.signatureFile)
-                    bmp.recycle()
-                    version++
-                    drawing = false
+                    // PNG encoding of a large pad takes a while: keep it off the main thread.
+                    scope.launch {
+                        withContext(Dispatchers.IO) { BitmapIO.savePng(bmp, vm.store.signatureFile) }
+                        bmp.recycle()
+                        version++
+                        drawing = false
+                    }
                 }
             } else if (page != null) {
                 Placement(vm, docId, page.id, page.revision, signature!!, hasStamps = page.stamps.isNotEmpty(), onRedraw = { drawing = true })

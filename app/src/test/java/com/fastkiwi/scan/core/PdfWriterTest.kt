@@ -88,6 +88,123 @@ class PdfWriterTest {
         }
     }
 
+    /**
+     * Strict structure check that does not rely on a lenient reader (PDFBox silently
+     * rebuilds a broken xref): every xref offset must point at "N 0 obj", and
+     * startxref at the xref table.
+     */
+    private fun assertXrefExact(bytes: ByteArray) {
+        val text = String(bytes, Charsets.ISO_8859_1)
+        val startxref = Regex("startxref\n(\\d+)\n%%EOF\n$").find(text)!!.groupValues[1].toInt()
+        assertTrue(text.startsWith("xref\n", startxref))
+        val header = Regex("xref\n0 (\\d+)\n").find(text, startxref)!!
+        val count = header.groupValues[1].toInt()
+        var pos = header.range.last + 1
+        for (id in 0 until count) {
+            val entry = text.substring(pos, pos + 20)
+            assertEquals("entry $id is 20 bytes", '\n', entry[19])
+            if (id == 0) assertEquals("0000000000 65535 f \n", entry)
+            else {
+                val off = entry.substring(0, 10).toInt()
+                assertTrue("object $id at $off", text.startsWith("$id 0 obj\n", off))
+            }
+            pos += 20
+        }
+        assertTrue(text.startsWith("trailer\n<< /Size $count ", pos))
+    }
+
+    @Test
+    fun xrefOffsetsAreExactPlainEncryptedAndStreamed() {
+        assertXrefExact(build(PageSize.A4))
+        assertXrefExact(build(PageSize.A4, password = "Kiwi-123!"))
+        val wr = PdfWriter(PageSize.FIT, "t", null, font)
+        val bos = ByteArrayOutputStream()
+        wr.begin(bos)
+        wr.addPage(PdfPage(jpeg(), 150f))
+        wr.addPage(PdfPage(bitonal(200, 100), 150f, listOf(OcrWord("Kiwi", 10, 10, 60, 30))))
+        wr.finish()
+        assertXrefExact(bos.toByteArray())
+        Loader.loadPDF(bos.toByteArray()).use { assertEquals(2, it.numberOfPages) }
+    }
+
+    /**
+     * Regression (1.1.1): 1.1.0 kept every encoded page in memory until the end,
+     * so a 200-page "High" export (~1.5 MB per page) ran out of memory on 2-3 GB
+     * phones. In streaming mode a page is written at once and not retained.
+     */
+    @Test
+    fun streamedPagesAreNotRetained() {
+        val wr = PdfWriter(PageSize.A4, "t")
+        wr.begin(ByteArrayOutputStream())
+        var bytes: ByteArray? = colorJpeg.copyOf()
+        val ref = java.lang.ref.WeakReference(bytes)
+        wr.addPage(PdfPage(PdfImage.Jpeg(1240, 1754, bytes!!, 3), 150f))
+        bytes = null
+        for (i in 0 until 20) {
+            if (ref.get() == null) break
+            System.gc()
+            Thread.sleep(20)
+        }
+        assertTrue("page image still referenced by the writer", ref.get() == null)
+        wr.finish()
+    }
+
+    @Test
+    fun twoHundredPageDocumentIsValid() {
+        val file = File.createTempFile("kiwi200", ".pdf")
+        try {
+            val wr = PdfWriter(PageSize.A4, "200", "pw", font)
+            file.outputStream().buffered().use { out ->
+                wr.begin(out)
+                for (i in 0 until 200) {
+                    val words = if (i % 50 == 0) listOf(OcrWord("Page$i", 100, 100, 300, 140)) else emptyList()
+                    wr.addPage(PdfPage(if (i % 2 == 0) jpeg() else bitonal(600, 800), 150f, words))
+                }
+                wr.finish()
+            }
+            assertXrefExact(file.readBytes())
+            Loader.loadPDF(file, "pw").use { doc ->
+                assertEquals(200, doc.numberOfPages)
+                assertTrue(PDFTextStripper().getText(doc).contains("Page150"))
+            }
+        } finally {
+            file.delete()
+        }
+    }
+
+    /** Arabic words mixed with digits and Latin keep their logical order on extraction. */
+    @Test
+    fun arabicTextLayerKeepsLogicalOrder() {
+        val wr = PdfWriter(PageSize.A4, "t", null, font)
+        val words = listOf(
+            OcrWord("فاتورة", 700, 100, 900, 140),
+            OcrWord("رقم", 500, 100, 650, 140),
+            OcrWord("2026", 300, 100, 450, 140),
+        )
+        wr.addPage(PdfPage(jpeg(), 150f, words))
+        val bos = ByteArrayOutputStream()
+        wr.write(bos)
+        Loader.loadPDF(bos.toByteArray()).use { doc ->
+            val text = PDFTextStripper().getText(doc)
+            assertTrue("text layer: $text", text.contains("فاتورة"))
+            assertTrue("text layer: $text", text.contains("رقم"))
+            assertTrue("text layer: $text", text.contains("2026"))
+        }
+        assertEquals("ةروتاف", wr.visualOrder("فاتورة"))
+        assertEquals("Kiwi", wr.visualOrder("Kiwi"))
+    }
+
+    /** Empty password means "no protection"; the writer itself still handles one correctly. */
+    @Test
+    fun emptyUserPasswordOpensWithoutPassword() {
+        val bytes = build(PageSize.A4, password = "")
+        Loader.loadPDF(bytes).use { doc ->
+            assertTrue(doc.isEncrypted)
+            assertEquals(2, doc.numberOfPages)
+            assertTrue(PDFTextStripper().getText(doc).contains("Hello"))
+        }
+    }
+
     @Test
     fun jpegComponentCount() {
         val gray = javaClass.getResourceAsStream("/gray.jpg")!!.readBytes()

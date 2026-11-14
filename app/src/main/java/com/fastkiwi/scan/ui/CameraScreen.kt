@@ -194,20 +194,10 @@ private fun CameraContent(vm: AppViewModel, initial: Screen.Camera, onClose: () 
                 vm.addCapture(target, bytes, rotation, liveQuad) { r ->
                     capturing = false
                     cooldownUntil = System.currentTimeMillis() + 2000
-                    // Open the outline editor when detection was doubtful, or after a manual
-                    // shot when "review after capture" is on (the owner's v1.0 feedback).
-                    val review = r?.pageId != null && !target.idCard &&
-                        (r.needsReview || (!auto && vm.settings.reviewAfterCapture))
                     if (r == null) {
                         status = R.string.status_error
-                    } else if (target.retakePageId != null) {
-                        vm.back()
-                        if (review) vm.open(Screen.Crop(r.docId, r.pageId!!))
-                    } else {
-                        val added = r.pageId != null
-                        vm.replaceTop(target.copy(docId = r.docId, captured = target.captured + if (added) 1 else 0))
-                        if (added) status = R.string.status_added
-                        if (review) vm.open(Screen.Crop(r.docId, r.pageId!!))
+                    } else if (vm.afterCapture(target, r, auto)) {
+                        status = R.string.status_added
                     }
                 }
             }

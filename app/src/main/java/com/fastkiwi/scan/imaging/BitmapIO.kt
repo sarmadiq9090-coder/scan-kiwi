@@ -12,8 +12,9 @@ import com.fastkiwi.scan.core.ImageFilters
 import com.fastkiwi.scan.core.Pt
 import com.fastkiwi.scan.core.Quad
 import com.fastkiwi.scan.core.QuadDetector
+import com.fastkiwi.scan.data.writeAtomically
 import java.io.File
-import java.io.FileOutputStream
+import java.io.IOException
 import kotlin.math.max
 
 object BitmapIO {
@@ -83,12 +84,16 @@ object BitmapIO {
         return out
     }
 
-    fun saveJpeg(bmp: Bitmap, file: File, quality: Int) {
-        file.parentFile?.mkdirs()
-        val tmp = File(file.parentFile, file.name + ".tmp")
-        FileOutputStream(tmp).use { bmp.compress(Bitmap.CompressFormat.JPEG, quality, it) }
-        if (!tmp.renameTo(file)) {
-            file.delete(); tmp.renameTo(file)
+    /**
+     * Saves atomically. compress() reports a failed write (full disk, I/O error)
+     * only through its result; ignoring it used to rename a truncated JPEG over
+     * the good page source.
+     */
+    fun saveJpeg(bmp: Bitmap, file: File, quality: Int) = save(bmp, file, Bitmap.CompressFormat.JPEG, quality)
+
+    private fun save(bmp: Bitmap, file: File, format: Bitmap.CompressFormat, quality: Int) {
+        writeAtomically(file) { out ->
+            if (!bmp.compress(format, quality, out)) throw IOException("could not write ${file.name}")
         }
     }
 
@@ -96,12 +101,7 @@ object BitmapIO {
     fun decodePng(file: File): Bitmap? =
         if (file.exists()) BitmapFactory.decodeFile(file.absolutePath, BitmapFactory.Options().apply { inPreferredConfig = Bitmap.Config.ARGB_8888 }) else null
 
-    fun savePng(bmp: Bitmap, file: File) {
-        file.parentFile?.mkdirs()
-        val tmp = File(file.parentFile, file.name + ".tmp")
-        FileOutputStream(tmp).use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
-        if (!tmp.renameTo(file)) { file.delete(); tmp.renameTo(file) }
-    }
+    fun savePng(bmp: Bitmap, file: File) = save(bmp, file, Bitmap.CompressFormat.PNG, 100)
 
     /** Finds the page outline in a bitmap; returns normalised corners or null. */
     fun detect(bmp: Bitmap): Quad? = detectPage(bmp)?.quad

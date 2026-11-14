@@ -105,6 +105,27 @@ class CropGeometryTest {
         assertTrue(CropGeometry.validate(line, w, h) != null)
     }
 
+    /**
+     * Regression (1.1.1): dragging the top side down past the bottom side gives a
+     * convex, non-crossing but mirrored (counter-clockwise) outline. 1.1.0 accepted
+     * it and the warp produced an upside-down mirror image of the page.
+     */
+    @Test
+    fun sideDraggedPastOppositeSideIsRejectedAndFixable() {
+        val r = Quad(Pt(200f, 300f), Pt(800f, 300f), Pt(800f, 600f), Pt(200f, 600f))
+        val flipped = CropGeometry.dragEdge(r, 0, Pt(0f, 500f), w, h) // top side now at y = 800
+        assertEquals(800f, flipped.tl.y, 1e-3f)
+        assertTrue(flipped.isConvex())
+        assertEquals(QuadProblem.CROSSED, CropGeometry.validate(flipped, w, h))
+        // Same thing in the normalised space the crop screen validates in.
+        assertEquals(QuadProblem.CROSSED, CropGeometry.validate(flipped.scale(1f / w, 1f / h), 1f, 1f, 0.005f))
+        // "Fix" restores the clockwise order, so the page is no longer mirrored.
+        val fixed = CropGeometry.fix(flipped, w, h)!!
+        assertNull(CropGeometry.validate(fixed, w, h))
+        assertTrue(CropGeometry.signedArea(fixed) > 0f)
+        assertEquals(Pt(200f, 600f), fixed.tl)
+    }
+
     @Test
     fun fixReordersCrossedOutline() {
         val crossed = Quad(q.tl, q.br, q.tr, q.bl)

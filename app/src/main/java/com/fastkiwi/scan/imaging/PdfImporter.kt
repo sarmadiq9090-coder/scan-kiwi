@@ -6,7 +6,6 @@ import android.graphics.Color
 import android.graphics.pdf.PdfRenderer
 import android.net.Uri
 import kotlin.math.max
-import kotlin.math.min
 
 /**
  * Reads pages of an existing PDF with the platform PdfRenderer (no extra
@@ -16,7 +15,7 @@ import kotlin.math.min
 object PdfImporter {
     class ProtectedPdfException : Exception()
 
-    fun importPages(ctx: Context, uri: Uri, onPage: (Bitmap) -> Unit): Int {
+    suspend fun importPages(ctx: Context, uri: Uri, onPage: suspend (Bitmap) -> Unit): Int {
         val pfd = ctx.contentResolver.openFileDescriptor(uri, "r") ?: return 0
         pfd.use {
             val renderer = try {
@@ -39,7 +38,7 @@ object PdfImporter {
                         onPage(bmp)
                     }
                 }
-                return min(r.pageCount, Int.MAX_VALUE)
+                return r.pageCount
             }
         }
     }

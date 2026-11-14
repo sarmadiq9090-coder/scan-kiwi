@@ -143,6 +143,8 @@
     <string name="undo">Undo</string>
     <string name="msg_undone">Undone</string>
     <string name="msg_page_deleted">Page deleted</string>
+    <string name="msg_nothing_imported">Nothing was imported: the chosen files are not readable images or PDFs.</string>
+    <string name="msg_ocr_unavailable">Text recognition (OCR) could not run on this phone, so the file was made without searchable text.</string>
     <string name="signature">Signature</string>
     <string name="signature_pad_desc">Signature drawing pad</string>
     <string name="signature_draw_hint">Draw your signature with your finger. It is stored only on this phone.</string>

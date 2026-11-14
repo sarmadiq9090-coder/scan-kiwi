@@ -44,114 +44,137 @@ class PdfWriter(
     private val glyphlessFont: ByteArray? = null,
     private val random: SecureRandom = SecureRandom(),
 ) {
-    private val pages = ArrayList<PdfPage>()
+    /** Pages buffered by [addPage] before [begin] (the one-shot [write] API used by tests). */
+    private val pending = ArrayList<PdfPage>()
 
-    fun addPage(page: PdfPage) {
-        pages.add(page)
+    // Streaming state: after [begin], every page is written at once and dropped, so a
+    // 200-page document never holds more than one page image in memory.
+    private var w: Writer? = null
+    private var crypt: PdfCrypt? = null
+    private val pageIds = ArrayList<Int>()
+    /** Object numbering: 1 catalog, 2 pages, 3 info; the rest in write order. */
+    private var nextId = 4
+    private var fontId = 0
+
+    /** Starts a streamed file; pages passed to [addPage] afterwards go straight to [out]. */
+    fun begin(out: OutputStream) {
+        check(w == null) { "already started" }
+        val wr = Writer(out)
+        w = wr
+        crypt = password?.let { PdfCrypt.create(it, random) }
+        wr.raw("%PDF-1.7\n%âãÏÓ\n".toByteArray(Charsets.ISO_8859_1))
     }
 
+    fun addPage(page: PdfPage) {
+        val wr = w
+        if (wr == null) pending.add(page) else writePage(wr, page)
+    }
+
+    /** Writes everything at once: buffered pages, then the document structure. */
     fun write(out: OutputStream) {
-        val w = Writer(out)
-        val crypt = password?.let { PdfCrypt.create(it, random) }
-        val fileId = ByteArray(16).also { random.nextBytes(it) }
-        val hasText = pages.any { it.words.isNotEmpty() } && glyphlessFont != null
+        begin(out)
+        val wr = w!!
+        for (p in pending) writePage(wr, p)
+        pending.clear()
+        finish()
+    }
 
-        w.raw("%PDF-1.7\n%âãÏÓ\n".toByteArray(Charsets.ISO_8859_1))
-
-        // Object numbering: 1 catalog, 2 pages, 3 info, [4..9 font], then pages.
+    /** Ends a streamed file: fonts, page tree, catalog, info, encryption, xref, trailer. */
+    fun finish() {
+        val wr = checkNotNull(w) { "begin() first" }
+        val crypt = crypt
         val catalogId = 1
         val pagesId = 2
         val infoId = 3
-        var nextId = 4
-        var fontId = 0
-        var cidFontId = 0; var descId = 0; var fileId2 = 0; var cidMapId = 0; var toUniId = 0
-        if (hasText) {
-            fontId = nextId++; cidFontId = nextId++; descId = nextId++
-            fileId2 = nextId++; cidMapId = nextId++; toUniId = nextId++
-        }
-        val pageIds = IntArray(pages.size)
-        val contentIds = IntArray(pages.size)
-        val imageIds = IntArray(pages.size)
-        for (i in pages.indices) {
-            pageIds[i] = nextId++; contentIds[i] = nextId++; imageIds[i] = nextId++
-        }
-        val encryptId = if (crypt != null) nextId++ else 0
 
-        val ext = if (crypt != null) " /Extensions << /ADBE << /BaseVersion /1.7 /ExtensionLevel 8 >> >>" else ""
-        w.obj(catalogId, "<< /Type /Catalog /Pages $pagesId 0 R$ext /ViewerPreferences << /DisplayDocTitle true >> >>")
-        w.obj(pagesId, "<< /Type /Pages /Count ${pages.size} /Kids [${pageIds.joinToString(" ") { "$it 0 R" }}] >>")
-        val titleStr = pdfString(utf16(title), crypt)
-        val producer = pdfString(utf16("Kiwi Scan"), crypt)
-        w.obj(infoId, "<< /Title $titleStr /Producer $producer /Creator $producer >>")
-
-        if (hasText) {
-            w.obj(fontId, "<< /Type /Font /Subtype /Type0 /BaseFont /GlyphLessFont /Encoding /Identity-H " +
+        if (fontId != 0) {
+            val font = glyphlessFont!!
+            val cidFontId = fontId + 1; val descId = fontId + 2; val fileId2 = fontId + 3
+            val cidMapId = fontId + 4; val toUniId = fontId + 5
+            wr.obj(fontId, "<< /Type /Font /Subtype /Type0 /BaseFont /GlyphLessFont /Encoding /Identity-H " +
                 "/DescendantFonts [$cidFontId 0 R] /ToUnicode $toUniId 0 R >>")
-            w.obj(cidFontId, "<< /Type /Font /Subtype /CIDFontType2 /BaseFont /GlyphLessFont " +
+            wr.obj(cidFontId, "<< /Type /Font /Subtype /CIDFontType2 /BaseFont /GlyphLessFont " +
                 "/CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> " +
                 "/FontDescriptor $descId 0 R /DW ${CHAR_WIDTH_UNITS} /CIDToGIDMap $cidMapId 0 R >>")
-            w.obj(descId, "<< /Type /FontDescriptor /FontName /GlyphLessFont /Flags 5 /FontBBox [0 0 500 1000] " +
+            wr.obj(descId, "<< /Type /FontDescriptor /FontName /GlyphLessFont /Flags 5 /FontBBox [0 0 500 1000] " +
                 "/ItalicAngle 0 /Ascent 1000 /Descent 0 /CapHeight 1000 /StemV 80 /FontFile2 $fileId2 0 R >>")
-            w.stream(fileId2, "/Length1 ${glyphlessFont!!.size}", glyphlessFont, crypt, deflate = true)
+            wr.stream(fileId2, "/Length1 ${font.size}", font, crypt, deflate = true)
             // Every CID maps to glyph 1 of the glyphless font.
             val map = ByteArray(65536 * 2)
             for (i in 0 until 65536) map[i * 2 + 1] = 1
-            w.stream(cidMapId, "", map, crypt, deflate = true)
-            w.stream(toUniId, "", TO_UNICODE.toByteArray(Charsets.ISO_8859_1), crypt, deflate = true)
+            wr.stream(cidMapId, "", map, crypt, deflate = true)
+            wr.stream(toUniId, "", TO_UNICODE.toByteArray(Charsets.ISO_8859_1), crypt, deflate = true)
         }
 
-        for ((i, p) in pages.withIndex()) {
-            val img = p.image
-            val imgWpt = img.width * 72f / p.dpi
-            val imgHpt = img.height * 72f / p.dpi
-            val (pw, ph) = when (pageSize) {
-                PageSize.FIT -> imgWpt to imgHpt
-                else -> {
-                    val landscape = img.width > img.height
-                    if (landscape) pageSize.heightPt to pageSize.widthPt else pageSize.widthPt to pageSize.heightPt
-                }
-            }
-            // Fit the image inside the page, centred, keeping aspect ratio.
-            val s = minOf(pw / img.width, ph / img.height)
-            val dw = img.width * s
-            val dh = img.height * s
-            val ox = (pw - dw) / 2f
-            val oy = (ph - dh) / 2f
+        val ext = if (crypt != null) " /Extensions << /ADBE << /BaseVersion /1.7 /ExtensionLevel 8 >> >>" else ""
+        wr.obj(catalogId, "<< /Type /Catalog /Pages $pagesId 0 R$ext /ViewerPreferences << /DisplayDocTitle true >> >>")
+        wr.obj(pagesId, "<< /Type /Pages /Count ${pageIds.size} /Kids [${pageIds.joinToString(" ") { "$it 0 R" }}] >>")
+        val titleStr = pdfString(utf16(title), crypt)
+        val producer = pdfString(utf16("Kiwi Scan"), crypt)
+        wr.obj(infoId, "<< /Title $titleStr /Producer $producer /Creator $producer >>")
+        val encryptId = if (crypt != null) nextId++ else 0
+        if (crypt != null) wr.obj(encryptId, crypt.encryptDictionary())
 
-            val font = if (hasText && p.words.isNotEmpty()) " /Font << /F1 $fontId 0 R >>" else ""
-            w.obj(pageIds[i], "<< /Type /Page /Parent $pagesId 0 R /MediaBox [0 0 ${f(pw)} ${f(ph)}] " +
-                "/Resources << /XObject << /Im0 ${imageIds[i]} 0 R >>$font >> /Contents ${contentIds[i]} 0 R >>")
-
-            val cs = StringBuilder()
-            cs.append("q ${f(dw)} 0 0 ${f(dh)} ${f(ox)} ${f(oy)} cm /Im0 Do Q\n")
-            if (font.isNotEmpty()) appendText(cs, p.words, s, ox, oy, img.height)
-            w.stream(contentIds[i], "", cs.toString().toByteArray(Charsets.ISO_8859_1), crypt, deflate = true)
-
-            when (img) {
-                is PdfImage.Jpeg -> {
-                    val space = if (img.components == 1) "/DeviceGray" else "/DeviceRGB"
-                    w.stream(imageIds[i], "/Type /XObject /Subtype /Image /Width ${img.width} /Height ${img.height} " +
-                        "/ColorSpace $space /BitsPerComponent 8 /Filter /DCTDecode", img.bytes, crypt, deflate = false)
-                }
-                is PdfImage.Bitonal -> {
-                    w.stream(imageIds[i], "/Type /XObject /Subtype /Image /Width ${img.width} /Height ${img.height} " +
-                        "/ColorSpace /DeviceGray /BitsPerComponent 1", img.bits, crypt, deflate = true)
-                }
-            }
-        }
-
-        if (crypt != null) w.obj(encryptId, crypt.encryptDictionary())
-
-        val xrefPos = w.pos
+        val fileId = ByteArray(16).also { random.nextBytes(it) }
+        val xrefPos = wr.pos
         val sb = StringBuilder()
         sb.append("xref\n0 ${nextId}\n0000000000 65535 f \n")
-        for (id in 1 until nextId) sb.append(String.format(Locale.ROOT, "%010d 00000 n \n", w.offsets[id]))
+        for (id in 1 until nextId) sb.append(String.format(Locale.ROOT, "%010d 00000 n \n", wr.offsets.getValue(id)))
         val idHex = hex(fileId)
         sb.append("trailer\n<< /Size $nextId /Root $catalogId 0 R /Info $infoId 0 R /ID [<$idHex> <$idHex>]")
         if (crypt != null) sb.append(" /Encrypt $encryptId 0 R")
         sb.append(" >>\nstartxref\n$xrefPos\n%%EOF\n")
-        w.raw(sb.toString().toByteArray(Charsets.ISO_8859_1))
-        out.flush()
+        wr.raw(sb.toString().toByteArray(Charsets.ISO_8859_1))
+        wr.flush()
+    }
+
+    private fun writePage(wr: Writer, p: PdfPage) {
+        val crypt = crypt
+        val hasText = p.words.isNotEmpty() && glyphlessFont != null
+        // The font objects get their numbers with the first page that needs them.
+        if (hasText && fontId == 0) { fontId = nextId; nextId += 6 }
+        val pageId = nextId++
+        val contentId = nextId++
+        val imageId = nextId++
+        pageIds.add(pageId)
+
+        val img = p.image
+        val imgWpt = img.width * 72f / p.dpi
+        val imgHpt = img.height * 72f / p.dpi
+        val (pw, ph) = when (pageSize) {
+            PageSize.FIT -> imgWpt to imgHpt
+            else -> {
+                val landscape = img.width > img.height
+                if (landscape) pageSize.heightPt to pageSize.widthPt else pageSize.widthPt to pageSize.heightPt
+            }
+        }
+        // Fit the image inside the page, centred, keeping aspect ratio.
+        val s = minOf(pw / img.width, ph / img.height)
+        val dw = img.width * s
+        val dh = img.height * s
+        val ox = (pw - dw) / 2f
+        val oy = (ph - dh) / 2f
+
+        val font = if (hasText) " /Font << /F1 $fontId 0 R >>" else ""
+        wr.obj(pageId, "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${f(pw)} ${f(ph)}] " +
+            "/Resources << /XObject << /Im0 $imageId 0 R >>$font >> /Contents $contentId 0 R >>")
+
+        val cs = StringBuilder()
+        cs.append("q ${f(dw)} 0 0 ${f(dh)} ${f(ox)} ${f(oy)} cm /Im0 Do Q\n")
+        if (hasText) appendText(cs, p.words, s, ox, oy, img.height)
+        wr.stream(contentId, "", cs.toString().toByteArray(Charsets.ISO_8859_1), crypt, deflate = true)
+
+        when (img) {
+            is PdfImage.Jpeg -> {
+                val space = if (img.components == 1) "/DeviceGray" else "/DeviceRGB"
+                wr.stream(imageId, "/Type /XObject /Subtype /Image /Width ${img.width} /Height ${img.height} " +
+                    "/ColorSpace $space /BitsPerComponent 8 /Filter /DCTDecode", img.bytes, crypt, deflate = false)
+            }
+            is PdfImage.Bitonal -> {
+                wr.stream(imageId, "/Type /XObject /Subtype /Image /Width ${img.width} /Height ${img.height} " +
+                    "/ColorSpace /DeviceGray /BitsPerComponent 1", img.bits, crypt, deflate = true)
+            }
+        }
     }
 
     /** Invisible (render mode 3) text placed over each word's box, scaled to fit. */
@@ -206,6 +229,8 @@ class PdfWriter(
         fun raw(b: ByteArray) {
             out.write(b); pos += b.size
         }
+
+        fun flush() = out.flush()
 
         fun obj(id: Int, body: String) {
             offsets[id] = pos

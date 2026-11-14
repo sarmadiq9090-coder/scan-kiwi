@@ -144,6 +144,8 @@
     <string name="undo">تراجع</string>
     <string name="msg_undone">تم التراجع</string>
     <string name="msg_page_deleted">حُذفت الصفحة</string>
+    <string name="msg_nothing_imported">لم يُستورد شيء: الملفات المختارة ليست صورًا أو ملفات PDF قابلة للقراءة.</string>
+    <string name="msg_ocr_unavailable">تعذّر تشغيل قراءة النص (OCR) على هذا الهاتف، فحُفظ الملف دون نص قابل للبحث.</string>
     <string name="signature">توقيع</string>
     <string name="signature_pad_desc">لوحة رسم التوقيع</string>
     <string name="signature_draw_hint">ارسم توقيعك بإصبعك. يُحفظ داخل الهاتف فقط.</string>

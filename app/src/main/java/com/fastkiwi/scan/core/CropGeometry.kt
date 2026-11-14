@@ -132,8 +132,23 @@ object CropGeometry {
         val p = q.points
         if (segmentsCross(p[0], p[1], p[2], p[3]) || segmentsCross(p[1], p[2], p[3], p[0])) return QuadProblem.CROSSED
         if (!q.isConvex()) return QuadProblem.CONCAVE
+        // Convex but counter-clockwise: a side was dragged past the opposite side,
+        // so TL/TR now sit below BL/BR. The warp would mirror the page. "Fix" re-orders it.
+        if (signedArea(q) < 0f) return QuadProblem.CROSSED
         if (q.area() < minAreaFraction * w * h) return QuadProblem.TOO_SMALL
         return null
+    }
+
+    /** Shoelace area with sign: positive for the TL, TR, BR, BL (clockwise on screen, y down) order. */
+    fun signedArea(q: Quad): Float {
+        val p = q.points
+        var s = 0f
+        for (i in 0 until 4) {
+            val a = p[i]
+            val b = p[(i + 1) % 4]
+            s += a.x * b.y - b.x * a.y
+        }
+        return s / 2f
     }
 
     /** Re-orders the corners of a crossed outline; null if that cannot make it valid. */

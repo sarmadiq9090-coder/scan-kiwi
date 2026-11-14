@@ -55,6 +55,15 @@ class AppUiTest {
 
     private val outDir = File("../screenshots").apply { mkdirs() }
 
+    /** Robolectric keeps the app's files between tests of a class: start each test empty. */
+    @org.junit.Before
+    fun cleanStore() {
+        val vm = rule.activity.vm
+        vm.store.list().forEach { vm.store.delete(it.id) }
+        rule.runOnUiThread { vm.refresh() }
+        rule.waitUntil(10_000) { vm.docs.value.isEmpty() }
+    }
+
     /** A "photo": dark desk with a tilted white page carrying text lines and a heading. */
     private fun fakePhoto(w: Int, h: Int, page: List<Pt>, seed: Int): Bitmap {
         val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
@@ -222,6 +231,131 @@ class AppUiTest {
         writeSignature(vm.store.signatureFile)
         rule.runOnUiThread { vm.editPage(doc.id, doc.pages[0].id) { it.copy(stamps = listOf(com.fastkiwi.scan.data.Stamp(0.7f, 0.85f, 0.3f))) } }
         rule.waitUntil(10_000) { vm.store.load(doc.id)!!.pages[0].stamps.size == 1 }
+    }
+
+    private fun waitIdle(vm: com.fastkiwi.scan.ui.AppViewModel) {
+        rule.waitForIdle()
+        // Jobs finish on the main thread (busy--), so keep its queue draining while waiting.
+        rule.waitUntil(30_000) {
+            org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+            vm.busy.value == 0
+        }
+        rule.waitForIdle()
+    }
+
+    /**
+     * Regression (1.1.1): edits ran as parallel jobs that each loaded, changed and
+     * saved their own copy of the document, so one silently overwrote the other.
+     * Two quick rotations gave 90 instead of 180 degrees; the same race dropped a
+     * freshly captured page when a crop was still being applied.
+     */
+    @Test
+    fun parallelEditsAreAllKept() {
+        val doc = seed()
+        val vm = rule.activity.vm
+        val p0 = doc.pages[0].id
+        rule.runOnUiThread {
+            vm.editPage(doc.id, p0) { it.copy(rotation = (it.rotation + 90) % 360) }
+            vm.editPage(doc.id, p0) { it.copy(rotation = (it.rotation + 90) % 360) }
+            vm.editPage(doc.id, doc.pages[1].id) { it.copy(filter = Filter.GRAYSCALE) }
+            vm.deletePage(doc.id, 2)
+        }
+        waitIdle(vm)
+        val now = vm.store.load(doc.id)!!
+        assertEquals(180, now.pages.first { it.id == p0 }.rotation)
+        assertEquals(Filter.GRAYSCALE, now.pages.first { it.id == doc.pages[1].id }.filter)
+        assertEquals(listOf(doc.pages[0].id, doc.pages[1].id), now.pages.map { it.id })
+    }
+
+    /**
+     * Regression (1.1.1): adding a page (camera or import) was not an undo step, so
+     * "Undo" after it restored an older snapshot that did not contain the new page:
+     * the page vanished and its files were deleted at the next start. Undo also
+     * reverted an unrelated rename.
+     */
+    @Test
+    fun undoAfterCaptureOnlyUndoesTheCapture() {
+        val doc = seed()
+        val vm = rule.activity.vm
+        val p0 = doc.pages[0].id
+        rule.runOnUiThread { vm.editPage(doc.id, p0) { it.copy(rotation = 90) } }
+        waitIdle(vm)
+        val photo = fakePhoto(800, 1066, listOf(Pt(120f, 100f), Pt(690f, 120f), Pt(700f, 960f), Pt(100f, 950f)), 7)
+        val jpeg = java.io.ByteArrayOutputStream().also { photo.compress(Bitmap.CompressFormat.JPEG, 90, it) }.toByteArray()
+        var result: com.fastkiwi.scan.ui.CaptureResult? = null
+        rule.runOnUiThread { vm.addCapture(Screen.Camera(doc.id), jpeg, 0, null) { result = it } }
+        waitIdle(vm)
+        assertNotNull(result?.pageId)
+        assertEquals(4, vm.store.load(doc.id)!!.pages.size)
+        rule.runOnUiThread { vm.rename(doc.id, "اسم جديد") }
+        waitIdle(vm)
+        rule.runOnUiThread { vm.undo(doc.id) }
+        waitIdle(vm)
+        val after = vm.store.load(doc.id)!!
+        // Only the capture is undone: the earlier rotation and the new name stay.
+        assertEquals(doc.pages.map { it.id }, after.pages.map { it.id })
+        assertEquals(90, after.pages[0].rotation)
+        assertEquals("اسم جديد", after.name)
+    }
+
+    /**
+     * Regression (1.1.1): importing something unreadable (here: not an image) left an
+     * empty document in the list, opened it, and reported "Imported: 1".
+     */
+    @Test
+    fun importOfUnreadableFileLeavesNoEmptyDocument() {
+        val vm = rule.activity.vm
+        val bad = android.net.Uri.parse("content://com.example.files/notes.jpg")
+        org.robolectric.Shadows.shadowOf(rule.activity.contentResolver)
+            .registerInputStreamSupplier(bad) { java.io.ByteArrayInputStream("not an image".toByteArray()) }
+        val before = vm.store.list().map { it.id }
+        var opened: String? = null
+        rule.runOnUiThread { vm.importUris(null, listOf(bad)) { opened = it } }
+        waitIdle(vm)
+        assertEquals(null, opened)
+        assertEquals("empty document left behind", before, vm.store.list().map { it.id })
+    }
+
+    /**
+     * Regression (1.1.1): when Tesseract cannot start (no native library for the
+     * device, missing model) the whole export failed - every time, since the OCR
+     * switch is remembered. Robolectric has no Tesseract library, like such a phone.
+     */
+    @Test
+    fun exportWithUnavailableOcrStillProducesPdf() {
+        val doc = seed()
+        val ctx = rule.activity
+        var unavailable = false
+        val file = runBlocking {
+            Exporter(ctx, ctx.vm.store).exportPdf(doc, ExportOptions(PageSize.A4, Quality.SMALL, ocr = true), onOcrUnavailable = { unavailable = true }) { _, _ -> }
+        }
+        assertTrue(unavailable)
+        Loader.loadPDF(file).use { assertEquals(3, it.numberOfPages) }
+        assertTrue("no partial file left", file.parentFile!!.listFiles()!!.none { it.name.endsWith(".part") })
+    }
+
+    /**
+     * Regression (1.1.1): a photo finishing after the user had left the camera
+     * replaced the screen on top (the page list) with the camera again.
+     */
+    @Test
+    fun captureFinishingAfterLeavingCameraDoesNotNavigate() {
+        val doc = seed()
+        val vm = rule.activity.vm
+        val cam = Screen.Camera(doc.id)
+        rule.runOnUiThread {
+            vm.open(Screen.Editor(doc.id))
+            vm.open(cam)
+            vm.back() // the user leaves while the photo is still being processed
+            vm.afterCapture(cam, com.fastkiwi.scan.ui.CaptureResult(doc.id, doc.pages[0].id, false), auto = true)
+        }
+        assertEquals(listOf(Screen.Home, Screen.Editor(doc.id)), vm.backStack.toList())
+        // Still on the camera: the counter goes up as before.
+        rule.runOnUiThread {
+            vm.open(cam)
+            assertTrue(vm.afterCapture(cam, com.fastkiwi.scan.ui.CaptureResult(doc.id, doc.pages[0].id, false), auto = true))
+        }
+        assertEquals(Screen.Camera(doc.id, captured = 1), vm.backStack.last())
     }
 
     @Test

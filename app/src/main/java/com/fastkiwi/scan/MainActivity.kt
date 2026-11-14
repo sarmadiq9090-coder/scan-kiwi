@@ -87,9 +87,22 @@ class MainActivity : ComponentActivity() {
             Intent.ACTION_SEND_MULTIPLE -> IntentCompat.getParcelableArrayListExtra(intent, Intent.EXTRA_STREAM, Uri::class.java) ?: emptyList()
             Intent.ACTION_VIEW -> listOfNotNull(intent.data)
             else -> emptyList()
-        }
+        }.filter { isAcceptableIncoming(it, "$packageName.files") }
         if (uris.isNotEmpty()) vm.importUris(null, uris) { id -> vm.open(Screen.Editor(id)) }
     }
+}
+
+/**
+ * Only content:// URIs from other apps are imported. Any app can send us an
+ * intent, and a file:// URI (or one of our own FileProvider URIs) would make Kiwi
+ * Scan read its own private files, such as the signature image or another
+ * document's export, into a new document.
+ */
+internal fun isAcceptableIncoming(uri: Uri, ownAuthority: String): Boolean {
+    if (!"content".equals(uri.scheme, ignoreCase = true)) return false
+    // "10@authority" addresses the same provider in another user profile.
+    val authority = uri.authority?.substringAfterLast('@') ?: return false
+    return authority.isNotEmpty() && !authority.equals(ownAuthority, ignoreCase = true)
 }
 
 @Composable

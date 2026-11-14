@@ -43,9 +43,16 @@ class OcrEngine(private val ctx: Context) {
     @Synchronized
     private fun ensure(lang: OcrLanguage): TessBaseAPI {
         api?.let { if (loaded == lang.code) return it }
+        // Drop the old engine first, so a failed init never leaves a recycled one in use.
         api?.recycle()
+        api = null
+        loaded = null
+        val dir = dataDir()
         val a = TessBaseAPI()
-        check(a.init(dataDir().absolutePath, lang.code, TessBaseAPI.OEM_LSTM_ONLY)) { "Tesseract init failed" }
+        if (!a.init(dir.absolutePath, lang.code, TessBaseAPI.OEM_LSTM_ONLY)) {
+            a.recycle()
+            throw IllegalStateException("Tesseract init failed")
+        }
         a.setPageSegMode(TessBaseAPI.PageSegMode.PSM_AUTO)
         api = a
         loaded = lang.code

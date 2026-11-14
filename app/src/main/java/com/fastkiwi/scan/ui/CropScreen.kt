@@ -92,8 +92,11 @@ fun CropScreen(vm: AppViewModel, docId: String, pageId: String) {
             bmp to runCatching { BitmapIO.detectPage(bmp) }.getOrNull()
         }
     }
-    var corners by remember { mutableStateOf(page?.corners ?: BitmapIO.FULL) }
-    var rotation by remember { mutableIntStateOf(page?.rotation ?: 0) }
+    // Saveable: an unapplied outline survives activity recreation (language or other config change).
+    var corners by androidx.compose.runtime.saveable.rememberSaveable(docId, pageId, stateSaver = QuadSaver) {
+        mutableStateOf(page?.corners ?: BitmapIO.FULL)
+    }
+    var rotation by androidx.compose.runtime.saveable.rememberSaveable(docId, pageId) { mutableIntStateOf(page?.rotation ?: 0) }
     val detected = loaded?.second?.quad
 
     val problem = CropGeometry.validate(corners, 1f, 1f, 0.005f)
@@ -156,6 +159,11 @@ fun CropScreen(vm: AppViewModel, docId: String, pageId: String) {
         }
     }
 }
+
+private val QuadSaver = androidx.compose.runtime.saveable.Saver<Quad, FloatArray>(
+    save = { it.toArray() },
+    restore = { Quad.fromArray(it) },
+)
 
 @Composable
 private fun ToolButton(icon: androidx.compose.ui.graphics.vector.ImageVector, label: Int, enabled: Boolean = true, onClick: () -> Unit) {

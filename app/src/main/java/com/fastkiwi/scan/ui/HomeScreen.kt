@@ -26,7 +26,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FileOpen
-import androidx.compose.material.icons.filled.MergeType
+import androidx.compose.material.icons.automirrored.filled.MergeType
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
@@ -115,7 +115,7 @@ fun HomeScreen(vm: AppViewModel, snackbar: SnackbarHostState) {
                             val ordered = docs.map { it.doc.id }.filter { it in selection }.reversed()
                             vm.merge(ordered) { id -> selection = emptySet(); vm.open(Screen.Editor(id)) }
                         }, enabled = selection.size >= 2) {
-                            Icon(Icons.Filled.MergeType, stringResource(R.string.merge))
+                            Icon(Icons.AutoMirrored.Filled.MergeType, stringResource(R.string.merge))
                         }
                         IconButton(onClick = { deleteIds = selection }) { Icon(Icons.Filled.Delete, stringResource(R.string.delete)) }
                     },

@@ -38,14 +38,16 @@ class Exporter(private val ctx: Context, private val store: DocumentStore) {
 
     private fun exportDir(): File = File(ctx.cacheDir, "exports").apply { mkdirs() }
 
-    /** Removes earlier exports; they only live until shared or saved. */
-    fun clearOldExports() {
-        exportDir().listFiles()?.forEach { it.delete() }
+    /** Removes earlier exports (all, or those last written before [before]); they only live until shared or saved. */
+    fun clearOldExports(before: Long = Long.MAX_VALUE) {
+        exportDir().listFiles()?.forEach { if (it.lastModified() < before) it.delete() }
     }
 
     fun safeName(name: String): String {
         val cleaned = name.replace(Regex("[\\\\/:*?\"<>|\\p{Cntrl}]"), "_").trim().trim('.')
-        return cleaned.ifEmpty { "scan" }.take(80)
+        val name80 = cleaned.ifEmpty { "scan" }.take(80)
+        // Never cut an emoji (surrogate pair) in half: a lone surrogate is not a valid file name.
+        return if (name80.isNotEmpty() && name80.last().isHighSurrogate()) name80.dropLast(1) else name80
     }
 
     private suspend fun pageBitmap(doc: ScanDocument, index: Int): Bitmap? {
@@ -55,35 +57,64 @@ class Exporter(private val ctx: Context, private val store: DocumentStore) {
         return BitmapIO.decodeFile(f)
     }
 
-    suspend fun exportPdf(doc: ScanDocument, opt: ExportOptions, progress: (Int, Int) -> Unit): File {
+    /**
+     * Writes the PDF page by page straight to the file (only one page image is in
+     * memory at a time, so 200-page documents export on 2-3 GB phones).
+     * When OCR cannot run (engine or model missing) the PDF is still made, without
+     * a text layer, and [onOcrUnavailable] is called.
+     */
+    suspend fun exportPdf(
+        doc: ScanDocument,
+        opt: ExportOptions,
+        onOcrUnavailable: () -> Unit = {},
+        progress: (Int, Int) -> Unit,
+    ): File {
         clearOldExports()
         val font = if (opt.ocr) ctx.assets.open("fonts/glyphless.ttf").use { it.readBytes() } else null
         val writer = PdfWriter(opt.pageSize, doc.name, opt.password?.takeIf { it.isNotEmpty() }, font)
-        val ocr = if (opt.ocr) OcrEngine(ctx) else null
+        var ocr = if (opt.ocr) OcrEngine(ctx) else null
+        val out = File(exportDir(), safeName(doc.name) + ".pdf")
+        val part = File(exportDir(), out.name + ".part")
         try {
-            for (i in doc.pages.indices) {
-                progress(i, doc.pages.size)
-                val page = doc.pages[i]
-                val full = pageBitmap(doc, i) ?: continue
-                var words: List<OcrWord> = emptyList()
-                if (ocr != null) {
-                    words = store.loadOcr(doc.id, page) ?: ocr.recognize(full, opt.ocrLanguage).also { store.saveOcr(doc.id, page, it) }
+            part.outputStream().buffered(64 * 1024).use { stream ->
+                writer.begin(stream)
+                for (i in doc.pages.indices) {
+                    progress(i, doc.pages.size)
+                    val page = doc.pages[i]
+                    val full = pageBitmap(doc, i) ?: continue
+                    var words: List<OcrWord> = emptyList()
+                    val engine = ocr
+                    if (engine != null) {
+                        words = store.loadOcr(doc.id, page) ?: try {
+                            engine.recognize(full, opt.ocrLanguage).also { store.saveOcr(doc.id, page, it) }
+                        } catch (e: Throwable) {
+                            // OOM and cancellation keep their meaning; anything else (no native
+                            // library, missing or broken model) means "export without text".
+                            if (e is OutOfMemoryError || e is kotlinx.coroutines.CancellationException) throw e
+                            runCatching { engine.close() }
+                            ocr = null
+                            onOcrUnavailable()
+                            emptyList()
+                        }
+                    }
+                    val (pdfImage, k) = encode(full, page.filter == Filter.BW, opt.quality)
+                    val scaledWords = if (k == 1f) words else words.map {
+                        OcrWord(it.text, (it.left * k).toInt(), (it.top * k).toInt(), (it.right * k).toInt(), (it.bottom * k).toInt())
+                    }
+                    // Physical size so a page is about A4 tall when "fit to image" is chosen.
+                    val dpi = max(pdfImage.width, pdfImage.height) / 11.69f
+                    writer.addPage(PdfPage(pdfImage, dpi, scaledWords))
                 }
-                val fullW = full.width
-                val (pdfImage, k) = encode(full, page.filter == Filter.BW, opt.quality)
-                val scaledWords = if (k == 1f) words else words.map {
-                    OcrWord(it.text, (it.left * k).toInt(), (it.top * k).toInt(), (it.right * k).toInt(), (it.bottom * k).toInt())
-                }
-                // Physical size so a page is about A4 tall when "fit to image" is chosen.
-                val dpi = max(pdfImage.width, pdfImage.height) / 11.69f
-                writer.addPage(PdfPage(pdfImage, dpi, scaledWords))
+                writer.finish()
             }
             progress(doc.pages.size, doc.pages.size)
+            if (!part.renameTo(out)) { out.delete(); if (!part.renameTo(out)) throw java.io.IOException("cannot write ${out.name}") }
+        } catch (e: Throwable) {
+            part.delete()
+            throw e
         } finally {
-            ocr?.close()
+            runCatching { ocr?.close() }
         }
-        val out = File(exportDir(), safeName(doc.name) + ".pdf")
-        out.outputStream().buffered().use { writer.write(it) }
         return out
     }
 
