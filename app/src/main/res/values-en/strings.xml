@@ -206,6 +206,8 @@
     <string name="theme_dark">Dark</string>
     <string name="dynamic_color_title">Wallpaper colours</string>
     <string name="dynamic_color_hint">Dynamic colours (Android 12 and later)</string>
+    <string name="date_today">Today %1$s</string>
+    <string name="date_yesterday">Yesterday</string>
     <plurals name="page_count">
         <item quantity="one">%d page</item>
         <item quantity="other">%d pages</item>

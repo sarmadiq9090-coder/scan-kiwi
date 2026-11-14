@@ -207,6 +207,8 @@
     <string name="theme_dark">داكن</string>
     <string name="dynamic_color_title">ألوان خلفية الهاتف</string>
     <string name="dynamic_color_hint">ألوان ديناميكية (أندرويد ١٢ وأحدث)</string>
+    <string name="date_today">اليوم %1$s</string>
+    <string name="date_yesterday">أمس</string>
     <plurals name="page_count">
         <item quantity="zero">لا صفحات</item>
         <item quantity="one">صفحة واحدة</item>
