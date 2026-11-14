@@ -15,10 +15,25 @@ import kotlin.math.max
 enum class OcrLanguage(val code: String) { ARABIC_ENGLISH("ara+eng"), ENGLISH("eng"), ARABIC("ara") }
 
 /**
+ * What the exporter needs from an OCR engine. A seam for tests (a fake engine runs
+ * on the JVM, where Tesseract's native library does not) and the first step toward
+ * the 1.3 `OcrEngine` interface.
+ */
+interface PageOcr {
+    /** Recognises words in [page]; boxes are in [page]'s pixel coordinates. Blocking. */
+    fun recognize(page: Bitmap, lang: OcrLanguage): List<OcrWord>
+
+    /** Interrupts a running [recognize] from another thread (export cancelled). */
+    fun stop()
+
+    fun close()
+}
+
+/**
  * Fully offline OCR with Tesseract (Apache-2.0) and the tessdata_fast LSTM
  * models for Arabic and English. No network, no Google Play services.
  */
-class OcrEngine(private val ctx: Context) {
+class OcrEngine(private val ctx: Context) : PageOcr {
     @Volatile private var api: TessBaseAPI? = null
     private var loaded: String? = null
 
@@ -63,7 +78,7 @@ class OcrEngine(private val ctx: Context) {
 
     /** Recognises words in a page image; boxes are in that image's pixel coordinates. */
     @Synchronized
-    fun recognize(page: Bitmap, lang: OcrLanguage): List<OcrWord> {
+    override fun recognize(page: Bitmap, lang: OcrLanguage): List<OcrWord> {
         val a = ensure(lang)
         // ~200 dpi on A4 is plenty for Tesseract and about 1.8x faster than 3200 px pages.
         val k = WORK_SIDE.toFloat() / max(page.width, page.height)
@@ -93,12 +108,12 @@ class OcrEngine(private val ctx: Context) {
     }
 
     /** Interrupts a running [recognize] from another thread (export cancelled). */
-    fun stop() {
+    override fun stop() {
         runCatching { api?.stop() }
     }
 
     @Synchronized
-    fun close() {
+    override fun close() {
         api?.recycle()
         api = null
         loaded = null

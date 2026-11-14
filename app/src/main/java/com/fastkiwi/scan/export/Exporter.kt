@@ -17,12 +17,44 @@ import com.fastkiwi.scan.imaging.BitmapIO
 import com.fastkiwi.scan.imaging.PageRenderer
 import com.fastkiwi.scan.ocr.OcrEngine
 import com.fastkiwi.scan.ocr.OcrLanguage
-import kotlinx.coroutines.Job
+import com.fastkiwi.scan.ocr.PageOcr
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.launch
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.max
+import kotlin.math.roundToInt
+
+/**
+ * Runs the blocking [block] (a native call that cannot see coroutine cancellation) and calls
+ * [stop] from another thread as soon as the calling coroutine is cancelled, so the block can
+ * return early. (1.2.0 used `Job.invokeOnCompletion`, which only runs after the job has
+ * completed, i.e. never while the block is still running.)
+ */
+internal suspend fun <T> stopOnCancel(stop: () -> Unit, block: () -> T): T = coroutineScope {
+    val done = AtomicBoolean(false)
+    // Starts here and suspends at once; when this scope is cancelled it resumes on a
+    // pool thread (this one is busy in [block]) and stops the work.
+    val watcher = launch(Dispatchers.Default, start = CoroutineStart.UNDISPATCHED) {
+        try {
+            awaitCancellation()
+        } finally {
+            if (!done.get()) stop()
+        }
+    }
+    try {
+        block()
+    } finally {
+        done.set(true)
+        watcher.cancel()
+    }
+}
 
 /** Size/quality presets. SMALL targets messaging apps and e-mail attachments. */
 enum class Quality(val longSide: Int, val jpegQuality: Int, val bitonalLongSide: Int) {
@@ -41,7 +73,12 @@ data class ExportOptions(
     val archival: Boolean = false,
 )
 
-class Exporter(private val ctx: Context, private val store: DocumentStore) {
+class Exporter(
+    private val ctx: Context,
+    private val store: DocumentStore,
+    /** Creates the OCR engine for one export; tests pass a fake. */
+    private val newOcr: (Context) -> PageOcr = { OcrEngine(it) },
+) {
 
     private fun exportDir(): File = File(ctx.cacheDir, "exports").apply { mkdirs() }
 
@@ -102,14 +139,11 @@ class Exporter(private val ctx: Context, private val store: DocumentStore) {
         }
         lastKey = null; lastFile = null
         clearOldExports()
-        val job = currentCoroutineContext()[Job]
         val pdfA = opt.archival && opt.password.isNullOrEmpty()
         val font = if (opt.ocr) ctx.assets.open("fonts/glyphless.ttf").use { it.readBytes() } else null
         val icc = if (pdfA) ctx.assets.open("icc/sRGB-v2-micro.icc").use { it.readBytes() } else null
         val writer = PdfWriter(opt.pageSize, doc.name, opt.password?.takeIf { it.isNotEmpty() }, font, pdfAIccProfile = icc)
-        var ocr = if (opt.ocr) OcrEngine(ctx) else null
-        // Cancelling the export also interrupts a page that Tesseract is reading.
-        val stopOcr = job?.invokeOnCompletion { cause -> if (cause != null) ocr?.stop() }
+        var ocr = if (opt.ocr) newOcr(ctx) else null
         val out = File(exportDir(), safeName(doc.name) + ".pdf")
         val part = File(exportDir(), out.name + ".part")
         try {
@@ -121,18 +155,23 @@ class Exporter(private val ctx: Context, private val store: DocumentStore) {
                     val page = doc.pages[i]
                     val bitonal = page.filter == Filter.BW
                     val engine = ocr
-                    val cachedWords = if (engine != null) store.loadOcr(doc.id, page, opt.ocrLanguage.code) else null
-                    val needOcr = engine != null && cachedWords == null
+                    val cached = if (engine != null) store.loadOcrFrame(doc.id, page, opt.ocrLanguage.code) else null
+                    val needOcr = engine != null && cached == null
                     // Decode only as large as needed: the export size, or OCR's working size.
                     val target = if (bitonal) opt.quality.bitonalLongSide else opt.quality.longSide
                     val full = pageBitmap(doc, i, if (needOcr) max(target, OcrEngine.WORK_SIDE) else target) ?: continue
-                    var words: List<OcrWord> = cachedWords ?: emptyList()
+                    // Cached boxes are in the frame OCR read (often larger than this export's
+                    // image): bring them into this bitmap's pixels before anything else.
+                    var words: List<OcrWord> = cached?.let {
+                        scaleWords(it.words, full.width.toFloat() / it.frameWidth, full.height.toFloat() / it.frameHeight)
+                    } ?: emptyList()
                     if (needOcr && engine != null) {
                         phase(Phase.READING_TEXT)
                         words = try {
-                            engine.recognize(full, opt.ocrLanguage).also {
+                            // Cancelling the export stops Tesseract inside this page.
+                            stopOnCancel(engine::stop) { engine.recognize(full, opt.ocrLanguage) }.also {
                                 currentCoroutineContext().ensureActive() // a stopped page is not cached
-                                store.saveOcr(doc.id, page, it, opt.ocrLanguage.code)
+                                store.saveOcr(doc.id, page, it, opt.ocrLanguage.code, full.width, full.height)
                             }
                         } catch (e: Throwable) {
                             // OOM and cancellation keep their meaning; anything else (no native
@@ -146,9 +185,7 @@ class Exporter(private val ctx: Context, private val store: DocumentStore) {
                     }
                     phase(Phase.WRITING)
                     val (pdfImage, k) = encode(full, bitonal, opt.quality)
-                    val scaledWords = if (k == 1f) words else words.map {
-                        OcrWord(it.text, (it.left * k).toInt(), (it.top * k).toInt(), (it.right * k).toInt(), (it.bottom * k).toInt())
-                    }
+                    val scaledWords = scaleWords(words, k, k)
                     // Physical size so a page is about A4 tall when "fit to image" is chosen.
                     val dpi = max(pdfImage.width, pdfImage.height) / 11.69f
                     writer.addPage(PdfPage(pdfImage, dpi, scaledWords))
@@ -161,12 +198,16 @@ class Exporter(private val ctx: Context, private val store: DocumentStore) {
             part.delete() // also on cancel: no half-written file is left behind
             throw e
         } finally {
-            stopOcr?.dispose()
             runCatching { ocr?.close() }
         }
         if (key != null) { lastKey = key; lastFile = out }
         return out
     }
+
+    private fun scaleWords(words: List<OcrWord>, kx: Float, ky: Float): List<OcrWord> =
+        if (kx == 1f && ky == 1f) words else words.map {
+            OcrWord(it.text, (it.left * kx).roundToInt(), (it.top * ky).roundToInt(), (it.right * kx).roundToInt(), (it.bottom * ky).roundToInt())
+        }
 
     /**
      * Encodes one finished page for the PDF at the chosen quality (recycles [full]).

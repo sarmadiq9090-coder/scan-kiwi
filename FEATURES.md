@@ -87,7 +87,7 @@ Legend: [x] done · [~] done with a stated limit · [ ] not done
 - Atomic, synced writes for doc.json, page images and OCR cache; a failed JPEG write no longer replaces the page.
 - Release builds log nothing; exports are removed from the cache after "Save" and after an hour otherwise.
 
-## What was tested (90 automated tests, all passing)
+## What was tested (93 automated tests, all passing)
 
 | Area | How | Result |
 |---|---|---|
@@ -102,6 +102,7 @@ Legend: [x] done · [~] done with a stated limit · [ ] not done
 | 1.1.1 regressions | Robolectric: parallel edits kept, undo after capture, unreadable import, OCR unavailable, capture after leaving camera, incoming-URI filter, safe file names, EXIF on real pixels. JVM: GC age cutoff, atomic write, strict xref offsets, streamed writer keeps no pages, 200-page encrypted PDF, Arabic text layer, empty password. The bug cases were also run against the 1.1.0 code (8 proof tests) and all 8 failed there; the others cover areas that were already right | Pass (17 new) |
 
 | Independent QC (1.2.0) | `Qc120Test`: export-sheet Share/Save on screen (normal, OCR open, 200 %), OCR cache per language (and 1.1.1 caches), PDF recognised by its header, auto-capture status on dropped frames, report text clipping and URL loop, 1.1.1 → 1.2.0 data migration (documents, settings, signature, OCR text, clean-up, re-crop), ID-card true size, merge, export/share timings for 1/10/50 pages with cancel | Pass (13 new; the 9 bug cases failed on 77ad6d6) |
+| OCR text layer (1.2.0, D33) | `OcrExportTest` with a fake engine: cached OCR reused at every quality after a first OCR at every quality, colour and B&W pages, word positions checked with PDFBox (within 1 % and inside the page); caches without a frame are read again; Cancel calls the engine's `stop()` within 2 s, caches nothing, leaves no PDF | Pass (3 new; all 3 failed on ee024d2) |
 
 Not tested: live CameraX preview/auto-capture, real photos, Tesseract OCR on device, share sheet and
 Storage Access Framework dialogs, TalkBack walk-through, performance and memory on low-end phones.

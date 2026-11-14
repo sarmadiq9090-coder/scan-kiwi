@@ -26,6 +26,7 @@ Each release section is written in Arabic first, then English.
 - الالتقاط التلقائي أثبت: يعتمد على الزمن لا عدد الإطارات، يتحمّل فقدان إطار أو اثنين، ولا يصوّر الصفحة نفسها مرتين.
 - كشف الحواف أفضل للورق الأبيض على سطح فاتح ملوّن.
 - الهواتف ذات الذاكرة القليلة تحفظ الصور بدقة 2400 بكسل بدل 3200 لتجنّب نفاد الذاكرة.
+- النص المقروء من كل صفحة يُحفظ ويُعاد استعماله عند المشاركة أو الحفظ مرة أخرى؛ لا تُقرأ الصفحة من جديد إلا إذا تغيّرت (قص أو تدوير أو مرشّح) أو تغيّرت لغة القراءة.
 
 #### أُصلح
 - التوقيع يبقى في مكانه على الورقة بعد إعادة القص أو التدوير.
@@ -37,6 +38,8 @@ Each release section is written in Arabic first, then English.
 - لصق نص أطول من الحد في «أبلغنا عن مشكلة» يُقصّ بدل أن يُتجاهل.
 - إطار مفقود لا يُظهر «اثبت قليلًا…» عندما لا يكون العدّ التنازلي جارياً.
 - إشعار ترخيص libyuv (داخل CameraX) أُضيف إلى التراخيص، والخطوط والأيقونات إلى قائمة المكوّنات.
+- النص المخفي في ملف PDF القابل للبحث يقع فوق كلماته في الصفحة بكل مستويات الجودة، حتى حين يُعاد استعمال نص قُرئ بجودة أخرى (كان يُزاح حتى 1.4 مرة ويخرج بعضه عن الصفحة).
+- زر «إلغاء» يوقف قراءة النص في الصفحة الجارية بدل انتظار انتهائها.
 
 #### الأمان
 - لا إذن إنترنت، ولا تثبيت حزم، ولا حالة شبكة؛ وفحص في CI يرفض أي إذن غير الكاميرا.
@@ -64,6 +67,8 @@ Each release section is written in Arabic first, then English.
 - Steadier auto capture: time based instead of frame based, tolerates dropped frames, never captures the same page twice.
 - Better edge detection for white paper on light coloured surfaces.
 - Low-memory phones store pages at 2400 px instead of 3200 px to avoid running out of memory.
+- Recognised text is cached per page and reused on the next share or save; a page is read again only after it
+  changes (crop, rotation, filter) or the OCR language changes.
 
 #### Fixed
 - A signature stays on the same spot of the paper after re-cropping or rotating the page.
@@ -77,6 +82,9 @@ Each release section is written in Arabic first, then English.
 - A dropped camera frame no longer shows "Hold steady…" when no countdown is running.
 - The libyuv licence notice (inside CameraX) is in the in-app licences; the SBOM now lists the Noto Sans Arabic
   fonts and the Material Symbols icons.
+- The invisible text layer of a searchable PDF sits on its words at every quality, also when text recognised at
+  another quality is reused (it was up to 1.4x off, partly outside the page). See DECISIONS.md D33.
+- "Cancel" stops text recognition on the page being read instead of waiting for it to finish.
 
 #### Security
 - No INTERNET, REQUEST_INSTALL_PACKAGES or ACCESS_NETWORK_STATE permission; CI fails on any permission except CAMERA.

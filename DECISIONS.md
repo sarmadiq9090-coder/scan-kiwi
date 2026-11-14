@@ -188,3 +188,28 @@ bugs in everything new since 1.1.1. Each finding has a test in `Qc120Test` that 
   and so that the provenance names the commit the v1.2.0 tag points at, the APK, SBOM, provenance and
   checksums are rebuilt from the final commit. Version stays 1.2.0 (versionCode 4).
 
+
+### D33 — Two OCR export defects found by the Scan Kiwi lead before launch (2026-11-14)
+Found by reading the 1.2.0 tree while designing the 1.3.0 `OcrEngine` interface; not in the QC findings. Both
+fixed in 1.2.0, each with a test that failed on the old code (`OcrExportTest`).
+- **S2 — text layer misplaced on cache reuse.** Fresh OCR read the page at `max(export size, 2400)` and cached
+  the boxes in that frame without recording it; a later export from the cache decoded the page at the export
+  size and drew the boxes unscaled. Reusing a cache at another quality (or at "Small", where a fresh OCR reads
+  2400 px but the page is drawn at 1700 px) put words up to 1.41x off, with the right and bottom third outside
+  the page. **Fix:** the cache records its frame (`"frame": [w, h]`) and an export scales the boxes into the
+  bitmap it draws, exactly. Caches without a frame (1.1.x, early 1.2.0 builds) are not trusted for placement:
+  an export reads such a page again (once); search still uses their text. Rejected: "always decode at the OCR
+  size" — it still mismatches when the first OCR ran at High (3200 px) and the reuse at Balanced.
+  Test: every first-OCR quality x every reuse quality, colour and black-and-white pages, PDFBox checks each
+  word's left edge and baseline within 1 % of where the engine saw it, and inside the page.
+- **S3 — Cancel did not reach Tesseract.** `Job.invokeOnCompletion` runs only after the job has completed, which
+  cannot happen while the export is blocked in `getUTF8Text()`, and the handler was disposed in `finally`
+  before that. So `TessBaseAPI.stop()` was never called and Cancel waited for the page (D27 claimed otherwise).
+  **Fix:** `stopOnCancel` runs the blocking call with a watcher coroutine that calls `stop()` from a pool
+  thread as soon as the export is cancelled. Test: a fake engine that blocks until `stop()`; Cancel must call
+  it within 2 s, end the export, cache nothing and leave no PDF. Whether Tesseract4Android's `stop()` cuts a
+  page short is a phone check (the cancel monitor is documented for hOCR); if it does not, the page still
+  finishes but the export ends right after it, as before.
+- A small `PageOcr` interface (recognize/stop/close) lets tests inject a fake engine; it is the first step of
+  the 1.3.0 `OcrEngine` interface. Word boxes are now rounded instead of truncated when scaled.
+- Rebuilt the release APK, SBOM, provenance and checksums from the new final commit; version stays 1.2.0 (4).
