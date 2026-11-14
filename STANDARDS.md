@@ -87,7 +87,7 @@ Status: **Met** · **Partial** (met with a stated limit) · **Gap** (not met, wi
 | Dependency update tool | Met | Dependabot for `gradle` and `github-actions`, monthly, max 2 open PRs. |
 | Scorecard | Met | `.github/workflows/scorecard.yml` (weekly + on push to main, results published). |
 | Wrapper validation | Met | `gradle/actions/wrapper-validation` + `distributionSha256Sum`. |
-| SBOM | Met | CycloneDX 1.6 JSON from the CycloneDX Gradle plugin over `releaseRuntimeClasspath`, plus hand-added native libs (Tesseract, Leptonica, libjpeg-turbo, libpng), OCR models, font and ICC profile with SHA-256 hashes. |
+| SBOM | Met | CycloneDX 1.6 JSON from the CycloneDX Gradle plugin over `releaseRuntimeClasspath`, plus hand-added native libs (Tesseract, Leptonica, libjpeg-turbo, libpng), OCR models, the glyphless font, the ICC profile and the Noto Sans Arabic UI fonts with SHA-256 hashes, and the Material Symbols icons; licence metadata the POMs get wrong is corrected (camera-core's libyuv is BSD-3-Clause). |
 | Gradle dependency verification | Met | `gradle/verification-metadata.xml` (SHA-256). Platform-specific artifacts (aapt2 for Linux) added so CI verifies too. |
 | Provenance | Partial | Unsigned in-toto SLSA v1 statement, Build L1, local builder (stated honestly). No CI attestation because release signing is local by design. |
 | CodeQL | Gap (council decision) | Not enabled for now. |

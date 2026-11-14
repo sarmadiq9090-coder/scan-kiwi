@@ -31,6 +31,12 @@ Each release section is written in Arabic first, then English.
 - التوقيع يبقى في مكانه على الورقة بعد إعادة القص أو التدوير.
 - استيراد ملفات PDF من تطبيقات تقدّم الملف كتدفق فقط (بعض تطبيقات السحابة والبريد).
 - تدوير المعاينة في شاشة القص لم يعد يثقل الواجهة.
+- زرّا «مشاركة» و«حفظ في الجهاز» ثابتان أسفل نافذة التصدير ولا يختفيان تحت الخيارات (فحص الجودة المستقل).
+- تغيير لغة التعرّف على النص يعيد قراءة الصفحات بدل استعمال نص محفوظ بلغة أخرى.
+- ملفات PDF التي تصل بلا نوع ولا امتداد تُعرف من بدايتها وتُستورد.
+- لصق نص أطول من الحد في «أبلغنا عن مشكلة» يُقصّ بدل أن يُتجاهل.
+- إطار مفقود لا يُظهر «اثبت قليلًا…» عندما لا يكون العدّ التنازلي جارياً.
+- إشعار ترخيص libyuv (داخل CameraX) أُضيف إلى التراخيص، والخطوط والأيقونات إلى قائمة المكوّنات.
 
 #### الأمان
 - لا إذن إنترنت، ولا تثبيت حزم، ولا حالة شبكة؛ وفحص في CI يرفض أي إذن غير الكاميرا.
@@ -63,6 +69,14 @@ Each release section is written in Arabic first, then English.
 - A signature stays on the same spot of the paper after re-cropping or rotating the page.
 - Importing PDFs from apps that only provide a stream (some cloud and mail apps).
 - Rotating the crop preview no longer runs on the main thread.
+- "Share" and "Save to device" stay fixed at the bottom of the export sheet instead of scrolling out of sight
+  (independent QC).
+- Changing the OCR language reads the pages again instead of reusing text recognised in another language.
+- PDFs that arrive without a MIME type or a ".pdf" name are recognised by their header and imported.
+- Pasting more than the limit into "Report a problem" cuts the text instead of ignoring the paste.
+- A dropped camera frame no longer shows "Hold steady…" when no countdown is running.
+- The libyuv licence notice (inside CameraX) is in the in-app licences; the SBOM now lists the Noto Sans Arabic
+  fonts and the Material Symbols icons.
 
 #### Security
 - No INTERNET, REQUEST_INSTALL_PACKAGES or ACCESS_NETWORK_STATE permission; CI fails on any permission except CAMERA.

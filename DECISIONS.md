@@ -167,3 +167,24 @@ Deviations from the spec, with reasons:
   non-reproducible). The full D-077 network statement is shown on the screen, word for word, instead of behind «لماذا؟».
 - **Fill 1 icons**: only `check_circle` (selection); other selected states use colour.
 - **Rename**: «الكل» in the crop tools is now «الصورة كاملة» as the spec asks.
+
+### D32 — Independent QC and bug hunt before release (2026-11-14)
+An agent that did not write 1.2.0 checked it against the design spec, D-076/D-077 and the standards, and hunted
+bugs in everything new since 1.1.1. Each finding has a test in `Qc120Test` that failed on 77ad6d6.
+- **Fixed (S2)**: the export sheet's «مشاركة» / «حفظ في الجهاز» were inside the scrolling options, below the fold
+  on a normal phone (spec §3: the primary action is always in the thumb zone). The footer is now fixed under
+  the options. OCR words cached for one language were reused for another, so switching to «عربي + إنجليزي»
+  kept an English-only text layer; the cache now records its language (1.1.x caches stay searchable and are
+  redone on the next export with OCR).
+- **Fixed (S3, cheap)**: PDFs with no MIME type and no ".pdf" in the URI are recognised by their header; a paste
+  over the 4000-character report limit is cut instead of ignored; the GitHub-URL shortening loop always ends;
+  a dropped camera frame no longer shows «اثبت قليلًا…» without a countdown; libyuv's BSD-3-Clause notice
+  added; the SBOM lists the Noto Sans Arabic fonts and Material Symbols and corrects two licence entries.
+- **Not fixed (S3, recorded)**: cancelling or failing a «حفظ في الجهاز» export leaves the empty file that the
+  system "Save as" dialog already created; sharing JPGs removes the cached PDF, so the next PDF share is
+  rebuilt; a re-share after OCR was unavailable reuses the file without a text layer; the cosmetic design
+  differences listed in the QC report.
+- **Release build**: the first 1.2.0 APK was built from 92f1c43 and never left the PC. Because code changed,
+  and so that the provenance names the commit the v1.2.0 tag points at, the APK, SBOM, provenance and
+  checksums are rebuilt from the final commit. Version stays 1.2.0 (versionCode 4).
+
