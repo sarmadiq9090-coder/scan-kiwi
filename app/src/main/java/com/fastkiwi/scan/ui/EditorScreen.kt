@@ -24,6 +24,12 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Undo
+import androidx.compose.runtime.produceState
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.material.icons.filled.AddAPhoto
 import androidx.compose.material.icons.filled.Badge
 import androidx.compose.material.icons.filled.Edit
@@ -113,6 +119,9 @@ fun EditorScreen(vm: AppViewModel, docId: String, snackbar: SnackbarHostState) {
                     )
                 },
                 actions = {
+                    IconButton(onClick = { vm.undo(docId) }, enabled = (vm.undoCounts[docId] ?: 0) > 0) {
+                        Icon(Icons.AutoMirrored.Filled.Undo, stringResource(R.string.undo))
+                    }
                     IconButton(onClick = { rename = true }) { Icon(Icons.Filled.Edit, stringResource(R.string.rename)) }
                 },
             )
@@ -155,7 +164,7 @@ fun EditorScreen(vm: AppViewModel, docId: String, snackbar: SnackbarHostState) {
         }
     }
 
-    if (rename) RenameDialog(doc.name, onDismiss = { rename = false }) { vm.rename(docId, it) }
+    if (rename) RenameDialog(doc.name, suggestion = vm.suggestName(docId), onDismiss = { rename = false }) { vm.rename(docId, it) }
     if (showExport) ExportSheet(vm, docId, onDismiss = { showExport = false })
 }
 
@@ -163,13 +172,28 @@ fun EditorScreen(vm: AppViewModel, docId: String, snackbar: SnackbarHostState) {
 private fun PageTile(vm: AppViewModel, docId: String, index: Int, count: Int, page: com.fastkiwi.scan.data.ScanPage) {
     var menu by remember { mutableStateOf(false) }
     val label = stringResource(R.string.page_n_of, index + 1, count)
+    // TalkBack: the page menu's actions are also offered as accessibility actions.
+    val aMoveEarlier = stringResource(R.string.move_earlier)
+    val aMoveLater = stringResource(R.string.move_later)
+    val aCrop = stringResource(R.string.crop)
+    val aRotate = stringResource(R.string.rotate_right)
+    val aDelete = stringResource(R.string.delete)
     Card(Modifier.fillMaxWidth()) {
         Box(
             Modifier
                 .fillMaxWidth()
                 .aspectRatio(0.72f)
                 .clickable(onClickLabel = stringResource(R.string.edit_page)) { vm.open(Screen.Page(docId, index)) }
-                .semantics { contentDescription = label },
+                .semantics {
+                    contentDescription = label
+                    customActions = buildList {
+                        if (index > 0) add(CustomAccessibilityAction(aMoveEarlier) { vm.movePage(docId, index, index - 1); true })
+                        if (index < count - 1) add(CustomAccessibilityAction(aMoveLater) { vm.movePage(docId, index, index + 1); true })
+                        add(CustomAccessibilityAction(aCrop) { vm.open(Screen.Crop(docId, page.id)); true })
+                        add(CustomAccessibilityAction(aRotate) { vm.editPage(docId, page.id) { it.copy(rotation = (it.rotation + 90) % 360) }; true })
+                        add(CustomAccessibilityAction(aDelete) { vm.deletePage(docId, index); true })
+                    }
+                },
         ) {
             FileImage(vm.store.thumbFile(docId, page.id), page.revision, 360, null, Modifier.fillMaxSize().padding(6.dp).clip(RoundedCornerShape(4.dp)))
         }
@@ -184,6 +208,7 @@ private fun PageTile(vm: AppViewModel, docId: String, index: Int, count: Int, pa
                     DropdownMenuItem(text = { Text(stringResource(R.string.move_last)) }, enabled = index < count - 1, onClick = { menu = false; vm.movePage(docId, index, count - 1) })
                     DropdownMenuItem(text = { Text(stringResource(R.string.rotate_right)) }, onClick = { menu = false; vm.editPage(docId, page.id) { it.copy(rotation = (it.rotation + 90) % 360) } })
                     DropdownMenuItem(text = { Text(stringResource(R.string.crop)) }, onClick = { menu = false; vm.open(Screen.Crop(docId, page.id)) })
+                    DropdownMenuItem(text = { Text(stringResource(R.string.signature)) }, onClick = { menu = false; vm.open(Screen.Sign(docId, page.id)) })
                     DropdownMenuItem(text = { Text(stringResource(R.string.retake)) }, onClick = { menu = false; vm.open(Screen.Camera(docId, retakePageId = page.id)) })
                     DropdownMenuItem(text = { Text(stringResource(R.string.delete)) }, onClick = { menu = false; vm.deletePage(docId, index) })
                 }
@@ -234,7 +259,10 @@ fun ExportSheet(vm: AppViewModel, docId: String, onDismiss: () -> Unit) {
                 ChipRow {
                     PageSize.entries.forEach { ps ->
                         FilterChip(selected = pageSize == ps, onClick = { pageSize = ps }, label = {
-                            Text(stringResource(when (ps) { PageSize.A4 -> R.string.size_a4; PageSize.LETTER -> R.string.size_letter; PageSize.FIT -> R.string.size_fit }))
+                            Text(stringResource(when (ps) {
+                                PageSize.A4 -> R.string.size_a4; PageSize.LETTER -> R.string.size_letter; PageSize.LEGAL -> R.string.size_legal
+                                PageSize.A5 -> R.string.size_a5; PageSize.FIT -> R.string.size_fit
+                            }))
                         })
                     }
                 }
@@ -285,6 +313,22 @@ fun ExportSheet(vm: AppViewModel, docId: String, onDismiss: () -> Unit) {
             }
 
             Spacer(Modifier.height(16.dp))
+            // What will be shared: page count and an estimated size, before tapping Share.
+            val pageCount = vm.doc(docId)?.pages?.size ?: 0
+            val estimate by produceState<Long?>(null, quality, asJpeg) {
+                value = null
+                value = vm.estimateSize(docId, ExportOptions(pageSize, quality))
+            }
+            Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth()) {
+                val pagesText = pluralStringResource(R.plurals.page_count, pageCount, pageCount)
+                val sizeText = estimate?.let { stringResource(R.string.estimated_size, formatSize(it)) } ?: stringResource(R.string.estimating_size)
+                Text(
+                    "$pagesText · $sizeText",
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(12.dp).semantics { liveRegion = androidx.compose.ui.semantics.LiveRegionMode.Polite },
+                )
+            }
+            Spacer(Modifier.height(12.dp))
             if (busy > 0) {
                 val p = progress
                 if (p != null && p.second > 0) {
@@ -313,7 +357,7 @@ fun ExportSheet(vm: AppViewModel, docId: String, onDismiss: () -> Unit) {
 
 @Composable
 private fun Label(res: Int) {
-    Text(stringResource(res), style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 12.dp, bottom = 4.dp))
+    Text(stringResource(res), style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 12.dp, bottom = 4.dp).semantics { heading() })
 }
 
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)

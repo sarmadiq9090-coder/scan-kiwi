@@ -61,7 +61,7 @@ class OcrEngine(private val ctx: Context) {
         val bmp = if (k < 1f) Bitmap.createScaledBitmap(page, (page.width * k).toInt(), (page.height * k).toInt(), true) else page
         val px = IntArray(bmp.width * bmp.height)
         bmp.getPixels(px, 0, bmp.width, 0, 0, bmp.width, bmp.height)
-        val gray = ImageFilters.toGray(px, bmp.width, bmp.height)
+        val gray = ImageFilters.normalizedGray(px, bmp.width, bmp.height)
         a.setImage(gray.data, bmp.width, bmp.height, 1, bmp.width)
         val scale = if (bmp === page) 1f else page.width.toFloat() / bmp.width
         if (bmp !== page) bmp.recycle()

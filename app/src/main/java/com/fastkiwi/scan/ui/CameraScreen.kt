@@ -38,6 +38,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Done
@@ -176,7 +179,8 @@ private fun CameraContent(vm: AppViewModel, initial: Screen.Camera, onClose: () 
             .build()
     }
 
-    fun capture() {
+    /** [auto]: taken by auto-capture (batch mode: no review unless the outline is doubtful). */
+    fun capture(auto: Boolean) {
         if (capturing) return
         capturing = true
         status = R.string.status_capturing
@@ -187,16 +191,23 @@ private fun CameraContent(vm: AppViewModel, initial: Screen.Camera, onClose: () 
                 val bytes = ByteArray(buf.remaining()).also { buf.get(it) }
                 val rotation = image.imageInfo.rotationDegrees
                 image.close()
-                vm.addCapture(target, bytes, rotation, liveQuad) { docId, added ->
+                vm.addCapture(target, bytes, rotation, liveQuad) { r ->
                     capturing = false
                     cooldownUntil = System.currentTimeMillis() + 2000
-                    if (docId == null) {
+                    // Open the outline editor when detection was doubtful, or after a manual
+                    // shot when "review after capture" is on (the owner's v1.0 feedback).
+                    val review = r?.pageId != null && !target.idCard &&
+                        (r.needsReview || (!auto && vm.settings.reviewAfterCapture))
+                    if (r == null) {
                         status = R.string.status_error
                     } else if (target.retakePageId != null) {
                         vm.back()
+                        if (review) vm.open(Screen.Crop(r.docId, r.pageId!!))
                     } else {
-                        vm.replaceTop(target.copy(docId = docId, captured = target.captured + if (added) 1 else 0))
+                        val added = r.pageId != null
+                        vm.replaceTop(target.copy(docId = r.docId, captured = target.captured + if (added) 1 else 0))
                         if (added) status = R.string.status_added
+                        if (review) vm.open(Screen.Crop(r.docId, r.pageId!!))
                     }
                 }
             }
@@ -265,7 +276,7 @@ private fun CameraContent(vm: AppViewModel, initial: Screen.Camera, onClose: () 
         if (!auto) { status = R.string.status_found; return@LaunchedEffect }
         if (now < cooldownUntil) return@LaunchedEffect
         status = R.string.status_hold
-        if (live.stableFrames >= 12) capture()
+        if (live.stableFrames >= 12) capture(auto = true)
     }
 
     LaunchedEffect(torch, camera) { camera?.cameraControl?.enableTorch(torch) }
@@ -339,6 +350,22 @@ private fun CameraContent(vm: AppViewModel, initial: Screen.Camera, onClose: () 
                 IconButton(onClick = onGallery, modifier = Modifier.size(56.dp), colors = IconButtonDefaults.iconButtonColors(contentColor = Color.White)) {
                     Icon(Icons.Filled.PhotoLibrary, stringResource(R.string.pick_from_gallery))
                 }
+                // Last captured page: tap to adjust its outline right away.
+                val docs by vm.docs.collectAsStateWithLifecycle()
+                val last = target.docId?.let { id -> docs.firstOrNull { it.doc.id == id }?.doc }?.takeIf { target.captured > 0 }?.pages?.lastOrNull()
+                val lastLabel = stringResource(R.string.adjust_last_page)
+                Box(
+                    Modifier
+                        .size(56.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .border(2.dp, if (last != null) Color.White else Color.Transparent, RoundedCornerShape(8.dp))
+                        .clickable(enabled = last != null && !capturing) { last?.let { vm.open(Screen.Crop(target.docId!!, it.id)) } }
+                        .semantics { if (last != null) { contentDescription = lastLabel; role = Role.Button } },
+                ) {
+                    if (last != null) {
+                        FileImage(vm.store.thumbFile(target.docId!!, last.id), last.revision, 360, null, Modifier.fillMaxSize(), androidx.compose.ui.layout.ContentScale.Crop)
+                    }
+                }
                 val shutterLabel = stringResource(R.string.take_photo)
                 Box(
                     Modifier
@@ -346,7 +373,7 @@ private fun CameraContent(vm: AppViewModel, initial: Screen.Camera, onClose: () 
                         .border(4.dp, Color.White, CircleShape)
                         .padding(8.dp)
                         .background(if (capturing) Color.Gray else Color.White, CircleShape)
-                        .clickable(enabled = !capturing) { capture() }
+                        .clickable(enabled = !capturing) { capture(auto = false) }
                         .semantics { contentDescription = shutterLabel; role = Role.Button },
                 )
                 val doneLabel = stringResource(R.string.done_with_count, captured)

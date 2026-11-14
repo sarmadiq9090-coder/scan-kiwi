@@ -60,7 +60,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextAlign
@@ -236,13 +237,24 @@ private fun DocRow(
     val date = remember(doc.modified) { DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(doc.modified)) }
     val pagesText = pluralStringResource(R.plurals.page_count, doc.pages.size, doc.pages.size)
     val selectedLabel = stringResource(if (selected) R.string.selected else R.string.not_selected)
+    val aShare = stringResource(R.string.share_pdf)
+    val aRename = stringResource(R.string.rename)
+    val aDelete = stringResource(R.string.delete)
     Surface(
         color = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface,
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = 88.dp)
             .combinedClickable(onClick = onClick, onLongClick = onLongClick, onLongClickLabel = stringResource(R.string.select))
-            .semantics { if (selecting) stateDescription = selectedLabel },
+            .semantics {
+                if (selecting) stateDescription = selectedLabel
+                // TalkBack actions mirroring the ⋮ menu.
+                if (!selecting) customActions = listOf(
+                    CustomAccessibilityAction(aShare) { onShare(); true },
+                    CustomAccessibilityAction(aRename) { onRename(); true },
+                    CustomAccessibilityAction(aDelete) { onDelete(); true },
+                )
+            },
     ) {
         Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(width = 56.dp, height = 72.dp).clip(RoundedCornerShape(6.dp))) {

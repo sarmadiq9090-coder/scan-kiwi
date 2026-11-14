@@ -25,8 +25,10 @@ object PageRenderer {
 
     suspend fun renderAndSave(store: DocumentStore, docId: String, page: ScanPage): Bitmap? = lock.withLock {
         val src = BitmapIO.decodeFile(store.srcFile(docId, page.id)) ?: return@withLock null
-        val out = render(src, page)
+        val signature = if (page.stamps.isNotEmpty()) BitmapIO.decodePng(store.signatureFile) else null
+        val out = render(src, page, signature)
         src.recycle()
+        signature?.recycle()
         BitmapIO.saveJpeg(out, store.outFile(docId, page.id), 92)
         val thumb = BitmapIO.fit(out.copy(Bitmap.Config.ARGB_8888, false), THUMB_SIDE)
         BitmapIO.saveJpeg(thumb, store.thumbFile(docId, page.id), 82)
@@ -34,7 +36,7 @@ object PageRenderer {
         thumb
     }
 
-    fun render(src: Bitmap, page: ScanPage): Bitmap {
+    fun render(src: Bitmap, page: ScanPage, signature: Bitmap? = null): Bitmap {
         val warped = warp(src, page.corners)
         val rotated = BitmapIO.rotate(warped, page.rotation)
         val px = IntArray(rotated.width * rotated.height)
@@ -42,7 +44,21 @@ object PageRenderer {
         ImageFilters.apply(page.filter, px, rotated.width, rotated.height)
         val out = if (rotated.isMutable) rotated else rotated.copy(Bitmap.Config.ARGB_8888, true).also { rotated.recycle() }
         out.setPixels(px, 0, out.width, 0, 0, out.width, out.height)
+        if (signature != null) drawStamps(out, page.stamps, signature)
         return out
+    }
+
+    /** Draws the signature at each stamp position (after filters, so ink stays crisp). */
+    fun drawStamps(page: Bitmap, stamps: List<com.fastkiwi.scan.data.Stamp>, signature: Bitmap) {
+        val c = Canvas(page)
+        val paint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
+        for (s in stamps) {
+            val w = s.width * page.width
+            val h = w * signature.height / signature.width
+            val l = s.cx * page.width - w / 2f
+            val t = s.cy * page.height - h / 2f
+            c.drawBitmap(signature, null, android.graphics.RectF(l, t, l + w, t + h), paint)
+        }
     }
 
     /** Rectifies the quad (normalised corners) to an upright rectangle. */

@@ -10,6 +10,8 @@ import java.util.zip.Deflater
 enum class PageSize(val widthPt: Float, val heightPt: Float) {
     A4(595.28f, 841.89f),
     LETTER(612f, 792f),
+    LEGAL(612f, 1008f),
+    A5(419.53f, 595.28f),
     FIT(0f, 0f), // page takes the image's own size
 }
 

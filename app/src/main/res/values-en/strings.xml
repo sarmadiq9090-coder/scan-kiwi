@@ -77,8 +77,8 @@
     <string name="filter_gray">Grayscale</string>
     <string name="filter_bw">Black &amp; white</string>
 
-    <string name="crop_hint">Drag the four corners to the edges of the page.</string>
-    <string name="crop_area_desc">Crop area. Use Auto detect or Whole image.</string>
+    <string name="crop_hint">Drag the corners or side midpoints to the page edges. They snap to detected edges when close.</string>
+    <string name="crop_area_desc">Crop area. Use the All, Re-detect or Rotate buttons.</string>
     <string name="auto_detect">Auto detect</string>
     <string name="whole_image">Whole image</string>
     <string name="apply">Apply</string>
@@ -129,6 +129,36 @@
     <string name="show_licenses">Licences</string>
     <string name="about_body">Kiwi Scan %1$s, part of the FastKiwi app suite. Completely free.</string>
     <string name="licenses_body">Open-source libraries: Jetpack Compose, CameraX, AndroidX and Kotlin (Apache-2.0); Tesseract4Android, Tesseract and tessdata_fast models (Apache-2.0); Leptonica (BSD-2); libjpeg-turbo (IJG/BSD); libpng (libpng licence).</string>
+
+    <!-- v1.1 -->
+    <string name="crop_all">All</string>
+    <string name="crop_reset_detected">Re-detect</string>
+    <string name="crop_problem_crossed">The corners cross: this is not a valid page shape.</string>
+    <string name="crop_problem_concave">The shape bends inwards: drag the corner outwards.</string>
+    <string name="crop_problem_small">The area is too small.</string>
+    <string name="crop_fix">Fix</string>
+    <string name="adjust_last_page">Adjust the crop of the last page</string>
+    <string name="review_after_capture">Review crop after each shot</string>
+    <string name="review_after_capture_hint">Opens the crop screen after a manual photo. With auto capture, only unclear pages are reviewed.</string>
+    <string name="undo">Undo</string>
+    <string name="msg_undone">Undone</string>
+    <string name="msg_page_deleted">Page deleted</string>
+    <string name="signature">Signature</string>
+    <string name="signature_pad_desc">Signature drawing pad</string>
+    <string name="signature_draw_hint">Draw your signature with your finger. It is stored only on this phone.</string>
+    <string name="signature_clear">Clear</string>
+    <string name="signature_place_hint">Drag the signature into place on the page and adjust its size.</string>
+    <string name="signature_place_desc">Page preview with signature, drag to move it</string>
+    <string name="signature_size">Signature size</string>
+    <string name="signature_redraw">Draw again</string>
+    <string name="signature_remove">Remove signatures</string>
+    <string name="size_legal">Legal</string>
+    <string name="size_a5">A5</string>
+    <string name="estimated_size">Estimated size about %1$s</string>
+    <string name="estimating_size">Estimating size…</string>
+    <string name="name_suggestion">Suggestion: %1$s</string>
+    <string name="shortcut_scan_short">Quick scan</string>
+    <string name="shortcut_scan_long">Scan a document with the camera</string>
 
     <plurals name="page_count">
         <item quantity="one">%d page</item>

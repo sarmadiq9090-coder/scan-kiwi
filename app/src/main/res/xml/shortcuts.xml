@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Long-press the app icon (or drag to the home screen) for one-tap scanning. -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_scan"
+        android:shortcutId="quick_scan"
+        android:shortcutLongLabel="@string/shortcut_scan_long"
+        android:shortcutShortLabel="@string/shortcut_scan_short">
+        <intent
+            android:action="com.fastkiwi.scan.action.QUICK_SCAN"
+            android:targetClass="com.fastkiwi.scan.MainActivity"
+            android:targetPackage="com.fastkiwi.scan" />
+    </shortcut>
+</shortcuts>

@@ -14,7 +14,9 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -35,6 +37,8 @@ import com.fastkiwi.scan.ui.SettingsScreen
 import com.fastkiwi.scan.ui.Settings
 import com.fastkiwi.scan.ui.theme.KiwiTheme
 import java.util.Locale
+
+const val ACTION_QUICK_SCAN = "com.fastkiwi.scan.action.QUICK_SCAN"
 
 class MainActivity : ComponentActivity() {
     internal val vm: AppViewModel by viewModels()
@@ -73,6 +77,11 @@ class MainActivity : ComponentActivity() {
     /** Files shared to the app from other apps ("Share > Kiwi Scan"). */
     private fun handleIncoming(intent: Intent?) {
         intent ?: return
+        // Home-screen shortcut "Scan": straight to the camera.
+        if (intent.action == ACTION_QUICK_SCAN) {
+            if (vm.screen !is Screen.Camera) vm.open(Screen.Camera(null))
+            return
+        }
         val uris: List<Uri> = when (intent.action) {
             Intent.ACTION_SEND -> listOfNotNull(IntentCompat.getParcelableExtra(intent, Intent.EXTRA_STREAM, Uri::class.java))
             Intent.ACTION_SEND_MULTIPLE -> IntentCompat.getParcelableArrayListExtra(intent, Intent.EXTRA_STREAM, Uri::class.java) ?: emptyList()
@@ -91,7 +100,14 @@ private fun App(vm: AppViewModel) {
 
     LaunchedEffect(Unit) {
         vm.messages.collect { m ->
-            snackbar.showSnackbar(if (m.arg != null) res.getString(m.res, m.arg) else res.getString(m.res))
+            val text = if (m.arg != null) res.getString(m.res, m.arg) else res.getString(m.res)
+            val undoId = m.undoDocId
+            if (undoId == null) {
+                snackbar.showSnackbar(text)
+            } else {
+                val r = snackbar.showSnackbar(text, actionLabel = res.getString(R.string.undo), duration = SnackbarDuration.Long)
+                if (r == SnackbarResult.ActionPerformed) vm.undo(undoId)
+            }
         }
     }
     LaunchedEffect(Unit) {
@@ -114,6 +130,7 @@ private fun App(vm: AppViewModel) {
             is Screen.Editor -> EditorScreen(vm, s.docId, snackbar)
             is Screen.Page -> PageScreen(vm, s.docId, s.index, snackbar)
             is Screen.Crop -> CropScreen(vm, s.docId, s.pageId)
+            is Screen.Sign -> com.fastkiwi.scan.ui.SignatureScreen(vm, s.docId, s.pageId)
             Screen.Settings -> SettingsScreen(vm)
         }
     }

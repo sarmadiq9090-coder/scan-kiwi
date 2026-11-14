@@ -6,6 +6,7 @@ import android.graphics.Bitmap
 import android.net.Uri
 import android.provider.DocumentsContract
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -39,13 +40,17 @@ sealed interface Screen {
     data class Editor(val docId: String) : Screen
     data class Page(val docId: String, val index: Int) : Screen
     data class Crop(val docId: String, val pageId: String) : Screen
+    data class Sign(val docId: String, val pageId: String) : Screen
     data object Settings : Screen
 }
 
 data class DocEntry(val doc: ScanDocument, val text: String)
 
 /** A user-visible message: string resource + optional argument. */
-data class UiMessage(val res: Int, val arg: String? = null)
+data class UiMessage(val res: Int, val arg: String? = null, val undoDocId: String? = null)
+
+/** Outcome of one camera shot. [needsReview]: the outline is doubtful, open the crop editor. */
+data class CaptureResult(val docId: String, val pageId: String?, val needsReview: Boolean)
 
 /** What to do with an export once the file(s) are ready. */
 sealed interface ExportResult {
@@ -77,8 +82,50 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private var idFront: Bitmap? = null
     val idFrontCaptured = mutableStateOf(false)
 
+    /** Per-document undo history (in memory, last 20 states). */
+    private val undoStacks = HashMap<String, ArrayDeque<ScanDocument>>()
+    val undoCounts = mutableStateMapOf<String, Int>()
+
     init {
         refresh()
+        // Page files are kept after delete/retake so Undo can bring them back;
+        // anything no longer referenced is cleaned up on the next start.
+        viewModelScope.launch(Dispatchers.IO) { runCatching { store.collectGarbage() } }
+    }
+
+    private fun pushUndo(prev: ScanDocument) {
+        val st = synchronized(undoStacks) { undoStacks.getOrPut(prev.id) { ArrayDeque() } }
+        synchronized(st) {
+            st.addLast(prev)
+            while (st.size > 20) st.removeFirst()
+            viewModelScope.launch { undoCounts[prev.id] = st.size }
+        }
+    }
+
+    /** Restores the document as it was before the last page edit. */
+    fun undo(docId: String) {
+        viewModelScope.launch {
+            job {
+                val st = synchronized(undoStacks) { undoStacks[docId] } ?: return@job
+                val prev = synchronized(st) { st.removeLastOrNull() } ?: return@job
+                viewModelScope.launch { undoCounts[docId] = st.size }
+                val cur = store.load(docId) ?: return@job
+                val curById = cur.pages.associateBy { it.id }
+                val pages = prev.pages.map { p ->
+                    val now = curById[p.id]
+                    val changed = now == null || now.corners != p.corners || now.rotation != p.rotation ||
+                        now.filter != p.filter || now.stamps != p.stamps
+                    if (changed || !store.outFile(docId, p.id).exists()) {
+                        // New revision so caches (thumbnails, OCR) never mix states.
+                        val restored = p.copy(revision = maxOf(p.revision, now?.revision ?: 0) + 1)
+                        PageRenderer.renderAndSave(store, docId, restored)?.recycle()
+                        restored
+                    } else now
+                }
+                saveAndPublish(cur.copy(name = prev.name, pages = pages))
+                _messages.send(UiMessage(R.string.msg_undone))
+            }
+        }
     }
 
     // -------------------------------------------------------------- navigation
@@ -128,6 +175,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         } catch (e: PdfImporter.ProtectedPdfException) {
             _messages.send(UiMessage(R.string.msg_pdf_protected)); null
         } catch (e: Exception) {
+            android.util.Log.w("KiwiScan", "job failed", e)
             _messages.send(UiMessage(R.string.msg_error, e.message ?: e.javaClass.simpleName)); null
         } finally {
             busy.value--
@@ -167,11 +215,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      * A photo from the camera. [liveQuad] is the outline seen in the preview,
      * used when detection on the still image fails.
      */
-    fun addCapture(target: Screen.Camera, jpeg: ByteArray, rotation: Int, liveQuad: Quad?, onDone: (docId: String?, added: Boolean) -> Unit) {
+    fun addCapture(target: Screen.Camera, jpeg: ByteArray, rotation: Int, liveQuad: Quad?, onDone: (CaptureResult?) -> Unit) {
         viewModelScope.launch {
             val result = job {
                 val bmp = BitmapIO.decodeBytes(jpeg, rotation) ?: error("decode")
-                val corners = BitmapIO.detect(bmp) ?: liveQuad
+                val det = BitmapIO.detectPage(bmp)
+                val corners = det?.quad ?: liveQuad
+                // Doubtful outline: ask the user instead of guessing.
+                val doubtful = det == null || !det.confident
                 var doc = ensureDoc(target.docId)
                 if (target.idCard) {
                     val card = PageRenderer.render(bmp, ScanPage("tmp", corners ?: BitmapIO.FULL, 0, Filter.ENHANCED))
@@ -181,7 +232,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                         idFront = card
                         idFrontCaptured.value = true
                         _messages.send(UiMessage(R.string.id_now_back))
-                        return@job (target.docId ?: doc.id.also { saveAndPublish(doc) }) to false
+                        val id = target.docId ?: doc.id.also { saveAndPublish(doc) }
+                        return@job CaptureResult(id, null, false)
                     }
                     val composed = IdCardComposer.compose(front, card)
                     front.recycle(); card.recycle()
@@ -191,27 +243,28 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     composed.recycle()
                     doc = saveAndPublish(doc.copy(pages = doc.pages + page))
                     _messages.send(UiMessage(R.string.msg_id_added))
-                    return@job doc.id to true
+                    return@job CaptureResult(doc.id, page.id, false)
                 }
                 val filter = settings.defaultFilter
+                val newPage: ScanPage
                 if (target.retakePageId != null) {
                     val idx = doc.pages.indexOfFirst { it.id == target.retakePageId }
-                    val newPage = addSource(doc.id, bmp, corners, doc.pages.getOrNull(idx)?.filter ?: filter)
+                    newPage = addSource(doc.id, bmp, corners, doc.pages.getOrNull(idx)?.filter ?: filter)
                     bmp.recycle()
-                    if (idx >= 0) {
-                        store.deletePageFiles(doc.id, doc.pages[idx].id)
-                        doc = doc.copy(pages = doc.pages.toMutableList().also { it[idx] = newPage })
+                    pushUndo(doc)
+                    doc = if (idx >= 0) {
+                        doc.copy(pages = doc.pages.toMutableList().also { it[idx] = newPage })
                     } else {
-                        doc = doc.copy(pages = doc.pages + newPage)
+                        doc.copy(pages = doc.pages + newPage)
                     }
                 } else {
-                    val page = addSource(doc.id, bmp, corners, filter)
+                    newPage = addSource(doc.id, bmp, corners, filter)
                     bmp.recycle()
-                    doc = doc.copy(pages = doc.pages + page)
+                    doc = doc.copy(pages = doc.pages + newPage)
                 }
-                saveAndPublish(doc).id to true
+                CaptureResult(saveAndPublish(doc).id, newPage.id, doubtful)
             }
-            onDone(result?.first, result?.second ?: false)
+            onDone(result)
         }
     }
 
@@ -266,13 +319,16 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    private fun mutatePages(docId: String, f: (MutableList<ScanPage>) -> Unit) {
+    private fun mutatePages(docId: String, message: UiMessage? = null, f: (MutableList<ScanPage>) -> Unit) {
         viewModelScope.launch {
             job {
                 val doc = store.load(docId) ?: return@job
                 val pages = doc.pages.toMutableList()
                 f(pages)
+                if (pages == doc.pages) return@job
+                pushUndo(doc)
                 saveAndPublish(doc.copy(pages = pages))
+                message?.let { _messages.send(it) }
             }
         }
     }
@@ -281,11 +337,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (from in p.indices && to in p.indices) p.add(to, p.removeAt(from))
     }
 
-    fun deletePage(docId: String, index: Int) = mutatePages(docId) { p ->
-        if (index in p.indices) {
-            store.deletePageFiles(docId, p[index].id)
-            p.removeAt(index)
-        }
+    /** Removes a page from the document; its files stay until restart so Undo works. */
+    fun deletePage(docId: String, index: Int) = mutatePages(docId, UiMessage(R.string.msg_page_deleted, undoDocId = docId)) { p ->
+        if (index in p.indices) p.removeAt(index)
     }
 
     /** Applies an edit to one page and re-renders it. */
@@ -295,12 +349,32 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 val doc = store.load(docId) ?: return@job
                 val idx = doc.pages.indexOfFirst { it.id == pageId }
                 if (idx < 0) return@job
-                val page = edit(doc.pages[idx]).let { it.copy(revision = it.revision + 1) }
+                val edited = edit(doc.pages[idx])
+                if (edited == doc.pages[idx]) return@job
+                val page = edited.copy(revision = edited.revision + 1)
+                pushUndo(doc)
                 PageRenderer.renderAndSave(store, docId, page)?.recycle()
                 val pages = doc.pages.toMutableList().also { it[idx] = page }
                 saveAndPublish(doc.copy(pages = pages))
             }
         }
+    }
+
+    /** Words from the recognised text, offered as a document name ("فاتورة كهرباء ..."). */
+    fun suggestName(docId: String): String? {
+        val d = doc(docId) ?: return null
+        val words = store.documentText(d).split(Regex("\\s+"))
+            .map { it.trim { c -> !c.isLetterOrDigit() } }
+            .filter { w -> w.length >= 2 && w.any { it.isLetter() } }
+            .take(5)
+        if (words.isEmpty()) return null
+        return words.joinToString(" ").take(48)
+    }
+
+    /** Rough size of the export (encodes up to 3 sample pages at the chosen quality). */
+    suspend fun estimateSize(docId: String, opt: ExportOptions): Long? = withContext(Dispatchers.Default) {
+        val d = store.load(docId) ?: return@withContext null
+        runCatching { exporter.estimatePdfSize(d, opt) }.getOrNull()
     }
 
     fun rename(docId: String, name: String) {

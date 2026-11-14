@@ -6,6 +6,18 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
+ * The user's signature placed on a finished page: centre ([cx], [cy]) and
+ * [width], all as fractions of the page; height follows the signature's aspect.
+ */
+data class Stamp(val cx: Float, val cy: Float, val width: Float) {
+    fun toJson(): JSONArray = JSONArray().put(cx.toDouble()).put(cy.toDouble()).put(width.toDouble())
+
+    companion object {
+        fun fromJson(a: JSONArray) = Stamp(a.getDouble(0).toFloat(), a.getDouble(1).toFloat(), a.getDouble(2).toFloat())
+    }
+}
+
+/**
  * One scanned page. [corners] are normalised (0..1) in the upright source
  * image; [rotation] is applied after the perspective crop.
  */
@@ -16,6 +28,7 @@ data class ScanPage(
     val filter: Filter = Filter.ENHANCED,
     /** Bumped whenever the rendered output changes, to bust image caches. */
     val revision: Int = 0,
+    val stamps: List<Stamp> = emptyList(),
 ) {
     fun toJson(): JSONObject = JSONObject()
         .put("id", id)
@@ -23,17 +36,20 @@ data class ScanPage(
         .put("rotation", rotation)
         .put("filter", filter.name)
         .put("revision", revision)
+        .put("stamps", JSONArray().apply { stamps.forEach { put(it.toJson()) } })
 
     companion object {
         fun fromJson(o: JSONObject): ScanPage {
             val a = o.getJSONArray("corners")
             val c = FloatArray(8) { a.getDouble(it).toFloat() }
+            val st = o.optJSONArray("stamps")
             return ScanPage(
                 id = o.getString("id"),
                 corners = Quad.fromArray(c),
                 rotation = o.optInt("rotation", 0),
                 filter = runCatching { Filter.valueOf(o.optString("filter")) }.getOrDefault(Filter.ORIGINAL),
                 revision = o.optInt("revision", 0),
+                stamps = if (st == null) emptyList() else List(st.length()) { Stamp.fromJson(st.getJSONArray(it)) },
             )
         }
     }

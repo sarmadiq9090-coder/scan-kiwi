@@ -69,28 +69,14 @@ class Exporter(private val ctx: Context, private val store: DocumentStore) {
                 if (ocr != null) {
                     words = store.loadOcr(doc.id, page) ?: ocr.recognize(full, opt.ocrLanguage).also { store.saveOcr(doc.id, page, it) }
                 }
-                val bitonal = page.filter == Filter.BW
-                val target = if (bitonal) opt.quality.bitonalLongSide else opt.quality.longSide
                 val fullW = full.width
-                val img = BitmapIO.fit(full, target)
-                val k = img.width.toFloat() / fullW
+                val (pdfImage, k) = encode(full, page.filter == Filter.BW, opt.quality)
                 val scaledWords = if (k == 1f) words else words.map {
                     OcrWord(it.text, (it.left * k).toInt(), (it.top * k).toInt(), (it.right * k).toInt(), (it.bottom * k).toInt())
                 }
-                val pdfImage = if (bitonal) {
-                    val px = IntArray(img.width * img.height)
-                    img.getPixels(px, 0, img.width, 0, 0, img.width, img.height)
-                    PdfImage.Bitonal(img.width, img.height, ImageFilters.packBits(px, img.width, img.height))
-                } else {
-                    val bos = ByteArrayOutputStream()
-                    img.compress(Bitmap.CompressFormat.JPEG, opt.quality.jpegQuality, bos)
-                    val bytes = bos.toByteArray()
-                    PdfImage.Jpeg(img.width, img.height, bytes, PdfWriter.jpegComponents(bytes))
-                }
                 // Physical size so a page is about A4 tall when "fit to image" is chosen.
-                val dpi = max(img.width, img.height) / 11.69f
+                val dpi = max(pdfImage.width, pdfImage.height) / 11.69f
                 writer.addPage(PdfPage(pdfImage, dpi, scaledWords))
-                img.recycle()
             }
             progress(doc.pages.size, doc.pages.size)
         } finally {
@@ -99,6 +85,49 @@ class Exporter(private val ctx: Context, private val store: DocumentStore) {
         val out = File(exportDir(), safeName(doc.name) + ".pdf")
         out.outputStream().buffered().use { writer.write(it) }
         return out
+    }
+
+    /**
+     * Encodes one finished page for the PDF at the chosen quality (recycles [full]).
+     * Returns the image and the scale factor applied to it.
+     */
+    private fun encode(full: Bitmap, bitonal: Boolean, quality: Quality): Pair<PdfImage, Float> {
+        val fullW = full.width
+        val img = BitmapIO.fit(full, if (bitonal) quality.bitonalLongSide else quality.longSide)
+        val k = img.width.toFloat() / fullW
+        val pdfImage = if (bitonal) {
+            val px = IntArray(img.width * img.height)
+            img.getPixels(px, 0, img.width, 0, 0, img.width, img.height)
+            PdfImage.Bitonal(img.width, img.height, ImageFilters.packBits(px, img.width, img.height))
+        } else {
+            val bos = ByteArrayOutputStream()
+            img.compress(Bitmap.CompressFormat.JPEG, quality.jpegQuality, bos)
+            val bytes = bos.toByteArray()
+            PdfImage.Jpeg(img.width, img.height, bytes, PdfWriter.jpegComponents(bytes))
+        }
+        img.recycle()
+        return pdfImage to k
+    }
+
+    /**
+     * Estimated PDF size in bytes without OCR: encodes up to 3 evenly spread
+     * pages and extrapolates. Bitonal pages are counted after Flate compression.
+     */
+    suspend fun estimatePdfSize(doc: ScanDocument, opt: ExportOptions): Long {
+        if (doc.pages.isEmpty()) return 0
+        val n = doc.pages.size
+        val sample = if (n <= 3) doc.pages.indices.toList() else listOf(0, n / 2, n - 1)
+        var bytes = 0L
+        for (i in sample) {
+            val full = pageBitmap(doc, i) ?: continue
+            val (img, _) = encode(full, doc.pages[i].filter == Filter.BW, opt.quality)
+            bytes += when (img) {
+                is PdfImage.Jpeg -> img.bytes.size.toLong()
+                is PdfImage.Bitonal -> PdfWriter.deflate(img.bits).size.toLong()
+            }
+        }
+        val perPage = bytes / sample.size
+        return perPage * n + 1500L * n + 2000L
     }
 
     suspend fun exportJpegs(doc: ScanDocument, opt: ExportOptions, progress: (Int, Int) -> Unit): List<File> {

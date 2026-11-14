@@ -65,7 +65,7 @@
     <string name="move_last">جعلها الأخيرة</string>
     <string name="rotate_left">تدوير لليسار</string>
     <string name="rotate_right">تدوير لليمين</string>
-    <string name="crop">قص الحواف</string>
+    <string name="crop">قص</string>
     <string name="retake">إعادة التصوير</string>
     <string name="delete_page">حذف الصفحة</string>
     <string name="delete_page_body">ستُحذف هذه الصفحة نهائيًا.</string>
@@ -78,8 +78,8 @@
     <string name="filter_gray">رمادي</string>
     <string name="filter_bw">أبيض وأسود</string>
 
-    <string name="crop_hint">اسحب الزوايا الأربع إلى حواف الورقة.</string>
-    <string name="crop_area_desc">منطقة القص. استخدم زر «كشف تلقائي» أو «الصورة كاملة».</string>
+    <string name="crop_hint">اسحب الزوايا أو منتصف الأضلاع إلى حواف الورقة. تلتصق بالحواف المكتشفة عند الاقتراب.</string>
+    <string name="crop_area_desc">منطقة القص. استخدم أزرار «الكل» أو «إعادة الكشف» أو التدوير.</string>
     <string name="auto_detect">كشف تلقائي</string>
     <string name="whole_image">الصورة كاملة</string>
     <string name="apply">تطبيق</string>
@@ -130,6 +130,36 @@
     <string name="show_licenses">التراخيص</string>
     <string name="about_body">ماسح كيوي %1$s، من مجموعة تطبيقات FastKiwi. مجاني بالكامل.</string>
     <string name="licenses_body">مكتبات مفتوحة المصدر: Jetpack Compose وCameraX وAndroidX وKotlin (Apache-2.0)، Tesseract4Android وTesseract وبيانات tessdata_fast (Apache-2.0)، Leptonica (BSD-2)، libjpeg-turbo (IJG/BSD)، libpng (رخصة libpng).</string>
+
+    <!-- v1.1 -->
+    <string name="crop_all">الكل</string>
+    <string name="crop_reset_detected">إعادة الكشف</string>
+    <string name="crop_problem_crossed">الزوايا متقاطعة: الشكل ليس رباعيًا صالحًا.</string>
+    <string name="crop_problem_concave">الشكل منبعج للداخل: اسحب الزاوية إلى الخارج.</string>
+    <string name="crop_problem_small">المنطقة صغيرة جدًا.</string>
+    <string name="crop_fix">إصلاح</string>
+    <string name="adjust_last_page">تعديل قص آخر صفحة</string>
+    <string name="review_after_capture">مراجعة القص بعد كل لقطة</string>
+    <string name="review_after_capture_hint">يفتح شاشة القص بعد التصوير اليدوي. في الالتقاط التلقائي تُراجَع فقط الصفحات غير الواضحة.</string>
+    <string name="undo">تراجع</string>
+    <string name="msg_undone">تم التراجع</string>
+    <string name="msg_page_deleted">حُذفت الصفحة</string>
+    <string name="signature">توقيع</string>
+    <string name="signature_pad_desc">لوحة رسم التوقيع</string>
+    <string name="signature_draw_hint">ارسم توقيعك بإصبعك. يُحفظ داخل الهاتف فقط.</string>
+    <string name="signature_clear">مسح اللوحة</string>
+    <string name="signature_place_hint">اسحب التوقيع إلى مكانه على الصفحة وغيّر حجمه.</string>
+    <string name="signature_place_desc">معاينة الصفحة مع التوقيع، اسحب لتحريكه</string>
+    <string name="signature_size">حجم التوقيع</string>
+    <string name="signature_redraw">رسم من جديد</string>
+    <string name="signature_remove">إزالة التواقيع</string>
+    <string name="size_legal">Legal</string>
+    <string name="size_a5">A5</string>
+    <string name="estimated_size">الحجم المتوقع نحو %1$s</string>
+    <string name="estimating_size">جارٍ تقدير الحجم…</string>
+    <string name="name_suggestion">اقتراح: %1$s</string>
+    <string name="shortcut_scan_short">مسح سريع</string>
+    <string name="shortcut_scan_long">مسح مستند بالكاميرا</string>
 
     <plurals name="page_count">
         <item quantity="zero">لا صفحات</item>

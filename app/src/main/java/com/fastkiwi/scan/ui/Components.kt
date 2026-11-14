@@ -73,19 +73,28 @@ fun FileImage(
 }
 
 @Composable
-fun RenameDialog(current: String, onDismiss: () -> Unit, onRename: (String) -> Unit) {
+fun RenameDialog(current: String, suggestion: String? = null, onDismiss: () -> Unit, onRename: (String) -> Unit) {
     var value by remember { mutableStateOf(TextFieldValue(current, TextRange(0, current.length))) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.rename)) },
         text = {
-            OutlinedTextField(
-                value = value,
-                onValueChange = { value = it },
-                singleLine = true,
-                label = { Text(stringResource(R.string.document_name)) },
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-            )
+            androidx.compose.foundation.layout.Column {
+                OutlinedTextField(
+                    value = value,
+                    onValueChange = { value = it },
+                    singleLine = true,
+                    label = { Text(stringResource(R.string.document_name)) },
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                )
+                // Name suggested from the first recognised words (after OCR).
+                if (suggestion != null && suggestion != value.text) {
+                    androidx.compose.material3.SuggestionChip(
+                        onClick = { value = TextFieldValue(suggestion, TextRange(suggestion.length)) },
+                        label = { Text(stringResource(R.string.name_suggestion, suggestion), maxLines = 1) },
+                    )
+                }
+            }
         },
         confirmButton = {
             TextButton(onClick = { onRename(value.text); onDismiss() }, enabled = value.text.isNotBlank()) {

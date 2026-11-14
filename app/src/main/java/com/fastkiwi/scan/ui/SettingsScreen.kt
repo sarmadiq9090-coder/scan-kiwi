@@ -34,6 +34,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.fastkiwi.scan.BuildConfig
 import com.fastkiwi.scan.R
@@ -45,6 +47,7 @@ fun SettingsScreen(vm: AppViewModel) {
     val ctx = LocalContext.current
     val s = vm.settings
     var auto by remember { mutableStateOf(s.autoCapture) }
+    var review by remember { mutableStateOf(s.reviewAfterCapture) }
     var filter by remember { mutableStateOf(s.defaultFilter) }
     var lang by remember { mutableStateOf(currentLanguage(ctx)) }
     var showLicenses by remember { mutableStateOf(false) }
@@ -67,6 +70,7 @@ fun SettingsScreen(vm: AppViewModel) {
             }
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
             SwitchRow(R.string.auto_capture, R.string.auto_capture_hint, auto) { auto = it; s.autoCapture = it }
+            SwitchRow(R.string.review_after_capture, R.string.review_after_capture_hint, review) { review = it; s.reviewAfterCapture = it }
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
             Section(R.string.default_filter)
             Column(Modifier.selectableGroup()) {
@@ -102,7 +106,7 @@ fun SettingsScreen(vm: AppViewModel) {
 
 @Composable
 private fun Section(res: Int) {
-    Text(stringResource(res), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 16.dp, bottom = 8.dp))
+    Text(stringResource(res), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 16.dp, bottom = 8.dp).semantics { heading() })
 }
 
 @Composable

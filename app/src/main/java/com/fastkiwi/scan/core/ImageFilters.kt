@@ -245,6 +245,22 @@ object ImageFilters {
         return threshold
     }
 
+    /**
+     * Luminance with shadows and uneven light divided out (paper ~ 255).
+     * Used before OCR: Tesseract binarises far better without shading.
+     */
+    fun normalizedGray(px: IntArray, w: Int, h: Int): GrayImage {
+        val bg = background(px, w, h, ::luma)
+        val out = ByteArray(w * h)
+        for (y in 0 until h) {
+            val row = y * w
+            for (x in 0 until w) {
+                out[row + x] = clamp((luma(px[row + x]) / bg.at(x, y) * 255f).toInt()).toByte()
+            }
+        }
+        return GrayImage(w, h, out)
+    }
+
     /** Luminance plane of ARGB pixels. */
     fun toGray(px: IntArray, w: Int, h: Int): GrayImage {
         val out = ByteArray(w * h)

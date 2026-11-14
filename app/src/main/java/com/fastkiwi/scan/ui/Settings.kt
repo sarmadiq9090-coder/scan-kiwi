@@ -14,6 +14,11 @@ class Settings(ctx: Context) {
         get() = p.getBoolean("auto_capture", true)
         set(v) = p.edit().putBoolean("auto_capture", v).apply()
 
+    /** Open the outline editor after each manual shot (auto-captured batches skip it). */
+    var reviewAfterCapture: Boolean
+        get() = p.getBoolean("review_after_capture", true)
+        set(v) = p.edit().putBoolean("review_after_capture", v).apply()
+
     var defaultFilter: Filter
         get() = enumOr(p.getString("default_filter", null), Filter.ENHANCED)
         set(v) = p.edit().putString("default_filter", v.name).apply()

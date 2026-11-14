@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Shortcut icon: kiwi-green circle with scan brackets and a lens. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp" android:height="48dp"
+    android:viewportWidth="48" android:viewportHeight="48">
+    <path android:fillColor="#356A1E" android:pathData="M24,24m-22,0a22,22 0,1 1,44 0a22,22 0,1 1,-44 0" />
+    <path android:strokeColor="#FFFFFF" android:strokeWidth="2.5" android:strokeLineCap="round"
+        android:pathData="M14,19 L14,14 L19,14 M29,14 L34,14 L34,19 M34,29 L34,34 L29,34 M19,34 L14,34 L14,29" />
+    <path android:fillColor="#B6F293" android:pathData="M24,24m-5,0a5,5 0,1 1,10 0a5,5 0,1 1,-10 0" />
+</vector>

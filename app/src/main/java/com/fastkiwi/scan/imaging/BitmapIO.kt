@@ -6,6 +6,8 @@ import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.media.ExifInterface
 import android.net.Uri
+import com.fastkiwi.scan.core.Detection
+import com.fastkiwi.scan.core.ExifOrientation
 import com.fastkiwi.scan.core.ImageFilters
 import com.fastkiwi.scan.core.Pt
 import com.fastkiwi.scan.core.Quad
@@ -47,17 +49,14 @@ object BitmapIO {
         if (opts.outWidth <= 0) return null
         val o2 = BitmapFactory.Options().apply { inSampleSize = sampleSize(opts.outWidth, opts.outHeight, maxSide) }
         val bmp = cr.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, o2) } ?: return null
-        val rotation = runCatching {
+        // All 8 EXIF orientations (rotations and mirrors) are baked into the stored
+        // page source, so crop corners always live in upright image space.
+        val orientation = runCatching {
             cr.openInputStream(uri)?.use {
-                when (ExifInterface(it).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)) {
-                    ExifInterface.ORIENTATION_ROTATE_90 -> 90
-                    ExifInterface.ORIENTATION_ROTATE_180 -> 180
-                    ExifInterface.ORIENTATION_ROTATE_270 -> 270
-                    else -> 0
-                }
-            } ?: 0
-        }.getOrDefault(0)
-        return rotate(fit(bmp, maxSide), rotation)
+                ExifInterface(it).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
+            } ?: ExifInterface.ORIENTATION_NORMAL
+        }.getOrDefault(ExifInterface.ORIENTATION_NORMAL)
+        return applyExif(fit(bmp, maxSide), ExifOrientation.transform(orientation))
     }
 
     private fun sampleSize(w: Int, h: Int, maxSide: Int): Int {
@@ -93,8 +92,22 @@ object BitmapIO {
         }
     }
 
+    /** Decodes a PNG keeping transparency (used for the signature). */
+    fun decodePng(file: File): Bitmap? =
+        if (file.exists()) BitmapFactory.decodeFile(file.absolutePath, BitmapFactory.Options().apply { inPreferredConfig = Bitmap.Config.ARGB_8888 }) else null
+
+    fun savePng(bmp: Bitmap, file: File) {
+        file.parentFile?.mkdirs()
+        val tmp = File(file.parentFile, file.name + ".tmp")
+        FileOutputStream(tmp).use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        if (!tmp.renameTo(file)) { file.delete(); tmp.renameTo(file) }
+    }
+
     /** Finds the page outline in a bitmap; returns normalised corners or null. */
-    fun detect(bmp: Bitmap): Quad? {
+    fun detect(bmp: Bitmap): Quad? = detectPage(bmp)?.quad
+
+    /** Page outline (normalised 0..1 corners) with its confidence, or null. */
+    fun detectPage(bmp: Bitmap): Detection? {
         val k = 480f / max(bmp.width, bmp.height)
         val small = if (k < 1f) Bitmap.createScaledBitmap(bmp, max(1, (bmp.width * k).toInt()), max(1, (bmp.height * k).toInt()), true) else bmp
         val px = IntArray(small.width * small.height)
@@ -103,7 +116,18 @@ object BitmapIO {
         val w = small.width.toFloat()
         val h = small.height.toFloat()
         if (small !== bmp) small.recycle()
-        return det?.quad?.map { Pt(it.x / w, it.y / h) }
+        return det?.let { it.copy(quad = it.quad.map { p -> Pt(p.x / w, p.y / h) }) }
+    }
+
+    /** Applies an EXIF orientation (rotate clockwise, then mirror) so the image is upright. */
+    fun applyExif(bmp: Bitmap, t: ExifOrientation.Transform): Bitmap {
+        if (t.rotation == 0 && !t.flipHorizontal) return bmp
+        val m = Matrix()
+        m.postRotate(t.rotation.toFloat())
+        if (t.flipHorizontal) m.postScale(-1f, 1f)
+        val out = Bitmap.createBitmap(bmp, 0, 0, bmp.width, bmp.height, m, true)
+        if (out !== bmp) bmp.recycle()
+        return out
     }
 
     val FULL: Quad = Quad.full(1f, 1f)

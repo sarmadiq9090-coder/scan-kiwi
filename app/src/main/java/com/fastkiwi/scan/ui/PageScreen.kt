@@ -13,10 +13,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.NavigateBefore
 import androidx.compose.material.icons.automirrored.filled.NavigateNext
-import androidx.compose.material.icons.automirrored.filled.RotateLeft
-import androidx.compose.material.icons.automirrored.filled.RotateRight
+import androidx.compose.material.icons.filled.Rotate90DegreesCcw
+import androidx.compose.material.icons.filled.Rotate90DegreesCw
 import androidx.compose.material.icons.filled.Cameraswitch
+import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.Crop
+import androidx.compose.material.icons.filled.Draw
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.BottomAppBar
 import androidx.compose.material3.CircularProgressIndicator
@@ -73,6 +75,9 @@ fun PageScreen(vm: AppViewModel, docId: String, startIndex: Int, snackbar: Snack
                 navigationIcon = { IconButton(onClick = { vm.back() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) } },
                 title = { Text(stringResource(R.string.page_n_of, index + 1, doc.pages.size)) },
                 actions = {
+                    IconButton(onClick = { vm.undo(docId) }, enabled = (vm.undoCounts[docId] ?: 0) > 0) {
+                        Icon(Icons.AutoMirrored.Filled.Undo, stringResource(R.string.undo))
+                    }
                     IconButton(onClick = { index-- }, enabled = index > 0) { Icon(Icons.AutoMirrored.Filled.NavigateBefore, stringResource(R.string.previous_page)) }
                     IconButton(onClick = { index++ }, enabled = index < doc.pages.lastIndex) { Icon(Icons.AutoMirrored.Filled.NavigateNext, stringResource(R.string.next_page)) }
                 },
@@ -83,11 +88,12 @@ fun PageScreen(vm: AppViewModel, docId: String, startIndex: Int, snackbar: Snack
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                     IconButton(onClick = { vm.open(Screen.Crop(docId, page.id)) }) { Icon(Icons.Filled.Crop, stringResource(R.string.crop)) }
                     IconButton(onClick = { vm.editPage(docId, page.id) { it.copy(rotation = (it.rotation + 270) % 360) } }) {
-                        Icon(Icons.AutoMirrored.Filled.RotateLeft, stringResource(R.string.rotate_left))
+                        Icon(Icons.Filled.Rotate90DegreesCcw, stringResource(R.string.rotate_left))
                     }
                     IconButton(onClick = { vm.editPage(docId, page.id) { it.copy(rotation = (it.rotation + 90) % 360) } }) {
-                        Icon(Icons.AutoMirrored.Filled.RotateRight, stringResource(R.string.rotate_right))
+                        Icon(Icons.Filled.Rotate90DegreesCw, stringResource(R.string.rotate_right))
                     }
+                    IconButton(onClick = { vm.open(Screen.Sign(docId, page.id)) }) { Icon(Icons.Filled.Draw, stringResource(R.string.signature)) }
                     IconButton(onClick = { vm.open(Screen.Camera(docId, retakePageId = page.id)) }) { Icon(Icons.Filled.Cameraswitch, stringResource(R.string.retake)) }
                     IconButton(onClick = { confirmDelete = true }) { Icon(Icons.Filled.Delete, stringResource(R.string.delete_page)) }
                 }

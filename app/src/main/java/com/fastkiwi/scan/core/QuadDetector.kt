@@ -15,7 +15,14 @@ class GrayImage(val width: Int, val height: Int, val data: ByteArray) {
     operator fun get(x: Int, y: Int): Int = data[y * width + x].toInt() and 0xFF
 }
 
-data class Detection(val quad: Quad, val score: Float)
+/**
+ * A found page outline. [minSupport]/[meanSupport] are the fractions of the
+ * sides lying on detected edges (0..1); low values mean a doubtful outline.
+ */
+data class Detection(val quad: Quad, val score: Float, val minSupport: Float = 1f, val meanSupport: Float = 1f) {
+    /** Confident enough to crop without asking the user. */
+    val confident: Boolean get() = minSupport >= 0.6f && meanSupport >= 0.78f
+}
 
 /**
  * Finds the outline of a document (the largest convex quadrilateral whose
@@ -63,11 +70,11 @@ class QuadDetector(private val workSize: Int = 320) {
                 val mean = sides.average().toFloat()
                 if (minSide < 0.45f || mean < 0.62f) continue
                 val score = (area / (w * h)) * mean * mean
-                if (best == null || score > best.score) best = Detection(quad, score)
+                if (best == null || score > best.score) best = Detection(quad, score, minSide, mean)
             }
             if (best != null && best.score > 0.25f) break
         }
-        return best?.let { Detection(it.quad.scale(s, s), it.score) }
+        return best?.let { it.copy(quad = it.quad.scale(s, s)) }
     }
 
     /**

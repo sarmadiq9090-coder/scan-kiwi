@@ -77,6 +77,28 @@ class DocumentStore(root: File) {
         return np
     }
 
+    /**
+     * Deletes page files that no document references any more (pages deleted
+     * or retaken in an earlier session; kept until now so Undo could restore them).
+     */
+    @Synchronized
+    fun collectGarbage(): Int {
+        var removed = 0
+        for (dir in base.listFiles() ?: emptyArray()) {
+            if (!dir.isDirectory) continue
+            val doc = runCatching { load(dir.name) }.getOrNull() ?: continue
+            val live = doc.pages.map { it.id }.toSet()
+            for (f in dir.listFiles() ?: emptyArray()) {
+                val m = PAGE_FILE.matchEntire(f.name) ?: continue
+                if (m.groupValues[1] !in live && f.delete()) removed++
+            }
+        }
+        return removed
+    }
+
+    /** The user's own signature (transparent PNG), kept only inside the app. */
+    val signatureFile = File(root, "signature/signature.png")
+
     // --------------------------------------------------------------- OCR cache
 
     fun saveOcr(docId: String, page: ScanPage, words: List<OcrWord>) {
@@ -106,6 +128,8 @@ class DocumentStore(root: File) {
         doc.pages.joinToString(" ") { p -> loadOcr(doc.id, p)?.joinToString(" ") { it.text } ?: "" }
 
     companion object {
+        private val PAGE_FILE = Regex("p_([0-9a-f]+)(_out|_thumb|_ocr)?\\.(jpg|json|tmp)")
+
         fun newId(): String = UUID.randomUUID().toString().replace("-", "").take(16)
     }
 }

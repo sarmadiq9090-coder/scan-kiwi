@@ -25,3 +25,49 @@ Each decision below would normally go to the owner. It was settled by a short in
 | D18 | **Signing key** | Debug key; new release key | **New RSA-4096 PKCS12 release key** in git-ignored `keystore/`, random password kept only in git-ignored `keystore/README-local.txt` and `keystore.properties`. |
 | D19 | **PDF password characters** | Any Unicode; ASCII only | **Printable ASCII only.** PDF readers apply SASLprep to passwords; mixed Arabic/digit passwords break its bidi rule (found by our PDFBox test), so some readers could never open the file. The UI explains this. |
 | D20 | **Testing without a device** | Emulator (needs Hyper-V/WHPX or the AEHD driver: system changes we may not make); skip UI testing; Robolectric | **Robolectric with native graphics** runs the real app UI and image pipeline on the JVM, makes the screenshots in `screenshots/`, and exports/decrypts real PDFs. Camera and Tesseract (native code) still need a phone. |
+
+## v1.1 — owner feedback and council review (2026-11-14)
+
+Owner feedback on 1.0.0: «تعديل على تحديد الصوره بعد الالتقاط» (adjusting the page selection after capture)
+and «استشر المجلس حول الاضافات و التحسينات وطبقها».
+
+### D21 — Crop after capture (owner priority)
+
+Benchmarked against Adobe Scan, Genius Scan and Google's ML Kit document scanner. All three offer draggable corners
+with a magnifier; Adobe and Genius add side handles; Google re-detects. We took the best of each:
+
+- 72 dp grab area per handle (corners **and** side midpoints; a side moves parallel to itself).
+- Magnifier (2.5x) floats **above** the finger (below it near the top edge), with a crosshair and the outline drawn inside.
+- Snapping to the detected page corners and sides, with a haptic tick.
+- Buttons: «الكل» (whole image), «إعادة الكشف» (back to the detected outline), 90° rotation inside the crop screen.
+- Crossed or concave outlines show a red warning bar with «إصلاح»; Apply is disabled until it is valid (no crash path).
+- After capture: a doubtful outline (low edge support) **always** opens the crop screen; a manual shot opens it when
+  «مراجعة القص بعد كل لقطة» is on (default **on**, as the owner asked); auto-captured pages flow on as a batch.
+- The last captured page is shown as a thumbnail in the camera; tap it to re-crop at once.
+- «قص» stays in every page's menu; the original photo is always kept, so re-cropping is lossless.
+- All 8 EXIF orientations (including mirrored ones) are baked into the stored source, so outlines stay correct for
+  gallery imports. Geometry is unit-tested (handle hit-test, corner/edge drag, snapping, invalid shapes, EXIF).
+
+### D22 — Council on v1.1 additions
+
+Viewpoints: **U** everyday user, **P** privacy/security, **A** accessibility/Arabic, **S** performance/size,
+**C** competitor parity. Budget: about one day after the crop work.
+
+| Candidate | Verdict | Reason |
+|---|---|---|
+| Signature stamp | **Done** | U+C: signing forms is a top reason to scan; Adobe/CamScanner charge for it. P: signature PNG stays in app-private storage, never exported alone. Draw once, drag to place, resize; burned in after filters. |
+| Batch auto-capture | **Done** | U: multi-page scanning without a tap per page. Auto-captured pages skip review unless the outline is doubtful. |
+| Book mode (split facing pages) | **Not now** | S+U: needs spine detection and page de-warping to be good; a naive half-split disappoints. Revisit with a better model. |
+| Page count + size before sharing | **Done** | U: avoids "file too big for WhatsApp" surprises; estimate from up to 3 encoded sample pages. |
+| Default names from date + first OCR words | **Done (as a suggestion)** | U wants meaningful names; P/A: renaming silently would surprise users, so the rename dialog offers the OCR words as a one-tap suggestion; the date-based default stays. |
+| Home-screen quick-scan shortcut | **Done** | U: one tap to the camera; static shortcut, no permissions. |
+| Dark theme | **Already in 1.0** | Follows the system; checked again. |
+| Send as images | **Already in 1.0** | JPG export / share several images. |
+| A5 / Legal page size | **Done** | C+U: cheap and common (Legal in the Gulf/US forms, A5 receipts and booklets). |
+| Better Arabic OCR | **Partly** | A wants it most; S objects to `tessdata_best` (+12.6 MB APK, ~3x slower OCR). We added shadow/illumination normalisation before OCR, which helps Tesseract on phone photos, and kept the fast model. Real-phone measurements decide the next step. |
+| Undo in the editor | **Done** | U: deletes and filter changes are reversible (20 steps; undo button + "Undo" on the delete snackbar). P: deleted page files are only removed at the next app start. |
+| TalkBack pass | **Done** | A: page tiles and document rows expose their menu actions as accessibility actions; section titles are headings; warning bar is a live region; rotation icons no longer mirror in RTL (rotation direction is physical). |
+
+### D23 — Version and signing
+
+**1.1.0 (versionCode 2)**, signed with the same release key as 1.0.0 so it installs over it and keeps the user's documents.

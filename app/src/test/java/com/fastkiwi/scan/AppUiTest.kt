@@ -12,6 +12,9 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.performClick
 import com.fastkiwi.scan.core.Filter
 import com.fastkiwi.scan.core.PageSize
@@ -138,13 +141,29 @@ class AppUiTest {
         shot("03-page-filters-ar")
 
         rule.runOnUiThread { vm.open(Screen.Crop(doc.id, doc.pages[0].id)) }
-        rule.waitUntil(5_000) { rule.onAllNodesWithText("كشف تلقائي", substring = true).fetchSemanticsNodes().isNotEmpty() }
+        rule.waitUntil(5_000) { rule.onAllNodesWithText("إعادة الكشف", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
+        rule.waitUntil(5_000) { rule.onAllNodesWithContentDescription("منطقة القص", substring = true).fetchSemanticsNodes().isNotEmpty() }
         Thread.sleep(500)
         shot("04-crop-corners-ar")
+        // Drag the top-left corner far to the right: the outline becomes crossed,
+        // the warning appears and nothing crashes; "Fix" repairs it.
+        dragCorner(from = vm.store.load(doc.id)!!.pages[0].corners.tl, to = 0.9f to 0.75f)
+        rule.waitUntil(5_000) { rule.onAllNodesWithText("إصلاح", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
+        shot("04b-crop-invalid-warning-ar")
+        rule.onNodeWithText("إصلاح", useUnmergedTree = true).performClick()
+        rule.runOnUiThread { vm.back() }
 
+        // Signature: store one, then the placement screen.
+        rule.runOnUiThread { vm.open(Screen.Sign(doc.id, doc.pages[1].id)) }
+        writeSignature(vm.store.signatureFile)
+        rule.runOnUiThread { vm.back(); vm.open(Screen.Sign(doc.id, doc.pages[1].id)) }
+        rule.waitUntil(5_000) { rule.onAllNodesWithText("حجم التوقيع").fetchSemanticsNodes().isNotEmpty() }
+        shot("09-signature-place-ar")
         rule.runOnUiThread { vm.back(); vm.back() }
+
         rule.onNodeWithText("تصدير").performClick()
         rule.waitUntil(5_000) { rule.onAllNodesWithText("حماية بكلمة مرور").fetchSemanticsNodes().isNotEmpty() }
+        rule.waitUntil(10_000) { rule.onAllNodesWithText("الحجم المتوقع", substring = true).fetchSemanticsNodes().isNotEmpty() }
         shot("05-export-options-ar")
         rule.runOnUiThread { rule.activity.onBackPressedDispatcher.onBackPressed() }
 
@@ -155,6 +174,54 @@ class AppUiTest {
         rule.runOnUiThread { vm.back(); vm.open(Screen.Camera(null)) }
         rule.waitForIdle()
         shot("07-camera-permission-ar")
+    }
+
+    /** Drags inside the crop canvas; fractions are of the canvas size. */
+    private fun dragCorner(from: Pt, to: Pair<Float, Float>) {
+        rule.onNodeWithContentDescription("منطقة القص", substring = true).performTouchInput {
+            // The 1000x1333 photo is centred in the canvas; grab the handle where it is drawn.
+            val k = minOf(width / 1000f, height / 1333f)
+            val ox = (width - 1000f * k) / 2f
+            val oy = (height - 1333f * k) / 2f
+            val start = androidx.compose.ui.geometry.Offset(ox + from.x * 1000f * k, oy + from.y * 1333f * k)
+            down(start)
+            val end = androidx.compose.ui.geometry.Offset(width * to.first, height * to.second)
+            for (i in 1..20) moveTo(start + (end - start) * (i / 20f))
+            up()
+        }
+        rule.waitForIdle()
+    }
+
+    private fun writeSignature(file: File) {
+        val bmp = Bitmap.createBitmap(600, 200, Bitmap.Config.ARGB_8888)
+        val c = Canvas(bmp)
+        val p = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(26, 35, 126); strokeWidth = 10f; style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND }
+        val path = Path().apply { moveTo(20f, 150f); cubicTo(120f, 10f, 180f, 190f, 260f, 80f); cubicTo(330f, 0f, 400f, 180f, 580f, 60f) }
+        c.drawPath(path, p)
+        file.parentFile?.mkdirs()
+        file.outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+    }
+
+    @Test
+    fun undoRestoresDeletedPageAndFilter() {
+        val doc = seed()
+        val vm = rule.activity.vm
+        rule.runOnUiThread { vm.deletePage(doc.id, 0) }
+        rule.waitUntil(10_000) { vm.store.load(doc.id)!!.pages.size == 2 }
+        rule.runOnUiThread { vm.editPage(doc.id, doc.pages[1].id) { it.copy(filter = Filter.GRAYSCALE) } }
+        rule.waitUntil(10_000) { vm.store.load(doc.id)!!.pages.first().filter == Filter.GRAYSCALE }
+        rule.runOnUiThread { vm.undo(doc.id) }
+        rule.waitUntil(10_000) { vm.store.load(doc.id)!!.pages.first().filter == Filter.WHITEN }
+        rule.runOnUiThread { vm.undo(doc.id) }
+        rule.waitUntil(10_000) { vm.store.load(doc.id)!!.pages.size == 3 }
+        val restored = vm.store.load(doc.id)!!
+        assertEquals(doc.pages.map { it.id }, restored.pages.map { it.id })
+        // Files of the deleted page were kept, so the restored page still renders.
+        assertTrue(vm.store.outFile(doc.id, doc.pages[0].id).exists())
+        // Signature stamp survives a save/load round trip and is rendered.
+        writeSignature(vm.store.signatureFile)
+        rule.runOnUiThread { vm.editPage(doc.id, doc.pages[0].id) { it.copy(stamps = listOf(com.fastkiwi.scan.data.Stamp(0.7f, 0.85f, 0.3f))) } }
+        rule.waitUntil(10_000) { vm.store.load(doc.id)!!.pages[0].stamps.size == 1 }
     }
 
     @Test
