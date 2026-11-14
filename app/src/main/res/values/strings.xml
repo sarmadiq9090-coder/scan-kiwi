@@ -20,7 +20,7 @@
     <string name="selected">محدد</string>
     <string name="not_selected">غير محدد</string>
     <string name="share_pdf">مشاركة PDF</string>
-    <string name="more_options_for">خيارات أخرى لـ %1$s</string>
+    <string name="more_options_for">خيارات أخرى لـ ⁨%1$s⁩</string>
     <string name="document_name">اسم المستند</string>
     <string name="save">حفظ</string>
     <string name="cancel">إلغاء</string>
@@ -104,7 +104,7 @@
     <string name="ocr_ara">عربي</string>
     <string name="ocr_quality_note">دقة الإنجليزية جيدة على الصفحات الواضحة. دقة العربية أقل وقد تحتاج تصحيحًا؛ وهي أفضل مع «أبيض وأسود» أو «إزالة الظلال».</string>
     <string name="password_title">حماية بكلمة مرور</string>
-    <string name="password_hint">تشفير AES-256؛ لا يُفتح الملف إلا بكلمة المرور.</string>
+    <string name="password_hint">تشفير ⁨AES-256⁩؛ لا يُفتح الملف إلا بكلمة المرور.</string>
     <string name="password">كلمة المرور</string>
     <string name="password_ascii_hint">حروف إنجليزية وأرقام ورموز فقط، ليفتح الملف في كل البرامج.</string>
     <string name="show_password">إظهار كلمة المرور</string>
@@ -184,8 +184,8 @@
     <string name="feedback_no_browser">لا يوجد متصفح على الهاتف. جرّب «عبر البريد».</string>
     <string name="updates_title">التحديثات</string>
     <string name="updates_body">التحديث يدوياً: نزّل ملف APK من صفحة الإصدارات وثبّته فوق الحالي؛ تبقى مستنداتك كما هي. لا يقبل أندرويد إلا تحديثاً موقّعاً بالمفتاح نفسه.</string>
-    <string name="pdfa_title">أرشيفي (PDF/A)</string>
-    <string name="pdfa_hint">صيغة PDF/A-2b للحفظ الطويل. لا تجتمع مع كلمة المرور.</string>
+    <string name="pdfa_title">أرشيفي (⁨PDF/A⁩)</string>
+    <string name="pdfa_hint">صيغة ⁨PDF/A-2b⁩ للحفظ الطويل. لا تجتمع مع كلمة المرور.</string>
 
     <string name="export_preparing">يجهّز الملف… صفحة %1$d من %2$d</string>
     <string name="export_reading_text">يقرأ النص… صفحة %1$d من %2$d</string>
@@ -242,7 +242,7 @@
     <string name="unit_cm">سم</string>
     <string name="unit_in">بوصة</string>
     <string name="pdfa_excluded">لا يجتمع مع كلمة المرور</string>
-    <string name="password_excluded">لا تجتمع مع الأرشفة (PDF/A)</string>
+    <string name="password_excluded">لا تجتمع مع الأرشفة (⁨PDF/A⁩)</string>
     <string name="camera_permission_title">اسمح باستخدام الكاميرا</string>
     <string name="not_now">ليس الآن</string>
     <string name="pick_images">اختيار صور من المعرض</string>
@@ -253,6 +253,8 @@
     <string name="flash">الفلاش</string>
     <string name="state_on">يعمل</string>
     <string name="state_off">متوقف</string>
+    <string name="size_kb">%1$s ك.ب</string>
+    <string name="size_mb">%1$s م.ب</string>
     <plurals name="page_count">
         <item quantity="zero">لا صفحات</item>
         <item quantity="one">صفحة واحدة</item>

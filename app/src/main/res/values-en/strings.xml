@@ -248,6 +248,8 @@
     <string name="flash">Flash</string>
     <string name="state_on">On</string>
     <string name="state_off">Off</string>
+    <string name="size_kb">%1$s KB</string>
+    <string name="size_mb">%1$s MB</string>
     <plurals name="page_count">
         <item quantity="one">%d page</item>
         <item quantity="other">%d pages</item>

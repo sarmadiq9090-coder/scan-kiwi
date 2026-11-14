@@ -141,7 +141,7 @@ private fun App(vm: AppViewModel) {
             when (r) {
                 is ExportResult.Share -> share(ctx, r.files, r.mime)
                 is ExportResult.Saved -> snackbar.showSnackbar(
-                    res.getString(R.string.msg_saved, android.text.format.Formatter.formatShortFileSize(ctx, r.bytes)),
+                    res.getString(R.string.msg_saved, com.fastkiwi.scan.ui.LocalFormat.size(ctx, r.bytes)),
                 )
             }
         }

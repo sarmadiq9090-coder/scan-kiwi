@@ -123,4 +123,4 @@ fun ConfirmDialog(title: String, body: String, confirm: String, onDismiss: () ->
 }
 
 @Composable
-fun formatSize(bytes: Long): String = Formatter.formatShortFileSize(LocalContext.current, bytes)
+fun formatSize(bytes: Long): String = LocalFormat.size(LocalContext.current, bytes)

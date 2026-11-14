@@ -337,8 +337,21 @@ object LocalFormat {
             days == 0L -> ctx.getString(R.string.date_today, android.text.format.DateFormat.getTimeFormat(ctx).format(Date(millis)))
             days == 1L -> ctx.getString(R.string.date_yesterday)
             then.get(Calendar.YEAR) == today.get(Calendar.YEAR) ->
-                android.text.format.DateFormat.format(android.text.format.DateFormat.getBestDateTimePattern(locale, "dMMMM"), millis).toString()
-            else -> android.text.format.DateFormat.format(android.text.format.DateFormat.getBestDateTimePattern(locale, "dMMMMy"), millis).toString()
+                java.text.SimpleDateFormat(android.text.format.DateFormat.getBestDateTimePattern(locale, "dMMMM"), locale).format(Date(millis))
+            else -> java.text.SimpleDateFormat(android.text.format.DateFormat.getBestDateTimePattern(locale, "dMMMMy"), locale).format(Date(millis))
+        }
+    }
+
+    /** File size in the locale's digits: «٧٨ ك.ب» / «١٫٢ م.ب» / "78 KB". */
+    fun size(ctx: Context, bytes: Long): String {
+        val locale = ctx.resources.configuration.locales[0] ?: Locale.getDefault()
+        val nf = NumberFormat.getNumberInstance(locale)
+        return if (bytes < 1_000_000L) {
+            nf.maximumFractionDigits = 0
+            ctx.getString(R.string.size_kb, nf.format(maxOf(1L, (bytes + 999) / 1000)))
+        } else {
+            nf.maximumFractionDigits = 1
+            ctx.getString(R.string.size_mb, nf.format(bytes / 1_000_000.0))
         }
     }
 
