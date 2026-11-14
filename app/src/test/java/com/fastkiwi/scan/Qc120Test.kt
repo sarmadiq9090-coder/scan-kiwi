@@ -326,6 +326,39 @@ class QcAppTest {
         assertTrue((r as ExportResult.Share).files.single().length() > 1000)
     }
 
+    /** ID-card mode: both sides at true ID-1 size (85.6 x 54 mm at 300 dpi) on one A4 page. (Guard: already right.) */
+    @Test
+    fun idCardSidesAreTrueSizeOnA4() {
+        val card = Bitmap.createBitmap(1712, 1080, Bitmap.Config.ARGB_8888).apply { eraseColor(Color.rgb(30, 60, 160)) }
+        val portrait = Bitmap.createBitmap(1080, 1712, Bitmap.Config.ARGB_8888).apply { eraseColor(Color.rgb(160, 40, 40)) }
+        val page = com.fastkiwi.scan.imaging.IdCardComposer.compose(card, portrait)
+        assertEquals(2480, page.width); assertEquals(3507, page.height)
+        fun span(y: Int): Int { var n = 0; for (x in 0 until page.width) if (page.getPixel(x, y) != Color.WHITE) n++; return n }
+        val mm = 300f / 25.4f
+        val frontRow = (40f * mm + 27f * mm).toInt()
+        val backRow = (40f * mm + 54f * mm + 25f * mm + 27f * mm).toInt()
+        assertEquals(85.6f * mm, span(frontRow).toFloat(), 3f)
+        assertEquals(85.6f * mm, span(backRow).toFloat(), 3f) // the portrait capture is turned to fit
+    }
+
+    /** Merge: one new document with copies of every page; the originals stay. (Guard: already right.) */
+    @Test
+    fun mergeCopiesAllPagesAndKeepsOriginals() {
+        val perf = ExportPerformanceTest()
+        val vm = AppViewModel(app)
+        val a = perf.seedPages(vm, 2)
+        val b = perf.seedPages(vm, 3)
+        var merged: String? = null
+        vm.merge(listOf(b.id, a.id)) { merged = it }
+        idle(20_000) { merged != null }
+        val m = vm.store.load(merged!!)!!
+        assertEquals(5, m.pages.size)
+        assertEquals(b.pages.size + a.pages.size, m.pages.map { it.id }.toSet().size)
+        assertTrue(m.pages.none { p -> (a.pages + b.pages).any { it.id == p.id } }) // copies, not shared files
+        m.pages.forEach { assertTrue(vm.store.srcFile(m.id, it.id).exists()) }
+        assertNotNull(vm.store.load(a.id)); assertNotNull(vm.store.load(b.id))
+    }
+
     /** Export / share timings for 1, 10 and 50 pages, main-thread time after the tap, and cancel latency. */
     @Test
     fun exportTimings1to50Pages() {
