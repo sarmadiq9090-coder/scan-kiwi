@@ -50,6 +50,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.TextButton
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -100,49 +103,52 @@ fun FeedbackScreen(vm: AppViewModel, start: Screen.Feedback) {
         }
     }
 
+    val attached = if (attach) info else null
     Scaffold(
         snackbarHost = { SnackbarHost(snackbar) },
-        topBar = {
-            TopAppBar(
-                navigationIcon = { IconButton(onClick = { vm.back() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) } },
-                title = { Text(stringResource(R.string.feedback_title)) },
-            )
+        topBar = { KiwiTopBar(stringResource(R.string.feedback_title), NavIcon.BACK, { vm.back() }) },
+        bottomBar = {
+            // Sticky footer: primary mail, secondary GitHub, review note.
+            BottomActionBar {
+                Button(
+                    onClick = { open(Feedback.mailto(kind, BuildConfig.VERSION_NAME, text, attached), Intent.ACTION_SENDTO, noMail) },
+                    enabled = text.isNotBlank(),
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
+                ) { Icon(KiwiIcons.mail(), null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text(stringResource(R.string.feedback_send_email)) }
+                TextButton(
+                    onClick = { open(Feedback.githubIssue(kind, BuildConfig.VERSION_NAME, text, attached), Intent.ACTION_VIEW, noBrowser) },
+                    enabled = text.isNotBlank(),
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                ) { Icon(KiwiIcons.openInNew(), null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text(stringResource(R.string.feedback_send_github)) }
+                Text(
+                    stringResource(R.string.feedback_review_note), style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         },
     ) { padding ->
         Column(Modifier.padding(padding).fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
-            Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = MaterialTheme.shapes.medium) {
+            Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = MaterialTheme.shapes.large) {
                 Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Outlined.Lock, null)
+                    Icon(KiwiIcons.lock(), null)
                     Text(stringResource(R.string.feedback_privacy), Modifier.padding(start = 12.dp), style = MaterialTheme.typography.bodyMedium)
                 }
             }
             Text(
                 stringResource(R.string.feedback_kind), style = MaterialTheme.typography.titleSmall,
-                modifier = Modifier.padding(top = 16.dp, bottom = 4.dp).semantics { heading() },
+                modifier = Modifier.padding(top = 24.dp, bottom = 8.dp).semantics { heading() },
             )
-            Row(Modifier.selectableGroup(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                FeedbackKind.entries.forEach { k ->
-                    Row(
-                        Modifier
-                            .heightIn(min = 48.dp)
-                            .selectable(selected = kind == k, onClick = { kind = k }, role = Role.RadioButton)
-                            .padding(end = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        RadioButton(selected = kind == k, onClick = null)
-                        Text(
-                            stringResource(if (k == FeedbackKind.PROBLEM) R.string.feedback_problem else R.string.feedback_suggestion),
-                            Modifier.padding(start = 8.dp),
-                        )
-                    }
-                }
-            }
+            ChoiceSegmentedRow(
+                listOf(stringResource(R.string.feedback_problem), stringResource(R.string.feedback_suggestion)),
+                kind.ordinal, { kind = FeedbackKind.entries[it] },
+            )
             OutlinedTextField(
                 value = text,
                 onValueChange = { if (it.length <= 4000) text = it },
                 label = { Text(stringResource(if (kind == FeedbackKind.PROBLEM) R.string.feedback_hint_problem else R.string.feedback_hint_suggestion)) },
+                supportingText = { Text(LocalFormat.count(text.length) + " / " + LocalFormat.count(4000)) },
                 minLines = 5,
-                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
             )
             Row(
                 Modifier
@@ -157,27 +163,10 @@ fun FeedbackScreen(vm: AppViewModel, start: Screen.Feedback) {
             }
             if (attach) {
                 Text(stringResource(R.string.feedback_attached_preview), style = MaterialTheme.typography.labelLarge)
-                Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = MaterialTheme.shapes.small, modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
+                Surface(color = MaterialTheme.colorScheme.surfaceContainerHigh, shape = MaterialTheme.shapes.small, modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
                     Text(Feedback.deviceLines(info), Modifier.padding(12.dp), style = MaterialTheme.typography.bodySmall)
                 }
             }
-            Spacer(Modifier.height(20.dp))
-            val attached = if (attach) info else null
-            Button(
-                onClick = { open(Feedback.mailto(kind, BuildConfig.VERSION_NAME, text, attached), Intent.ACTION_SENDTO, noMail) },
-                enabled = text.isNotBlank(),
-                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-            ) { Icon(Icons.Filled.Email, null); Text("  " + stringResource(R.string.feedback_send_email)) }
-            Spacer(Modifier.height(8.dp))
-            OutlinedButton(
-                onClick = { open(Feedback.githubIssue(kind, BuildConfig.VERSION_NAME, text, attached), Intent.ACTION_VIEW, noBrowser) },
-                enabled = text.isNotBlank(),
-                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-            ) { Icon(Icons.Filled.Public, null); Text("  " + stringResource(R.string.feedback_send_github)) }
-            Text(
-                stringResource(R.string.feedback_review_note), style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 12.dp),
-            )
         }
     }
 }

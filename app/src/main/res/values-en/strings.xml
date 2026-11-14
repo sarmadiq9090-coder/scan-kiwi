@@ -176,8 +176,8 @@
     <string name="feedback_hint_suggestion">What do you suggest?</string>
     <string name="feedback_attach_device">Attach device information</string>
     <string name="feedback_attached_preview">Only this will be attached:</string>
-    <string name="feedback_send_email">By e-mail</string>
-    <string name="feedback_send_github">On GitHub</string>
+    <string name="feedback_send_email">Send by e-mail</string>
+    <string name="feedback_send_github">Or on GitHub</string>
     <string name="feedback_review_note">Your mail app or browser opens with the text ready; check it, then send it yourself. The app never goes online.</string>
     <string name="feedback_no_mail_app">No e-mail app on this phone. Try "On GitHub".</string>
     <string name="feedback_no_browser">No browser on this phone. Try "By e-mail".</string>

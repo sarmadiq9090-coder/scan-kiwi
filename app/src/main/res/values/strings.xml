@@ -177,8 +177,8 @@
     <string name="feedback_hint_suggestion">ما الذي تقترحه؟</string>
     <string name="feedback_attach_device">أرفق معلومات الجهاز</string>
     <string name="feedback_attached_preview">سيُرفق هذا فقط:</string>
-    <string name="feedback_send_email">عبر البريد</string>
-    <string name="feedback_send_github">عبر GitHub</string>
+    <string name="feedback_send_email">إرسال عبر البريد</string>
+    <string name="feedback_send_github">أو عبر GitHub</string>
     <string name="feedback_review_note">يفتح تطبيق البريد أو المتصفح والنص جاهز؛ راجعه ثم أرسله بنفسك. التطبيق لا يتصل بالإنترنت.</string>
     <string name="feedback_no_mail_app">لا يوجد تطبيق بريد على الهاتف. جرّب «عبر GitHub».</string>
     <string name="feedback_no_browser">لا يوجد متصفح على الهاتف. جرّب «عبر البريد».</string>
