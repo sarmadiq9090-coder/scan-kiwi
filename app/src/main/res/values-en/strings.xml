@@ -232,6 +232,12 @@
     <string name="crop_title">Adjust edges</string>
     <string name="done">Done</string>
     <string name="crop_hint_short">Drag the corners to the page edges</string>
+    <string name="format_jpg_images">JPG images</string>
+    <string name="size_dims">%1$s × %2$s %3$s</string>
+    <string name="unit_cm">cm</string>
+    <string name="unit_in">in</string>
+    <string name="pdfa_excluded">Not with a password</string>
+    <string name="password_excluded">Not with archival (PDF/A)</string>
     <plurals name="page_count">
         <item quantity="one">%d page</item>
         <item quantity="other">%d pages</item>

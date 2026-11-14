@@ -237,6 +237,12 @@
     <string name="crop_title">تعديل الحواف</string>
     <string name="done">تم</string>
     <string name="crop_hint_short">اسحب الزوايا إلى حواف الورقة</string>
+    <string name="format_jpg_images">صور JPG</string>
+    <string name="size_dims">%1$s × %2$s %3$s</string>
+    <string name="unit_cm">سم</string>
+    <string name="unit_in">بوصة</string>
+    <string name="pdfa_excluded">لا يجتمع مع كلمة المرور</string>
+    <string name="password_excluded">لا تجتمع مع الأرشفة (PDF/A)</string>
     <plurals name="page_count">
         <item quantity="zero">لا صفحات</item>
         <item quantity="one">صفحة واحدة</item>

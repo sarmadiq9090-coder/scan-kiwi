@@ -44,6 +44,9 @@ import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.BottomAppBar
 import androidx.compose.material3.Button
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenu
@@ -274,10 +277,16 @@ private fun PageTile(vm: AppViewModel, docId: String, index: Int, count: Int, pa
     }
 }
 
+/**
+ * Export sheet (design spec §3.6): segmented format and quality, a page-size
+ * dropdown, grouped option rows (OCR, PDF/A, password; PDF/A and password
+ * exclude each other), live page count and size, and Save / Share at the bottom.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ExportSheet(vm: AppViewModel, docId: String, onDismiss: () -> Unit) {
     val s = vm.settings
+    val ctx = LocalContext.current
     var asJpeg by remember { mutableStateOf(false) }
     var pageSize by remember { mutableStateOf(s.pageSize) }
     var quality by remember { mutableStateOf(s.quality) }
@@ -287,8 +296,8 @@ fun ExportSheet(vm: AppViewModel, docId: String, onDismiss: () -> Unit) {
     var archival by remember { mutableStateOf(false) }
     var password by remember { mutableStateOf("") }
     var showPw by remember { mutableStateOf(false) }
+    var sizeMenu by remember { mutableStateOf(false) }
     val busy by vm.busy
-    val progress by vm.progress
 
     fun options(): ExportOptions {
         s.pageSize = pageSize; s.quality = quality; s.ocr = ocr; s.ocrLanguage = ocrLang
@@ -302,57 +311,87 @@ fun ExportSheet(vm: AppViewModel, docId: String, onDismiss: () -> Unit) {
         if (uri != null) vm.saveJpegsTo(docId, options(), uri)
     }
 
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
-        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 24.dp)) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+    ) {
+        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = Dimens.sheet).padding(bottom = Dimens.xl)) {
+            // Header: title, then what will be shared (live).
             Text(stringResource(R.string.export), style = MaterialTheme.typography.titleLarge)
-            Spacer(Modifier.height(12.dp))
+            val pageCount = vm.doc(docId)?.pages?.size ?: 0
+            val estimate by produceState<Long?>(null, quality, asJpeg) {
+                value = null
+                value = vm.estimateSize(docId, ExportOptions(pageSize, quality))
+            }
+            val pagesText = pluralStringResource(R.plurals.page_count, pageCount, pageCount)
+            val sizeText = estimate?.let { stringResource(R.string.estimated_size, formatSize(it)) } ?: stringResource(R.string.estimating_size)
+            Text(
+                pagesText + LocalFormat.metaSep(ctx.resources.configuration.locales[0]) + sizeText,
+                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.semantics { liveRegion = androidx.compose.ui.semantics.LiveRegionMode.Polite },
+            )
 
             Label(R.string.format)
-            ChipRow {
-                FilterChip(selected = !asJpeg, onClick = { asJpeg = false }, label = { Text("PDF") })
-                FilterChip(selected = asJpeg, onClick = { asJpeg = true }, label = { Text("JPG") })
-            }
+            ChoiceSegmentedRow(listOf("PDF", stringResource(R.string.format_jpg_images)), if (asJpeg) 1 else 0, { asJpeg = it == 1 })
+
             if (!asJpeg) {
-                Label(R.string.page_size)
-                ChipRow {
-                    PageSize.entries.forEach { ps ->
-                        FilterChip(selected = pageSize == ps, onClick = { pageSize = ps }, label = {
-                            Text(stringResource(when (ps) {
-                                PageSize.A4 -> R.string.size_a4; PageSize.LETTER -> R.string.size_letter; PageSize.LEGAL -> R.string.size_legal
-                                PageSize.A5 -> R.string.size_a5; PageSize.FIT -> R.string.size_fit
-                            }))
-                        })
+                Spacer(Modifier.height(Dimens.l))
+                ExposedDropdownMenuBox(expanded = sizeMenu, onExpandedChange = { sizeMenu = it }) {
+                    OutlinedTextField(
+                        value = pageSizeLabel(pageSize),
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text(stringResource(R.string.page_size)) },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = sizeMenu) },
+                        modifier = Modifier.fillMaxWidth().menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
+                    )
+                    ExposedDropdownMenu(expanded = sizeMenu, onDismissRequest = { sizeMenu = false }) {
+                        PageSize.entries.forEach { ps ->
+                            DropdownMenuItem(text = { Text(pageSizeLabel(ps)) }, onClick = { pageSize = ps; sizeMenu = false })
+                        }
                     }
                 }
             }
+
             Label(R.string.quality)
-            ChipRow {
-                Quality.entries.forEach { q ->
-                    FilterChip(selected = quality == q, onClick = { quality = q }, label = {
-                        Text(stringResource(when (q) { Quality.SMALL -> R.string.quality_small; Quality.BALANCED -> R.string.quality_balanced; Quality.HIGH -> R.string.quality_high }))
-                    })
-                }
-            }
+            ChoiceSegmentedRow(
+                listOf(stringResource(R.string.quality_small), stringResource(R.string.quality_balanced), stringResource(R.string.quality_high)),
+                quality.ordinal, { quality = Quality.entries[it] },
+            )
             Text(
                 stringResource(when (quality) { Quality.SMALL -> R.string.quality_small_hint; Quality.BALANCED -> R.string.quality_balanced_hint; Quality.HIGH -> R.string.quality_high_hint }),
-                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = Dimens.xs),
             )
 
             if (!asJpeg) {
-                SwitchRow(R.string.ocr_title, R.string.ocr_hint, ocr) { ocr = it }
-                if (ocr) {
-                    ChipRow {
-                        OcrLanguage.entries.forEach { l ->
-                            FilterChip(selected = ocrLang == l, onClick = { ocrLang = l }, label = {
-                                Text(stringResource(when (l) { OcrLanguage.ARABIC_ENGLISH -> R.string.ocr_ara_eng; OcrLanguage.ENGLISH -> R.string.ocr_eng; OcrLanguage.ARABIC -> R.string.ocr_ara }))
-                            })
-                        }
+                Spacer(Modifier.height(Dimens.l))
+                val groupColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                SettingsGroup(3) { i, shape ->
+                    when (i) {
+                        0 -> SettingsSwitchRow(KiwiIcons.ocr(), stringResource(R.string.ocr_title), stringResource(R.string.ocr_hint), ocr, shape, color = groupColor) { ocr = it }
+                        1 -> SettingsSwitchRow(
+                            KiwiIcons.pdfa(), stringResource(R.string.pdfa_title),
+                            stringResource(if (protect) R.string.pdfa_excluded else R.string.pdfa_hint),
+                            archival && !protect, shape, enabled = !protect, color = groupColor,
+                        ) { archival = it }
+                        else -> SettingsSwitchRow(
+                            KiwiIcons.lock(), stringResource(R.string.password_title),
+                            stringResource(if (archival) R.string.password_excluded else R.string.password_hint),
+                            protect && !archival, shape, enabled = !archival, color = groupColor,
+                        ) { protect = it }
                     }
-                    Text(stringResource(R.string.ocr_quality_note), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                SwitchRow(R.string.pdfa_title, R.string.pdfa_hint, archival && !protect) { archival = it; if (it) protect = false }
-                SwitchRow(R.string.password_title, R.string.password_hint, protect) { protect = it; if (it) archival = false }
+                if (ocr) {
+                    Spacer(Modifier.height(Dimens.m))
+                    ChoiceSegmentedRow(
+                        listOf(stringResource(R.string.ocr_ara_eng), stringResource(R.string.ocr_eng), stringResource(R.string.ocr_ara)),
+                        ocrLang.ordinal, { ocrLang = OcrLanguage.entries[it] },
+                    )
+                    Text(stringResource(R.string.ocr_quality_note), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = Dimens.xs))
+                }
                 if (protect) {
+                    Spacer(Modifier.height(Dimens.m))
                     OutlinedTextField(
                         value = password,
                         onValueChange = { v -> password = v.filter { it.code in 0x20..0x7E } },
@@ -362,96 +401,76 @@ fun ExportSheet(vm: AppViewModel, docId: String, onDismiss: () -> Unit) {
                         visualTransformation = if (showPw) VisualTransformation.None else PasswordVisualTransformation(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                         trailingIcon = {
-                            IconButton(onClick = { showPw = !showPw }) {
-                                Icon(if (showPw) Icons.Filled.VisibilityOff else Icons.Filled.Visibility, stringResource(if (showPw) R.string.hide_password else R.string.show_password))
-                            }
+                            TooltipIconButton(
+                                if (showPw) KiwiIcons.visibilityOff() else KiwiIcons.visibility(),
+                                stringResource(if (showPw) R.string.hide_password else R.string.show_password), { showPw = !showPw },
+                            )
                         },
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
             }
 
-            Spacer(Modifier.height(16.dp))
-            // What will be shared: page count and an estimated size, before tapping Share.
-            val pageCount = vm.doc(docId)?.pages?.size ?: 0
-            val estimate by produceState<Long?>(null, quality, asJpeg) {
-                value = null
-                value = vm.estimateSize(docId, ExportOptions(pageSize, quality))
-            }
-            Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth()) {
-                val pagesText = pluralStringResource(R.plurals.page_count, pageCount, pageCount)
-                val sizeText = estimate?.let { stringResource(R.string.estimated_size, formatSize(it)) } ?: stringResource(R.string.estimating_size)
-                Text(
-                    "$pagesText · $sizeText",
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.padding(12.dp).semantics { liveRegion = androidx.compose.ui.semantics.LiveRegionMode.Polite },
-                )
-            }
-            Spacer(Modifier.height(12.dp))
-            // Export in progress: shown the moment Share/Save is tapped, with a real Cancel.
+            Spacer(Modifier.height(Dimens.xl))
+            // Footer: progress with a real Cancel while exporting, otherwise Save / Share.
             val ex = vm.exportState.value
             if (ex != null) {
-                Surface(color = MaterialTheme.colorScheme.surfaceContainerHigh, shape = MaterialTheme.shapes.medium, modifier = Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(12.dp).semantics { liveRegion = androidx.compose.ui.semantics.LiveRegionMode.Polite }) {
-                        if (ex.total > 0) {
-                            LinearProgressIndicator(progress = { ex.page.toFloat() / ex.total }, modifier = Modifier.fillMaxWidth())
-                            val page = (ex.page + 1).coerceAtMost(ex.total)
-                            Text(
-                                stringResource(if (ex.readingText) R.string.export_reading_text else R.string.export_preparing, page, ex.total),
-                                style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 8.dp),
-                            )
-                        } else {
-                            LinearProgressIndicator(Modifier.fillMaxWidth())
-                            Text(stringResource(R.string.export_starting), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 8.dp))
-                        }
-                        OutlinedButton(onClick = { vm.cancelExport() }, modifier = Modifier.align(Alignment.End).padding(top = 4.dp).heightIn(min = 48.dp)) {
-                            Text(stringResource(R.string.cancel))
-                        }
+                Column(Modifier.semantics { liveRegion = androidx.compose.ui.semantics.LiveRegionMode.Polite }) {
+                    if (ex.total > 0) {
+                        LinearProgressIndicator(progress = { ex.page.toFloat() / ex.total }, modifier = Modifier.fillMaxWidth())
+                        val page = (ex.page + 1).coerceAtMost(ex.total)
+                        Text(
+                            stringResource(if (ex.readingText) R.string.export_reading_text else R.string.export_preparing, page, ex.total),
+                            style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = Dimens.s),
+                        )
+                    } else {
+                        LinearProgressIndicator(Modifier.fillMaxWidth())
+                        Text(stringResource(R.string.export_starting), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = Dimens.s))
+                    }
+                    TextButton(onClick = { vm.cancelExport() }, modifier = Modifier.align(Alignment.End).heightIn(min = 48.dp)) {
+                        Text(stringResource(R.string.cancel))
                     }
                 }
-                Spacer(Modifier.height(12.dp))
+            } else {
+                val canGo = busy == 0 && (!protect || asJpeg || password.isNotEmpty())
+                ButtonPair(
+                    secondary = { m ->
+                        OutlinedButton(onClick = {
+                            if (asJpeg) folderLauncher.launch(null) else saveLauncher.launch(vm.suggestedFileName(docId))
+                        }, enabled = canGo, modifier = m) {
+                            Icon(KiwiIcons.download(), null, Modifier.size(20.dp)); Spacer(Modifier.width(Dimens.s)); Text(stringResource(R.string.save_to_device))
+                        }
+                    },
+                    primary = { m ->
+                        Button(onClick = { vm.share(docId, options(), asJpeg) }, enabled = canGo, modifier = m) {
+                            Icon(KiwiIcons.share(), null, Modifier.size(20.dp)); Spacer(Modifier.width(Dimens.s)); Text(stringResource(R.string.share))
+                        }
+                    },
+                )
             }
-            val canGo = ex == null && busy == 0 && (!protect || asJpeg || password.isNotEmpty())
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Button(onClick = { vm.share(docId, options(), asJpeg) }, enabled = canGo, modifier = Modifier.weight(1f)) {
-                    Icon(Icons.Filled.Share, null); Spacer(Modifier.width(8.dp)); Text(stringResource(R.string.share))
-                }
-                OutlinedButton(onClick = {
-                    if (asJpeg) folderLauncher.launch(null) else saveLauncher.launch(vm.suggestedFileName(docId))
-                }, enabled = canGo, modifier = Modifier.weight(1f)) {
-                    Icon(Icons.Filled.Save, null); Spacer(Modifier.width(8.dp)); Text(stringResource(R.string.save_to_device))
-                }
-            }
-            TextButton(onClick = onDismiss, modifier = Modifier.align(Alignment.End)) { Text(stringResource(R.string.close)) }
         }
+    }
+}
+
+/** «A4 (٢١ × ٢٩٫٧ سم)»: name plus size in the locale's digits. */
+@Composable
+private fun pageSizeLabel(ps: PageSize): String {
+    val locale = LocalContext.current.resources.configuration.locales[0]
+    val nf = java.text.NumberFormat.getNumberInstance(locale).apply { maximumFractionDigits = 1 }
+    @Composable fun dims(w: Double, h: Double, unit: Int) = stringResource(R.string.size_dims, nf.format(w), nf.format(h), stringResource(unit))
+    return when (ps) {
+        PageSize.A4 -> "A4 (" + dims(21.0, 29.7, R.string.unit_cm) + ")"
+        PageSize.LETTER -> "Letter (" + dims(8.5, 11.0, R.string.unit_in) + ")"
+        PageSize.LEGAL -> "Legal (" + dims(8.5, 14.0, R.string.unit_in) + ")"
+        PageSize.A5 -> "A5 (" + dims(14.8, 21.0, R.string.unit_cm) + ")"
+        PageSize.FIT -> stringResource(R.string.size_fit)
     }
 }
 
 @Composable
 private fun Label(res: Int) {
-    Text(stringResource(res), style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 12.dp, bottom = 4.dp).semantics { heading() })
-}
-
-@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
-@Composable
-private fun ChipRow(content: @Composable () -> Unit) {
-    androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) { content() }
-}
-
-@Composable
-fun SwitchRow(title: Int, hint: Int, checked: Boolean, onChange: (Boolean) -> Unit) {
-    Surface(
-        onClick = { onChange(!checked) },
-        modifier = Modifier.fillMaxWidth().padding(top = 12.dp).semantics {
-            toggleableState = if (checked) ToggleableState.On else ToggleableState.Off
-        },
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
-            Column(Modifier.weight(1f)) {
-                Text(stringResource(title), style = MaterialTheme.typography.titleSmall)
-                Text(stringResource(hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Switch(checked = checked, onCheckedChange = null)
-        }
-    }
+    Text(
+        stringResource(res), style = MaterialTheme.typography.titleSmall,
+        modifier = Modifier.padding(top = Dimens.xl, bottom = Dimens.s).semantics { heading() },
+    )
 }
