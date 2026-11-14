@@ -68,6 +68,22 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import android.os.Build
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.semantics.stateDescription
+import com.fastkiwi.scan.ui.theme.CameraTheme
+import com.fastkiwi.scan.ui.theme.Dimens
+import com.fastkiwi.scan.ui.theme.KiwiAccent
+import com.fastkiwi.scan.ui.theme.LocalReducedMotion
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -126,35 +142,74 @@ fun CameraScreen(vm: AppViewModel, target: Screen.Camera) {
         vm.importUris(target.docId, uris) { id -> vm.cancelIdCard(); vm.finishCamera(id) }
     }
 
-    Box(Modifier.fillMaxSize().background(Color.Black)) {
-        if (granted) {
-            CameraContent(vm, target, onClose = leave, onGallery = {
-                galleryLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-            })
-        } else {
-            Column(
-                Modifier.fillMaxSize().safeDrawingPadding().padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
-            ) {
-                Text(stringResource(R.string.camera_permission_needed), color = Color.White, textAlign = TextAlign.Center)
-                Spacer(Modifier.height(16.dp))
-                if (asked) {
-                    Button(onClick = {
-                        ctx.startActivity(Intent(AndroidSettings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", ctx.packageName, null)))
-                    }) { Text(stringResource(R.string.open_settings)) }
-                } else {
-                    Button(onClick = { permLauncher.launch(Manifest.permission.CAMERA) }) { Text(stringResource(R.string.allow_camera)) }
+    CameraTheme {
+        Box(Modifier.fillMaxSize().background(Color.Black)) {
+            if (granted) {
+                CameraContent(vm, target, onClose = leave, onGallery = {
+                    galleryLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                })
+            } else {
+                // Permission screen (design spec §3.2): one primary in the thumb zone.
+                Column(Modifier.fillMaxSize().safeDrawingPadding().padding(horizontal = Dimens.xl)) {
+                    Box(Modifier.fillMaxWidth().padding(top = Dimens.s)) {
+                        CamIconButton(KiwiIcons.close(), stringResource(R.string.close_camera), leave, Modifier.align(Alignment.CenterStart))
+                    }
+                    Column(
+                        Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center,
+                    ) {
+                        Box(
+                            Modifier.size(112.dp).background(MaterialTheme.colorScheme.surfaceContainerHigh, CircleShape),
+                            contentAlignment = Alignment.Center,
+                        ) { Icon(KiwiIcons.camera(), null, Modifier.size(48.dp), tint = KiwiAccent) }
+                        Spacer(Modifier.height(Dimens.xl))
+                        Text(stringResource(R.string.camera_permission_title), style = MaterialTheme.typography.headlineSmall, color = Color.White, textAlign = TextAlign.Center)
+                        Spacer(Modifier.height(Dimens.s))
+                        Text(stringResource(R.string.camera_permission_needed), style = MaterialTheme.typography.bodyLarge, color = Color.White.copy(alpha = 0.85f), textAlign = TextAlign.Center)
+                        Spacer(Modifier.height(Dimens.l))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(KiwiIcons.lock(), null, tint = KiwiAccent, modifier = Modifier.size(20.dp))
+                            Spacer(Modifier.width(Dimens.s))
+                            Text(stringResource(R.string.privacy_short), style = MaterialTheme.typography.bodyMedium, color = Color.White)
+                        }
+                    }
+                    Column(Modifier.fillMaxWidth().padding(bottom = Dimens.l), verticalArrangement = Arrangement.spacedBy(Dimens.s)) {
+                        Button(
+                            onClick = {
+                                if (asked) ctx.startActivity(Intent(AndroidSettings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", ctx.packageName, null)))
+                                else permLauncher.launch(Manifest.permission.CAMERA)
+                            },
+                            modifier = Modifier.fillMaxWidth().heightIn(min = Dimens.buttonLarge),
+                        ) { Text(stringResource(if (asked) R.string.open_settings else R.string.allow_camera)) }
+                        OutlinedButton(
+                            onClick = { galleryLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                            modifier = Modifier.fillMaxWidth().heightIn(min = Dimens.button),
+                        ) { Text(stringResource(R.string.pick_images)) }
+                        TextButton(onClick = leave, modifier = Modifier.fillMaxWidth().heightIn(min = Dimens.button)) { Text(stringResource(R.string.not_now)) }
+                    }
                 }
-                Spacer(Modifier.height(8.dp))
-                Button(onClick = { galleryLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) {
-                    Text(stringResource(R.string.pick_from_gallery))
-                }
-                Spacer(Modifier.height(8.dp))
-                Button(onClick = leave) { Text(stringResource(R.string.cancel)) }
             }
         }
     }
+}
+
+/** A 48 dp round icon button on a 45% black disc, readable over any camera image. */
+@Composable
+private fun CamIconButton(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit, modifier: Modifier = Modifier, stateText: String? = null) {
+    Box(
+        modifier
+            .size(48.dp)
+            .background(Color.Black.copy(alpha = 0.45f), CircleShape)
+            .clip(CircleShape)
+            .clickable(onClick = onClick)
+            .semantics {
+                contentDescription = label
+                role = Role.Button
+                if (stateText != null) stateDescription = stateText
+            },
+        contentAlignment = Alignment.Center,
+    ) { Icon(icon, null, tint = Color.White) }
 }
 
 @Composable
@@ -174,6 +229,7 @@ private fun CameraContent(vm: AppViewModel, initial: Screen.Camera, onClose: () 
     var cooldownUntil by remember { mutableStateOf(0L) }
     var status by remember { mutableIntStateOf(R.string.status_searching) }
     val idFront by vm.idFrontCaptured
+    val haptics = androidx.compose.ui.platform.LocalHapticFeedback.current
 
     val previewView = remember { PreviewView(ctx).apply { scaleType = PreviewView.ScaleType.FIT_CENTER } }
     val analysisExecutor = remember { Executors.newSingleThreadExecutor() }
@@ -226,7 +282,8 @@ private fun CameraContent(vm: AppViewModel, initial: Screen.Camera, onClose: () 
         val future = ProcessCameraProvider.getInstance(ctx)
         val detector = QuadDetector(320)
         future.addListener({
-            val provider = future.get()
+            // No usable camera (emulator without one, camera service error): show the status, never crash.
+            val provider = runCatching { future.get() }.getOrNull() ?: run { status = R.string.status_error; return@addListener }
             val rotation = previewView.display?.rotation ?: Surface.ROTATION_0
             val preview = Preview.Builder()
                 .setResolutionSelector(ResolutionSelector.Builder().setAspectRatioStrategy(AspectRatioStrategy.RATIO_4_3_FALLBACK_AUTO_STRATEGY).build())
@@ -279,7 +336,10 @@ private fun CameraContent(vm: AppViewModel, initial: Screen.Camera, onClose: () 
             AutoCapture.State.CAPTURED -> if (recentlyAdded) status else R.string.status_next_page
             AutoCapture.State.FIRE -> R.string.status_capturing
         }
-        if (live.state == AutoCapture.State.FIRE && auto) capture(auto = true)
+        if (live.state == AutoCapture.State.FIRE && auto) {
+            haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.Confirm)
+            capture(auto = true)
+        }
     }
 
     LaunchedEffect(torch, camera) { camera?.cameraControl?.enableTorch(torch) }
@@ -292,113 +352,92 @@ private fun CameraContent(vm: AppViewModel, initial: Screen.Camera, onClose: () 
         analysis.targetRotation = r
     }
 
-    Box(Modifier.fillMaxSize()) {
-        AndroidView(factory = { previewView }, modifier = Modifier.fillMaxSize())
-        QuadOverlay(live)
+    val galleryLabel = stringResource(R.string.pick_from_gallery)
+    // Capture feedback: a short white flash (skipped with reduced motion) and haptics.
+    val reducedMotion = LocalReducedMotion.current
+    var flash by remember { mutableStateOf(false) }
+    LaunchedEffect(captured) {
+        if (captured > 0 && !reducedMotion) { flash = true; kotlinx.coroutines.delay(120); flash = false }
+    }
+    // «تعديل» on the status pill for a few seconds after each capture (accessibility-aware timeout).
+    var editUntil by remember { mutableStateOf(0L) }
+    val a11y = remember { ctx.getSystemService(android.view.accessibility.AccessibilityManager::class.java) }
+    val editMillis = remember {
+        if (Build.VERSION.SDK_INT >= 29) a11y?.getRecommendedTimeoutMillis(4000, android.view.accessibility.AccessibilityManager.FLAG_CONTENT_CONTROLS or android.view.accessibility.AccessibilityManager.FLAG_CONTENT_TEXT)?.toLong() ?: 4000L
+        else 4000L
+    }
+    LaunchedEffect(captured) {
+        if (captured > 0) { editUntil = System.currentTimeMillis() + editMillis; kotlinx.coroutines.delay(editMillis); editUntil = 0L }
+    }
 
-        // Top controls
-        Row(
-            Modifier.fillMaxWidth().safeDrawingPadding().padding(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            IconButton(onClick = onClose, colors = IconButtonDefaults.iconButtonColors(contentColor = Color.White)) {
-                Icon(Icons.Filled.Close, stringResource(R.string.close_camera))
-            }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                FilterChip(
-                    selected = auto,
-                    onClick = { auto = !auto; vm.settings.autoCapture = auto },
-                    label = { Text(stringResource(R.string.auto_capture)) },
-                    colors = FilterChipDefaults.filterChipColors(labelColor = Color.White),
-                )
-                if (target.retakePageId == null) {
-                    Spacer(Modifier.size(8.dp))
-                    FilterChip(
-                        selected = target.idCard,
-                        onClick = { vm.cancelIdCard(); vm.replaceTop(target.copy(idCard = !target.idCard)) },
-                        label = { Text(stringResource(R.string.id_card_mode)) },
-                        colors = FilterChipDefaults.filterChipColors(labelColor = Color.White),
+    val docsState by vm.docs.collectAsStateWithLifecycle()
+    val last = target.docId?.let { id -> docsState.firstOrNull { it.doc.id == id }?.doc }?.takeIf { target.captured > 0 }?.pages?.lastOrNull()
+    Box(Modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize()) {
+            Box(Modifier.weight(1f).fillMaxWidth()) {
+                AndroidView(factory = { previewView }, modifier = Modifier.fillMaxSize())
+                QuadOverlay(live)
+                if (flash) Box(Modifier.fillMaxSize().background(Color.White.copy(alpha = 0.3f)))
+
+                // Top: close (start), auto/manual pill (centre), flash (end).
+                Box(Modifier.fillMaxWidth().statusBarsPadding().padding(Dimens.m)) {
+                    CamIconButton(KiwiIcons.close(), stringResource(R.string.close_camera), onClose, Modifier.align(Alignment.CenterStart))
+                    AutoManualPill(auto, Modifier.align(Alignment.Center)) { auto = it; vm.settings.autoCapture = it }
+                    CamIconButton(
+                        if (torch) KiwiIcons.flashOn() else KiwiIcons.flashOff(),
+                        stringResource(R.string.flash), { torch = !torch }, Modifier.align(Alignment.CenterEnd),
+                        stateText = stringResource(if (torch) R.string.state_on else R.string.state_off),
                     )
                 }
-                IconButton(onClick = { torch = !torch }, colors = IconButtonDefaults.iconButtonColors(contentColor = Color.White)) {
-                    Icon(if (torch) Icons.Filled.FlashOn else Icons.Filled.FlashOff, stringResource(if (torch) R.string.torch_off else R.string.torch_on))
-                }
-            }
-        }
 
-        // Bottom controls
-        Column(
-            Modifier.align(Alignment.BottomCenter).fillMaxWidth().safeDrawingPadding().padding(bottom = 16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            val statusText = when {
-                target.idCard && !idFront && status != R.string.status_capturing -> stringResource(R.string.id_front_hint)
-                target.idCard && idFront && status != R.string.status_capturing -> stringResource(R.string.id_back_hint)
-                status == R.string.status_added -> stringResource(R.string.status_added, captured)
-                else -> stringResource(status)
-            }
-            Text(
-                statusText,
-                color = Color.White,
-                style = MaterialTheme.typography.titleMedium,
-                textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .background(Color(0x99000000), CircleShape)
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
-                    .semantics { liveRegion = LiveRegionMode.Polite },
-            )
-            Spacer(Modifier.height(16.dp))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onGallery, modifier = Modifier.size(56.dp), colors = IconButtonDefaults.iconButtonColors(contentColor = Color.White)) {
-                    Icon(Icons.Filled.PhotoLibrary, stringResource(R.string.pick_from_gallery))
+                // Status pill: white on 72% black, polite live region, «تعديل» after a capture.
+                val statusText = when {
+                    target.idCard && !idFront && status != R.string.status_capturing -> stringResource(R.string.id_front_hint)
+                    target.idCard && idFront && status != R.string.status_capturing -> stringResource(R.string.id_back_hint)
+                    status == R.string.status_added -> stringResource(R.string.status_added, captured)
+                    else -> stringResource(status)
                 }
-                // Last captured page: tap to adjust its outline right away.
-                val docs by vm.docs.collectAsStateWithLifecycle()
-                val last = target.docId?.let { id -> docs.firstOrNull { it.doc.id == id }?.doc }?.takeIf { target.captured > 0 }?.pages?.lastOrNull()
-                val lastLabel = stringResource(R.string.adjust_last_page)
-                Box(
-                    Modifier
-                        .size(56.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .border(2.dp, if (last != null) Color.White else Color.Transparent, RoundedCornerShape(8.dp))
-                        .clickable(enabled = last != null && !capturing) { last?.let { vm.open(Screen.Crop(target.docId!!, it.id)) } }
-                        .semantics { if (last != null) { contentDescription = lastLabel; role = Role.Button } },
+                Row(
+                    Modifier.align(Alignment.BottomCenter).padding(bottom = Dimens.l)
+                        .background(Color.Black.copy(alpha = 0.72f), CircleShape)
+                        .padding(start = Dimens.l, end = if (editUntil > 0L && last != null) Dimens.xs else Dimens.l)
+                        .semantics { liveRegion = LiveRegionMode.Polite },
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    if (last != null) {
-                        FileImage(vm.store.thumbFile(target.docId!!, last.id), last.revision, 360, null, Modifier.fillMaxSize(), androidx.compose.ui.layout.ContentScale.Crop)
+                    Text(statusText, color = Color.White, style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center, modifier = Modifier.padding(vertical = Dimens.s))
+                    if (editUntil > 0L && last != null) {
+                        TextButton(onClick = { vm.open(Screen.Crop(target.docId!!, last.id)) }, modifier = Modifier.heightIn(min = 48.dp)) {
+                            Text(stringResource(R.string.edit_edges_action), color = KiwiAccent)
+                        }
                     }
                 }
-                val shutterLabel = stringResource(R.string.take_photo)
-                val ring = if (auto && live.state == AutoCapture.State.HOLD) live.progress else 0f
-                val ringColor = MaterialTheme.colorScheme.primaryContainer
-                Box(
-                    Modifier
-                        .size(76.dp)
-                        .border(4.dp, Color.White, CircleShape)
-                        // Auto-capture countdown around the shutter while the page is held steady.
-                        .drawWithContent {
-                            drawContent()
-                            if (ring > 0f) {
-                                drawArc(
-                                    ringColor, -90f, 360f * ring, useCenter = false,
-                                    style = androidx.compose.ui.graphics.drawscope.Stroke(5.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round),
-                                )
-                            }
+            }
+
+            // Controls panel on black.
+            Column(Modifier.fillMaxWidth().background(Color.Black).navigationBarsPadding().padding(bottom = Dimens.l)) {
+                if (target.retakePageId == null) {
+                    ModeTabs(target.idCard, Modifier.align(Alignment.CenterHorizontally).padding(vertical = Dimens.s)) { id ->
+                        if (id != target.idCard) { vm.cancelIdCard(); vm.replaceTop(target.copy(idCard = id)) }
+                    }
+                }
+                // Weights 1 : 96 dp : 1 keep the shutter centred whatever sits beside it.
+                Row(Modifier.fillMaxWidth().padding(horizontal = Dimens.l), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+                        Box(
+                            Modifier.size(56.dp).background(Color.White.copy(alpha = 0.14f), CircleShape).clip(CircleShape)
+                                .clickable(onClick = onGallery)
+                                .semantics { contentDescription = galleryLabel; role = Role.Button },
+                            contentAlignment = Alignment.Center,
+                        ) { Icon(KiwiIcons.gallery(), null, tint = Color.White) }
+                    }
+                    Box(Modifier.width(96.dp), contentAlignment = Alignment.Center) {
+                        Shutter(capturing, if (auto && live.state == AutoCapture.State.HOLD) live.progress else 0f) { capture(auto = false) }
+                    }
+                    Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
+                        if (captured > 0 && last != null) {
+                            DonePill(vm, target.docId!!, last, captured, enabled = !capturing) { target.docId?.let { vm.finishCamera(it) } ?: onClose() }
                         }
-                        .padding(8.dp)
-                        .background(if (capturing) Color.Gray else Color.White, CircleShape)
-                        .clickable(enabled = !capturing) { capture(auto = false) }
-                        .semantics { contentDescription = shutterLabel; role = Role.Button },
-                )
-                val doneLabel = stringResource(R.string.done_with_count, captured)
-                IconButton(
-                    onClick = { target.docId?.let { vm.finishCamera(it) } ?: onClose() },
-                    enabled = captured > 0 && !capturing,
-                    modifier = Modifier.size(56.dp).semantics { contentDescription = doneLabel },
-                    colors = IconButtonDefaults.iconButtonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary),
-                ) {
-                    if (captured > 0) Text(captured.toString(), style = MaterialTheme.typography.titleMedium) else Icon(Icons.Filled.Done, null)
+                    }
                 }
             }
         }
@@ -406,14 +445,118 @@ private fun CameraContent(vm: AppViewModel, initial: Screen.Camera, onClose: () 
 }
 
 @Composable
+private fun AutoManualPill(auto: Boolean, modifier: Modifier, onChange: (Boolean) -> Unit) {
+    Row(modifier.background(Color.Black.copy(alpha = 0.45f), CircleShape).padding(Dimens.xs).selectableGroup()) {
+        listOf(true to R.string.auto_short, false to R.string.mode_manual).forEach { (value, label) ->
+            val sel = auto == value
+            Row(
+                Modifier
+                    .heightIn(min = 40.dp)
+                    .background(if (sel) KiwiAccent else Color.Transparent, CircleShape)
+                    .clip(CircleShape)
+                    .selectable(selected = sel, onClick = { onChange(value) }, role = Role.RadioButton)
+                    .padding(horizontal = Dimens.l),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (value) { Icon(KiwiIcons.autoCapture(), null, Modifier.size(18.dp), tint = if (sel) Color(0xFF082100) else Color.White); Spacer(Modifier.width(Dimens.xs)) }
+                Text(stringResource(label), color = if (sel) Color(0xFF082100) else Color.White, style = MaterialTheme.typography.labelLarge)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ModeTabs(idCard: Boolean, modifier: Modifier, onSelect: (Boolean) -> Unit) {
+    Row(modifier.selectableGroup(), horizontalArrangement = Arrangement.spacedBy(Dimens.xl)) {
+        listOf(false to R.string.mode_document, true to R.string.id_card_mode).forEach { (value, label) ->
+            val sel = idCard == value
+            Column(
+                Modifier.heightIn(min = 48.dp).selectable(selected = sel, onClick = { onSelect(value) }, role = Role.Tab).padding(horizontal = Dimens.s),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                Text(stringResource(label), color = if (sel) KiwiAccent else Color.White.copy(alpha = 0.75f), style = MaterialTheme.typography.titleSmall)
+                Box(Modifier.padding(top = Dimens.xs).size(6.dp).background(if (sel) KiwiAccent else Color.Transparent, CircleShape))
+            }
+        }
+    }
+}
+
+@Composable
+private fun Shutter(capturing: Boolean, ring: Float, onClick: () -> Unit) {
+    val label = stringResource(R.string.take_photo)
+    Box(
+        Modifier
+            .size(80.dp)
+            .border(4.dp, Color.White, CircleShape)
+            // Auto-capture countdown (functional, kept even with reduced motion).
+            .drawWithContent {
+                drawContent()
+                if (ring > 0f) {
+                    drawArc(
+                        KiwiAccent, -90f, 360f * ring, useCenter = false,
+                        style = androidx.compose.ui.graphics.drawscope.Stroke(5.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round),
+                    )
+                }
+            }
+            .padding(9.dp)
+            .background(if (capturing) Color.Gray else Color.White, CircleShape)
+            .clip(CircleShape)
+            .clickable(enabled = !capturing, onClick = onClick)
+            .semantics { contentDescription = label; role = Role.Button },
+    )
+}
+
+/** «تم» pill with the last page and the page count; tap finishes the batch. */
+@Composable
+private fun DonePill(vm: AppViewModel, docId: String, last: com.fastkiwi.scan.data.ScanPage, count: Int, enabled: Boolean, onClick: () -> Unit) {
+    val label = stringResource(R.string.done_with_count, count)
+    Row(
+        Modifier
+            .heightIn(min = 56.dp)
+            .background(KiwiAccent, CircleShape)
+            .clip(CircleShape)
+            .clickable(enabled = enabled, onClick = onClick)
+            .semantics(mergeDescendants = true) { contentDescription = label; role = Role.Button }
+            .padding(horizontal = Dimens.s),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        PageThumbnail(vm.store.thumbFile(docId, last.id), last.revision, Modifier.size(width = 36.dp, height = 44.dp), radius = 4)
+        Spacer(Modifier.width(Dimens.s))
+        Text(stringResource(R.string.done), color = Color(0xFF082100), style = MaterialTheme.typography.labelLarge)
+        Spacer(Modifier.width(Dimens.s))
+        Box(Modifier.size(24.dp).background(Color(0xFF356A1E), CircleShape), contentAlignment = Alignment.Center) {
+            Text(LocalFormat.count(count), color = Color.White, style = MaterialTheme.typography.labelSmall)
+        }
+        Spacer(Modifier.width(Dimens.xs))
+    }
+}
+
+@Composable
 private fun QuadOverlay(live: Live) {
-    val color = MaterialTheme.colorScheme.primaryContainer
+    val color = KiwiAccent
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val density = LocalDensity.current
         val vw = with(density) { maxWidth.toPx() }
         val vh = with(density) { maxHeight.toPx() }
         Canvas(Modifier.fillMaxSize()) {
-            val q = live.quad ?: return@Canvas
+            val q = live.quad
+            if (q == null) {
+                // No page yet: faint corner brackets in the middle of the frame.
+                val bw = size.width * 0.6f
+                val bh = bw * 1.3f
+                val l = (size.width - bw) / 2f
+                val t = (size.height - bh) / 2f
+                val arm = 28.dp.toPx()
+                val c = Color.White.copy(alpha = 0.5f)
+                val st = Stroke(3.dp.toPx())
+                for ((x, y, dx, dy) in listOf(
+                    listOf(l, t, 1f, 1f), listOf(l + bw, t, -1f, 1f), listOf(l, t + bh, 1f, -1f), listOf(l + bw, t + bh, -1f, -1f),
+                )) {
+                    drawPath(Path().apply { moveTo(x, y + dy * arm); lineTo(x, y); lineTo(x + dx * arm, y) }, c, style = st)
+                }
+                return@Canvas
+            }
             // PreviewView FIT_CENTER: the frame is letter-boxed inside the view.
             val viewAspect = vw / vh
             val (cw, ch) = if (live.aspect > viewAspect) vw to vw / live.aspect else vh * live.aspect to vh
@@ -425,9 +568,9 @@ private fun QuadOverlay(live: Live) {
                 for (i in 1 until 4) lineTo(pts[i].x, pts[i].y)
                 close()
             }
-            drawPath(path, color.copy(alpha = 0.25f))
-            drawPath(path, color, style = Stroke(width = 4.dp.toPx()))
-            pts.forEach { drawCircle(color, radius = 8.dp.toPx(), center = it) }
+            drawPath(path, color.copy(alpha = 0.2f))
+            drawPath(path, color, style = Stroke(width = 3.5.dp.toPx()))
+            pts.forEach { drawCircle(color, radius = 6.dp.toPx(), center = it) }
         }
     }
 }

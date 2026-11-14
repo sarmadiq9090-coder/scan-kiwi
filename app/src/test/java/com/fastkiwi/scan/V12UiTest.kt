@@ -7,6 +7,8 @@ import android.os.Looper
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import com.fastkiwi.scan.core.PageSize
@@ -159,5 +161,31 @@ class UpdatesSettingsTest {
         rule.waitUntil(5_000) { rule.onAllNodesWithText("نزّل Obtainium").fetchSemanticsNodes().isNotEmpty() }
         rule.onNodeWithText("نزّل Obtainium").performClick() // no browser either: a message, no crash
         rule.waitForIdle()
+    }
+}
+
+/** The camera overlay (no real camera under Robolectric: the preview stays black). */
+@RunWith(RobolectricTestRunner::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+@Config(sdk = [36], qualifiers = "ar-w400dp-h860dp-xxhdpi")
+class CameraOverlayTest {
+    @get:Rule
+    val rule = createAndroidComposeRule<MainActivity>()
+
+    @Test
+    fun overlayShowsCentredShutterAndControls() {
+        shadowOf(RuntimeEnvironment.getApplication()).grantPermissions(android.Manifest.permission.CAMERA)
+        rule.runOnUiThread { rule.activity.vm.open(Screen.Camera(null)) }
+        rule.waitForIdle()
+        rule.onNodeWithContentDescription("التقاط صورة").assertExists()
+        rule.onNodeWithText("تلقائي").assertExists()
+        rule.onNodeWithText("مستند").assertExists()
+        // The shutter is horizontally centred (1 : 96 dp : 1 row).
+        val shutter = rule.onNodeWithContentDescription("التقاط صورة").fetchSemanticsNode().boundsInRoot
+        val root = rule.onRoot().fetchSemanticsNode().boundsInRoot
+        assertEquals(root.center.x, shutter.center.x, 2f)
+        Thread.sleep(300)
+        rule.waitForIdle()
+        saveWindows(File("../screenshots/07b-camera-ar.png"))
     }
 }

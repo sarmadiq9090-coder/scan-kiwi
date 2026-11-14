@@ -243,6 +243,16 @@
     <string name="unit_in">بوصة</string>
     <string name="pdfa_excluded">لا يجتمع مع كلمة المرور</string>
     <string name="password_excluded">لا تجتمع مع الأرشفة (PDF/A)</string>
+    <string name="camera_permission_title">اسمح باستخدام الكاميرا</string>
+    <string name="not_now">ليس الآن</string>
+    <string name="pick_images">اختيار صور من المعرض</string>
+    <string name="mode_document">مستند</string>
+    <string name="mode_manual">يدوي</string>
+    <string name="auto_short">تلقائي</string>
+    <string name="edit_edges_action">تعديل</string>
+    <string name="flash">الفلاش</string>
+    <string name="state_on">يعمل</string>
+    <string name="state_off">متوقف</string>
     <plurals name="page_count">
         <item quantity="zero">لا صفحات</item>
         <item quantity="one">صفحة واحدة</item>

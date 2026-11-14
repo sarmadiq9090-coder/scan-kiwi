@@ -238,6 +238,16 @@
     <string name="unit_in">in</string>
     <string name="pdfa_excluded">Not with a password</string>
     <string name="password_excluded">Not with archival (PDF/A)</string>
+    <string name="camera_permission_title">Allow the camera</string>
+    <string name="not_now">Not now</string>
+    <string name="pick_images">Pick images from gallery</string>
+    <string name="mode_document">Document</string>
+    <string name="mode_manual">Manual</string>
+    <string name="auto_short">Auto</string>
+    <string name="edit_edges_action">Edit</string>
+    <string name="flash">Flash</string>
+    <string name="state_on">On</string>
+    <string name="state_off">Off</string>
     <plurals name="page_count">
         <item quantity="one">%d page</item>
         <item quantity="other">%d pages</item>
