@@ -200,6 +200,12 @@
     <string name="obtainium_missing_body">Obtainium is a free open-source app by an independent developer (not FastKiwi). Install it first, then tap "Auto-update with Obtainium" again.</string>
     <string name="obtainium_download">Download Obtainium</string>
     <string name="msg_no_browser">No browser on this phone to open the link.</string>
+    <string name="theme_title">Theme</string>
+    <string name="theme_system">System default</string>
+    <string name="theme_light">Light</string>
+    <string name="theme_dark">Dark</string>
+    <string name="dynamic_color_title">Wallpaper colours</string>
+    <string name="dynamic_color_hint">Dynamic colours (Android 12 and later)</string>
     <plurals name="page_count">
         <item quantity="one">%d page</item>
         <item quantity="other">%d pages</item>

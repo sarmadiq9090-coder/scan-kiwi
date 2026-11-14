@@ -127,6 +127,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private var idFront: Bitmap? = null
     val idFrontCaptured = mutableStateOf(false)
 
+    /** Appearance, observed by the theme so a change applies at once. */
+    val themeMode = mutableStateOf(settings.themeMode)
+    val dynamicColor = mutableStateOf(settings.dynamicColor)
+
+    fun setThemeMode(m: com.fastkiwi.scan.ui.theme.ThemeMode) { settings.themeMode = m; themeMode.value = m }
+    fun setDynamicColor(on: Boolean) { settings.dynamicColor = on; dynamicColor.value = on }
+
     /** Per-document undo history (in memory, last 20 states). */
     private val undoStacks = HashMap<String, ArrayDeque<ScanDocument>>()
     val undoCounts = mutableStateMapOf<String, Int>()

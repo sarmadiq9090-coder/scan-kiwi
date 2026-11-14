@@ -201,6 +201,12 @@
     <string name="obtainium_missing_body">Obtainium تطبيق مجاني مفتوح المصدر من مطوّر مستقل (ليس من FastKiwi). ثبّته أولاً ثم اضغط «حدّثه تلقائياً عبر Obtainium» مرة أخرى.</string>
     <string name="obtainium_download">نزّل Obtainium</string>
     <string name="msg_no_browser">لا يوجد متصفح على الهاتف لفتح الرابط.</string>
+    <string name="theme_title">السمة</string>
+    <string name="theme_system">حسب النظام</string>
+    <string name="theme_light">فاتح</string>
+    <string name="theme_dark">داكن</string>
+    <string name="dynamic_color_title">ألوان خلفية الهاتف</string>
+    <string name="dynamic_color_hint">ألوان ديناميكية (أندرويد ١٢ وأحدث)</string>
     <plurals name="page_count">
         <item quantity="zero">لا صفحات</item>
         <item quantity="one">صفحة واحدة</item>

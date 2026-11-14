@@ -64,9 +64,15 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         if (savedInstanceState == null) handleIncoming(intent)
+        // "Remove animations" (animator duration scale 0) also turns off decorative motion.
+        val reducedMotion = runCatching {
+            android.provider.Settings.Global.getFloat(contentResolver, android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
+        }.getOrDefault(false)
         setContent {
-            KiwiTheme {
-                Surface(Modifier.fillMaxSize()) { App(vm) }
+            KiwiTheme(mode = vm.themeMode.value, dynamic = vm.dynamicColor.value) {
+                androidx.compose.runtime.CompositionLocalProvider(com.fastkiwi.scan.ui.theme.LocalReducedMotion provides reducedMotion) {
+                    Surface(Modifier.fillMaxSize()) { App(vm) }
+                }
             }
         }
     }
