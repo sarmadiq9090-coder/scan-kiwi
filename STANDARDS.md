@@ -96,7 +96,7 @@ Status: **Met** · **Partial** (met with a stated limit) · **Gap** (not met, wi
 
 | Practice | Status | How |
 |---|---|---|
-| REUSE / SPDX | Met | `REUSE.toml` (defaults + overrides for Tesseract data, Gradle wrapper, ICC profile, notices), `LICENSES/` texts, SPDX headers in every Kotlin source; `reuse lint` runs in CI (`fsfe/reuse-action`). Not run locally (no Python `reuse` tool on the build PC). |
+| REUSE / SPDX | Met | `REUSE.toml` (defaults + overrides for Tesseract data, Gradle wrapper, ICC profile, notices), `LICENSES/` texts, SPDX headers in every Kotlin source; `reuse lint` passes locally (reuse 5.1.1) and runs in CI (`fsfe/reuse-action`). |
 | THIRD_PARTY.md complete | Met | Shipped, test-only and build-only components with licences and model/font hashes. |
 
 ## Community
