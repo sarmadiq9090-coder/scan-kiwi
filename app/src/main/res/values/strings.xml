@@ -10,8 +10,8 @@
     <string name="clear_search">مسح البحث</string>
     <string name="clear_selection">إلغاء التحديد</string>
     <string name="no_results">لا توجد نتائج</string>
-    <string name="empty_title">لا توجد مستندات بعد</string>
-    <string name="empty_body">اضغط «مسح» لتصوير ورقة، أو استورد صورًا وملفات PDF لدمجها.</string>
+    <string name="empty_title">لا مستندات بعد</string>
+    <string name="empty_body">امسح ورقة أو استورد صورة أو PDF.</string>
     <string name="privacy_short">كل شيء يبقى على هاتفك</string>
     <string name="merge">دمج المحدد</string>
     <string name="delete">حذف</string>
@@ -219,6 +219,15 @@
     <string name="updates_manual_title">التحديث يدوياً</string>
     <string name="updates_manual_step1">نزّل أحدث ملف APK من صفحة الإصدارات على GitHub.</string>
     <string name="updates_manual_step2">ثبّته فوق النسخة الحالية؛ تبقى مستنداتك. لا يقبل أندرويد إلا تحديثاً موقّعاً بالمفتاح نفسه.</string>
+    <string name="import_short">استيراد</string>
+    <plurals name="doc_count">
+        <item quantity="zero">لا مستندات</item>
+        <item quantity="one">مستند واحد</item>
+        <item quantity="two">مستندان</item>
+        <item quantity="few">%d مستندات</item>
+        <item quantity="many">%d مستندًا</item>
+        <item quantity="other">%d مستند</item>
+    </plurals>
     <plurals name="page_count">
         <item quantity="zero">لا صفحات</item>
         <item quantity="one">صفحة واحدة</item>

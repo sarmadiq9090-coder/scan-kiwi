@@ -218,6 +218,11 @@
     <string name="updates_manual_title">Updating by hand</string>
     <string name="updates_manual_step1">Download the latest APK from the GitHub releases page.</string>
     <string name="updates_manual_step2">Install it over the current version; your documents stay. Android only accepts an update signed with the same key.</string>
+    <string name="import_short">Import</string>
+    <plurals name="doc_count">
+        <item quantity="one">%d document</item>
+        <item quantity="other">%d documents</item>
+    </plurals>
     <plurals name="page_count">
         <item quantity="one">%d page</item>
         <item quantity="other">%d pages</item>
