@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 FastKiwi
+// SPDX-License-Identifier: Apache-2.0
 package com.fastkiwi.scan.ui
 
 import android.app.Activity
@@ -8,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
@@ -24,6 +27,10 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -48,11 +55,16 @@ fun SettingsScreen(vm: AppViewModel) {
     val s = vm.settings
     var auto by remember { mutableStateOf(s.autoCapture) }
     var review by remember { mutableStateOf(s.reviewAfterCapture) }
+    val openFeedback = { vm.open(Screen.Feedback()) }
     var filter by remember { mutableStateOf(s.defaultFilter) }
     var lang by remember { mutableStateOf(currentLanguage(ctx)) }
     var showLicenses by remember { mutableStateOf(false) }
 
-    Scaffold(topBar = {
+    val snackbar = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    val noBrowser = stringResource(R.string.msg_no_browser)
+    var obtainiumMissing by remember { mutableStateOf(false) }
+    Scaffold(snackbarHost = { SnackbarHost(snackbar) }, topBar = {
         TopAppBar(
             navigationIcon = { IconButton(onClick = { vm.back() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) } },
             title = { Text(stringResource(R.string.settings)) },
@@ -81,12 +93,45 @@ fun SettingsScreen(vm: AppViewModel) {
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
             Section(R.string.privacy_title)
             Text(stringResource(R.string.privacy_body), style = MaterialTheme.typography.bodyMedium)
+            Text(stringResource(R.string.network_statement), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 8.dp))
+            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+            Section(R.string.feedback_title)
+            Text(stringResource(R.string.feedback_settings_hint), style = MaterialTheme.typography.bodyMedium)
+            androidx.compose.material3.OutlinedButton(
+                onClick = openFeedback,
+                modifier = Modifier.padding(top = 8.dp).heightIn(min = 48.dp),
+            ) { Text(stringResource(R.string.feedback_title)) }
+            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+            // Room for the update channel the council is deciding on. No network code here.
+            UpdatesSection(onNoBrowser = { scope.launch { snackbar.showSnackbar(noBrowser) } }, onObtainiumMissing = { obtainiumMissing = true })
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
             Section(R.string.about_title)
             Text(stringResource(R.string.about_body, BuildConfig.VERSION_NAME), style = MaterialTheme.typography.bodyMedium)
+            Text(stringResource(R.string.network_statement), style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp))
             Text(stringResource(R.string.licenses_body), style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 8.dp))
-            androidx.compose.material3.TextButton(onClick = { showLicenses = true }) { Text(stringResource(R.string.show_licenses)) }
+            Row {
+                androidx.compose.material3.TextButton(onClick = { showLicenses = true }, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.show_licenses)) }
+                androidx.compose.material3.TextButton(onClick = openFeedback, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.feedback_short)) }
+            }
         }
+    }
+    if (obtainiumMissing) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { obtainiumMissing = false },
+            title = { Text(stringResource(R.string.obtainium_missing_title)) },
+            text = { Text(stringResource(R.string.obtainium_missing_body)) },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = {
+                    obtainiumMissing = false
+                    if (!openUri(ctx, UpdateLinks.OBTAINIUM_DOWNLOAD)) scope.launch { snackbar.showSnackbar(noBrowser) }
+                }, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.obtainium_download)) }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { obtainiumMissing = false }, modifier = Modifier.heightIn(min = 48.dp)) {
+                    Text(stringResource(R.string.cancel))
+                }
+            },
+        )
     }
     if (showLicenses) {
         val text = remember { runCatching { ctx.assets.open("THIRD_PARTY_NOTICES.txt").bufferedReader().readText() }.getOrDefault("") }

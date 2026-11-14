@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Kiwi Scan</string>
+    <string name="app_name">Scan Kiwi</string>
     <string name="default_doc_name">Scan %1$s</string>
     <string name="scan">Scan</string>
     <string name="settings">Settings</string>
@@ -51,6 +51,7 @@
     <string name="status_capturing">Capturing…</string>
     <string name="status_added">Page %1$d added</string>
     <string name="status_error">Camera unavailable</string>
+    <string name="status_next_page">Page captured. Turn to the next one</string>
 
     <string name="export">Export</string>
     <string name="add_page_camera">Add page with camera</string>
@@ -127,7 +128,7 @@
     <string name="privacy_body">The app does not even have the internet permission, so it cannot upload anything. No accounts, no ads, no tracking, no watermark. Documents are kept in the app\'s private storage and excluded from cloud backup. A file only leaves when you choose Share or Save.</string>
     <string name="about_title">About</string>
     <string name="show_licenses">Licences</string>
-    <string name="about_body">Kiwi Scan %1$s, part of the FastKiwi app suite. Completely free.</string>
+    <string name="about_body">Scan Kiwi %1$s, part of the FastKiwi app suite. Free and open source (Apache-2.0).</string>
     <string name="licenses_body">Open-source libraries: Jetpack Compose, CameraX, AndroidX and Kotlin (Apache-2.0); Tesseract4Android, Tesseract and tessdata_fast models (Apache-2.0); Leptonica (BSD-2); libjpeg-turbo (IJG/BSD); libpng (libpng licence).</string>
 
     <!-- v1.1 -->
@@ -162,6 +163,43 @@
     <string name="shortcut_scan_short">Quick scan</string>
     <string name="shortcut_scan_long">Scan a document with the camera</string>
 
+    <!-- v1.2 -->
+    <string name="feedback_title">Report a problem or suggestion</string>
+    <string name="feedback_short">Report</string>
+    <string name="feedback_settings_hint">Tell us about a problem or an idea. It opens your mail app or browser, and you send it.</string>
+    <string name="feedback_report_this">Report this problem</string>
+    <string name="feedback_privacy">No document or image is sent. You see everything before it is sent.</string>
+    <string name="feedback_kind">Type</string>
+    <string name="feedback_problem">Problem</string>
+    <string name="feedback_suggestion">Suggestion</string>
+    <string name="feedback_hint_problem">What happened, and what did you expect?</string>
+    <string name="feedback_hint_suggestion">What do you suggest?</string>
+    <string name="feedback_attach_device">Attach device information</string>
+    <string name="feedback_attached_preview">Only this will be attached:</string>
+    <string name="feedback_send_email">By e-mail</string>
+    <string name="feedback_send_github">On GitHub</string>
+    <string name="feedback_review_note">Your mail app or browser opens with the text ready; check it, then send it yourself. The app never goes online.</string>
+    <string name="feedback_no_mail_app">No e-mail app on this phone. Try "On GitHub".</string>
+    <string name="feedback_no_browser">No browser on this phone. Try "By e-mail".</string>
+    <string name="updates_title">Updates</string>
+    <string name="updates_body">Updating by hand: download the APK from the releases page and install it over this one; your documents stay. Android only accepts an update signed with the same key.</string>
+    <string name="pdfa_title">Archival (PDF/A)</string>
+    <string name="pdfa_hint">PDF/A-2b for long-term keeping. Cannot be combined with a password.</string>
+
+    <string name="export_preparing">Preparing the file… page %1$d of %2$d</string>
+    <string name="export_reading_text">Reading text… page %1$d of %2$d</string>
+    <string name="export_starting">Preparing the file…</string>
+    <string name="msg_export_cancelled">Export cancelled</string>
+    <string name="network_statement">Scan Kiwi has no internet permission and never connects to the internet. It does not update itself. To get updates automatically, you can use Obtainium, a free open-source app by an independent developer (not FastKiwi): it checks our GitHub releases and installs new versions, and Android may ask you to confirm. When Obtainium or your browser checks GitHub, GitHub sees your IP address, as with any website. You can also update by hand from the releases page.</string>
+    <string name="updates_version">Version %1$s</string>
+    <string name="updates_obtainium">Auto-update with Obtainium</string>
+    <string name="updates_obtainium_sub">A free, independent app that follows our GitHub releases</string>
+    <string name="updates_check">Check for updates</string>
+    <string name="updates_check_sub">Opens the GitHub releases page in your browser</string>
+    <string name="obtainium_missing_title">Obtainium is not installed</string>
+    <string name="obtainium_missing_body">Obtainium is a free open-source app by an independent developer (not FastKiwi). Install it first, then tap "Auto-update with Obtainium" again.</string>
+    <string name="obtainium_download">Download Obtainium</string>
+    <string name="msg_no_browser">No browser on this phone to open the link.</string>
     <plurals name="page_count">
         <item quantity="one">%d page</item>
         <item quantity="other">%d pages</item>

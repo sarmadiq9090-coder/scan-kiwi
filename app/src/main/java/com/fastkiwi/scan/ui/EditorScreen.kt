@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 FastKiwi
+// SPDX-License-Identifier: Apache-2.0
 package com.fastkiwi.scan.ui
 
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -13,6 +15,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -227,6 +230,7 @@ fun ExportSheet(vm: AppViewModel, docId: String, onDismiss: () -> Unit) {
     var ocr by remember { mutableStateOf(s.ocr) }
     var ocrLang by remember { mutableStateOf(s.ocrLanguage) }
     var protect by remember { mutableStateOf(false) }
+    var archival by remember { mutableStateOf(false) }
     var password by remember { mutableStateOf("") }
     var showPw by remember { mutableStateOf(false) }
     val busy by vm.busy
@@ -234,7 +238,7 @@ fun ExportSheet(vm: AppViewModel, docId: String, onDismiss: () -> Unit) {
 
     fun options(): ExportOptions {
         s.pageSize = pageSize; s.quality = quality; s.ocr = ocr; s.ocrLanguage = ocrLang
-        return ExportOptions(pageSize, quality, ocr && !asJpeg, ocrLang, if (protect && !asJpeg) password else null)
+        return ExportOptions(pageSize, quality, ocr && !asJpeg, ocrLang, if (protect && !asJpeg) password else null, archival = archival && !protect && !asJpeg)
     }
 
     val saveLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/pdf")) { uri ->
@@ -292,7 +296,8 @@ fun ExportSheet(vm: AppViewModel, docId: String, onDismiss: () -> Unit) {
                     }
                     Text(stringResource(R.string.ocr_quality_note), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                SwitchRow(R.string.password_title, R.string.password_hint, protect) { protect = it }
+                SwitchRow(R.string.pdfa_title, R.string.pdfa_hint, archival && !protect) { archival = it; if (it) protect = false }
+                SwitchRow(R.string.password_title, R.string.password_hint, protect) { protect = it; if (it) archival = false }
                 if (protect) {
                     OutlinedTextField(
                         value = password,
@@ -329,17 +334,30 @@ fun ExportSheet(vm: AppViewModel, docId: String, onDismiss: () -> Unit) {
                 )
             }
             Spacer(Modifier.height(12.dp))
-            if (busy > 0) {
-                val p = progress
-                if (p != null && p.second > 0) {
-                    LinearProgressIndicator(progress = { p.first.toFloat() / p.second }, modifier = Modifier.fillMaxWidth())
-                    Text(stringResource(R.string.processing_page, (p.first + 1).coerceAtMost(p.second), p.second), style = MaterialTheme.typography.bodySmall)
-                } else {
-                    LinearProgressIndicator(Modifier.fillMaxWidth())
+            // Export in progress: shown the moment Share/Save is tapped, with a real Cancel.
+            val ex = vm.exportState.value
+            if (ex != null) {
+                Surface(color = MaterialTheme.colorScheme.surfaceContainerHigh, shape = MaterialTheme.shapes.medium, modifier = Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(12.dp).semantics { liveRegion = androidx.compose.ui.semantics.LiveRegionMode.Polite }) {
+                        if (ex.total > 0) {
+                            LinearProgressIndicator(progress = { ex.page.toFloat() / ex.total }, modifier = Modifier.fillMaxWidth())
+                            val page = (ex.page + 1).coerceAtMost(ex.total)
+                            Text(
+                                stringResource(if (ex.readingText) R.string.export_reading_text else R.string.export_preparing, page, ex.total),
+                                style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 8.dp),
+                            )
+                        } else {
+                            LinearProgressIndicator(Modifier.fillMaxWidth())
+                            Text(stringResource(R.string.export_starting), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 8.dp))
+                        }
+                        OutlinedButton(onClick = { vm.cancelExport() }, modifier = Modifier.align(Alignment.End).padding(top = 4.dp).heightIn(min = 48.dp)) {
+                            Text(stringResource(R.string.cancel))
+                        }
+                    }
                 }
                 Spacer(Modifier.height(12.dp))
             }
-            val canGo = busy == 0 && (!protect || asJpeg || password.isNotEmpty())
+            val canGo = ex == null && busy == 0 && (!protect || asJpeg || password.isNotEmpty())
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Button(onClick = { vm.share(docId, options(), asJpeg) }, enabled = canGo, modifier = Modifier.weight(1f)) {
                     Icon(Icons.Filled.Share, null); Spacer(Modifier.width(8.dp)); Text(stringResource(R.string.share))

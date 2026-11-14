@@ -1,4 +1,4 @@
-# Kiwi Scan v1.1.1 — feature checklist
+# Scan Kiwi v1.1.1 — feature checklist
 
 Legend: [x] done · [~] done with a stated limit · [ ] not done
 
@@ -25,7 +25,7 @@ Legend: [x] done · [~] done with a stated limit · [ ] not done
 - [x] **Password-protected PDF**: AES-256 (PDF standard security handler R6). Password limited to Latin letters/digits/symbols for reader compatibility
 - [x] **Export as JPG** (share several, or save into a chosen folder)
 - [x] **Signature stamp** (1.1): draw once, drag and resize on any page; stored only in app-private storage
-- [x] Receive "Share to Kiwi Scan" from other apps (images and PDFs become a new document)
+- [x] Receive "Share to Scan Kiwi" from other apps (images and PDFs become a new document)
 
 ## New in 1.1
 
@@ -64,7 +64,7 @@ Legend: [x] done · [~] done with a stated limit · [ ] not done
   deleting, two quick rotations): every document change is serialised.
 - Adding pages (camera, import) is now an undo step; Undo used to drop pages added since the last edit, and
   it no longer reverts a rename.
-- Start-up clean-up no longer deletes pages that a "Share to Kiwi Scan" import is still writing.
+- Start-up clean-up no longer deletes pages that a "Share to Scan Kiwi" import is still writing.
 - A side dragged past the opposite side (mirrored outline) is flagged with «إصلاح» instead of giving a mirrored page.
 - PDF export streams page by page (200-page documents on 2–3 GB phones); missing OCR engine/model exports
   without a text layer instead of failing or crashing.

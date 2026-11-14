@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 FastKiwi
+// SPDX-License-Identifier: Apache-2.0
 package com.fastkiwi.scan.core
 
 import kotlin.math.max
@@ -257,6 +259,22 @@ object ImageFilters {
             for (x in 0 until w) {
                 out[row + x] = clamp((luma(px[row + x]) / bg.at(x, y) * 255f).toInt()).toByte()
             }
+        }
+        return GrayImage(w, h, out)
+    }
+
+    /**
+     * "Paper-likeness": bright and colourless scores high. A white page on a
+     * light but coloured surface (wood, cloth, a coloured desk) has almost the
+     * same luminance as the surface, but a very different value here.
+     */
+    fun paperMap(px: IntArray, w: Int, h: Int): GrayImage {
+        val out = ByteArray(w * h)
+        for (i in 0 until w * h) {
+            val c = px[i]
+            val r = r(c); val g = g(c); val b = b(c)
+            val chroma = max(r, max(g, b)) - min(r, min(g, b))
+            out[i] = clamp(luma(c) - chroma * 3 / 2).toByte()
         }
         return GrayImage(w, h, out)
     }

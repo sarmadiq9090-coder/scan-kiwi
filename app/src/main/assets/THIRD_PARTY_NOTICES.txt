@@ -1,4 +1,4 @@
-Kiwi Scan - third-party notices
+Scan Kiwi - third-party notices
 ===============================
 
 This app includes the following open-source components:
@@ -11,6 +11,7 @@ This app includes the following open-source components:
 - Leptonica - BSD 2-clause style licence (below)
 - libjpeg-turbo - IJG licence, BSD 3-clause, zlib licence (below)
 - libpng - PNG Reference Library License v2 (below)
+- sRGB-v2-micro.icc (Compact-ICC-Profiles, Clinton Ingram) - CC0 1.0 (public domain dedication), used for PDF/A output
 
 
 === Apache License 2.0 ===

@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 FastKiwi
+// SPDX-License-Identifier: Apache-2.0
 package com.fastkiwi.scan
 
 import android.graphics.Bitmap
@@ -24,7 +26,7 @@ class IntakeTest {
     private val own = "com.fastkiwi.scan.files"
 
     /**
-     * Regression (1.1.1): any app may send "Share to Kiwi Scan". A file:// URI or one
+     * Regression (1.1.1): any app may send "Share to Scan Kiwi". A file:// URI or one
      * of our own FileProvider URIs made the app read its own private files (the
      * signature image, other exports) into a new document.
      */

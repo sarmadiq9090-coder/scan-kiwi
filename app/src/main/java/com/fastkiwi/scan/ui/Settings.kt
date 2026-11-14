@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 FastKiwi
+// SPDX-License-Identifier: Apache-2.0
 package com.fastkiwi.scan.ui
 
 import android.content.Context

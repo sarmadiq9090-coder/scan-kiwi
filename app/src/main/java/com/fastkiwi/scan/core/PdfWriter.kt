@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 FastKiwi
+// SPDX-License-Identifier: Apache-2.0
 package com.fastkiwi.scan.core
 
 import java.io.ByteArrayOutputStream
@@ -43,7 +45,16 @@ class PdfWriter(
     private val password: String? = null,
     private val glyphlessFont: ByteArray? = null,
     private val random: SecureRandom = SecureRandom(),
+    /**
+     * sRGB ICC profile: when set, the file is written as PDF/A-2b (ISO 19005-2,
+     * level B) with an sRGB output intent and XMP metadata. Not allowed with a password.
+     */
+    private val pdfAIccProfile: ByteArray? = null,
 ) {
+    init {
+        require(pdfAIccProfile == null || password.isNullOrEmpty()) { "PDF/A files cannot be encrypted" }
+    }
+
     /** Pages buffered by [addPage] before [begin] (the one-shot [write] API used by tests). */
     private val pending = ArrayList<PdfPage>()
 
@@ -107,10 +118,22 @@ class PdfWriter(
         }
 
         val ext = if (crypt != null) " /Extensions << /ADBE << /BaseVersion /1.7 /ExtensionLevel 8 >> >>" else ""
-        wr.obj(catalogId, "<< /Type /Catalog /Pages $pagesId 0 R$ext /ViewerPreferences << /DisplayDocTitle true >> >>")
+        var pdfA = ""
+        val icc = pdfAIccProfile
+        if (icc != null) {
+            val iccId = nextId++
+            val metaId = nextId++
+            wr.stream(iccId, "/N 3", icc, null, deflate = true)
+            val xmp = xmp(title, PRODUCER).toByteArray(Charsets.UTF_8)
+            // XMP stays uncompressed so archive tools can read it without a PDF parser.
+            wr.stream(metaId, "/Type /Metadata /Subtype /XML", xmp, null, deflate = false)
+            pdfA = " /Metadata $metaId 0 R /OutputIntents [<< /Type /OutputIntent /S /GTS_PDFA1 " +
+                "/OutputConditionIdentifier (sRGB IEC61966-2.1) /Info (sRGB IEC61966-2.1) /DestOutputProfile $iccId 0 R >>]"
+        }
+        wr.obj(catalogId, "<< /Type /Catalog /Pages $pagesId 0 R$ext$pdfA /ViewerPreferences << /DisplayDocTitle true >> >>")
         wr.obj(pagesId, "<< /Type /Pages /Count ${pageIds.size} /Kids [${pageIds.joinToString(" ") { "$it 0 R" }}] >>")
         val titleStr = pdfString(utf16(title), crypt)
-        val producer = pdfString(utf16("Kiwi Scan"), crypt)
+        val producer = pdfString(utf16(PRODUCER), crypt)
         wr.obj(infoId, "<< /Title $titleStr /Producer $producer /Creator $producer >>")
         val encryptId = if (crypt != null) nextId++ else 0
         if (crypt != null) wr.obj(encryptId, crypt.encryptDictionary())
@@ -258,6 +281,23 @@ class PdfWriter(
             "1 begincodespacerange\n<0000> <FFFF>\nendcodespacerange\n" +
             "1 beginbfrange\n<0000> <FFFF> <0000>\nendbfrange\n" +
             "endcmap\nCMapName currentdict /CMap defineresource pop\nend\nend\n"
+
+        const val PRODUCER = "Scan Kiwi"
+
+        /** XMP packet for PDF/A-2b; mirrors the Info dictionary (Title, Producer, Creator). */
+        internal fun xmp(title: String, producer: String): String {
+            fun esc(s: String) = s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;")
+            return "<?xpacket begin=\"${0xFEFF.toChar()}\" id=\"W5M0MpCehiHzreSzNTczkc9d\"?>\n" +
+                "<x:xmpmeta xmlns:x=\"adobe:ns:meta/\">\n" +
+                "<rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\">\n" +
+                "<rdf:Description rdf:about=\"\" xmlns:pdfaid=\"http://www.aiim.org/pdfa/ns/id/\">" +
+                "<pdfaid:part>2</pdfaid:part><pdfaid:conformance>B</pdfaid:conformance></rdf:Description>\n" +
+                "<rdf:Description rdf:about=\"\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\">" +
+                "<dc:title><rdf:Alt><rdf:li xml:lang=\"x-default\">${esc(title)}</rdf:li></rdf:Alt></dc:title></rdf:Description>\n" +
+                "<rdf:Description rdf:about=\"\" xmlns:pdf=\"http://ns.adobe.com/pdf/1.3/\"><pdf:Producer>${esc(producer)}</pdf:Producer></rdf:Description>\n" +
+                "<rdf:Description rdf:about=\"\" xmlns:xmp=\"http://ns.adobe.com/xap/1.0/\"><xmp:CreatorTool>${esc(producer)}</xmp:CreatorTool></rdf:Description>\n" +
+                "</rdf:RDF>\n</x:xmpmeta>\n<?xpacket end=\"w\"?>"
+        }
 
         fun deflate(data: ByteArray): ByteArray {
             val d = Deflater(Deflater.BEST_COMPRESSION)

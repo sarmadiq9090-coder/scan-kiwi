@@ -52,6 +52,7 @@
     <string name="status_capturing">جارٍ الالتقاط…</string>
     <string name="status_added">أُضيفت الصفحة %1$d</string>
     <string name="status_error">تعذّر استخدام الكاميرا</string>
+    <string name="status_next_page">صُوّرت هذه الصفحة. اقلب إلى التالية</string>
 
     <string name="export">تصدير</string>
     <string name="add_page_camera">إضافة صفحة بالكاميرا</string>
@@ -128,7 +129,7 @@
     <string name="privacy_body">لا يملك التطبيق إذن الإنترنت أصلًا، فلا يمكنه رفع أي شيء. لا حسابات ولا إعلانات ولا تتبّع ولا علامة مائية. المستندات محفوظة داخل مساحة التطبيق الخاصة، والنسخ الاحتياطي السحابي معطّل لها. لا يخرج ملف إلا عندما تختار أنت «مشاركة» أو «حفظ».</string>
     <string name="about_title">حول التطبيق</string>
     <string name="show_licenses">التراخيص</string>
-    <string name="about_body">ماسح كيوي %1$s، من مجموعة تطبيقات FastKiwi. مجاني بالكامل.</string>
+    <string name="about_body">ماسح كيوي (Scan Kiwi) %1$s، من مجموعة تطبيقات FastKiwi. مجاني ومفتوح المصدر (Apache-2.0).</string>
     <string name="licenses_body">مكتبات مفتوحة المصدر: Jetpack Compose وCameraX وAndroidX وKotlin (Apache-2.0)، Tesseract4Android وTesseract وبيانات tessdata_fast (Apache-2.0)، Leptonica (BSD-2)، libjpeg-turbo (IJG/BSD)، libpng (رخصة libpng).</string>
 
     <!-- v1.1 -->
@@ -163,6 +164,43 @@
     <string name="shortcut_scan_short">مسح سريع</string>
     <string name="shortcut_scan_long">مسح مستند بالكاميرا</string>
 
+    <!-- v1.2 -->
+    <string name="feedback_title">أبلغنا عن مشكلة أو اقتراح</string>
+    <string name="feedback_short">أبلغنا</string>
+    <string name="feedback_settings_hint">اكتب لنا مشكلة أو فكرة. يفتح بريدك أو المتصفح، وأنت من يرسل.</string>
+    <string name="feedback_report_this">أبلغ عن هذه المشكلة</string>
+    <string name="feedback_privacy">لن يُرسل أي مستند أو صورة. أنت ترى كل ما يُرسل قبل الإرسال.</string>
+    <string name="feedback_kind">النوع</string>
+    <string name="feedback_problem">مشكلة</string>
+    <string name="feedback_suggestion">اقتراح</string>
+    <string name="feedback_hint_problem">ماذا حدث؟ وما الذي توقعته؟</string>
+    <string name="feedback_hint_suggestion">ما الذي تقترحه؟</string>
+    <string name="feedback_attach_device">أرفق معلومات الجهاز</string>
+    <string name="feedback_attached_preview">سيُرفق هذا فقط:</string>
+    <string name="feedback_send_email">عبر البريد</string>
+    <string name="feedback_send_github">عبر GitHub</string>
+    <string name="feedback_review_note">يفتح تطبيق البريد أو المتصفح والنص جاهز؛ راجعه ثم أرسله بنفسك. التطبيق لا يتصل بالإنترنت.</string>
+    <string name="feedback_no_mail_app">لا يوجد تطبيق بريد على الهاتف. جرّب «عبر GitHub».</string>
+    <string name="feedback_no_browser">لا يوجد متصفح على الهاتف. جرّب «عبر البريد».</string>
+    <string name="updates_title">التحديثات</string>
+    <string name="updates_body">التحديث يدوياً: نزّل ملف APK من صفحة الإصدارات وثبّته فوق الحالي؛ تبقى مستنداتك كما هي. لا يقبل أندرويد إلا تحديثاً موقّعاً بالمفتاح نفسه.</string>
+    <string name="pdfa_title">أرشيفي (PDF/A)</string>
+    <string name="pdfa_hint">صيغة PDF/A-2b للحفظ الطويل. لا تجتمع مع كلمة المرور.</string>
+
+    <string name="export_preparing">يجهّز الملف… صفحة %1$d من %2$d</string>
+    <string name="export_reading_text">يقرأ النص… صفحة %1$d من %2$d</string>
+    <string name="export_starting">يجهّز الملف…</string>
+    <string name="msg_export_cancelled">أُلغي التصدير</string>
+    <string name="network_statement">لا يملك ماسح كيوي إذن الإنترنت ولا يتصل به أبداً، ولا يحدّث نفسه. للتحديث التلقائي يمكنك استعمال Obtainium، وهو تطبيق مجاني مفتوح المصدر من مطوّر مستقل (ليس من FastKiwi)، يتابع إصداراتنا على GitHub ويثبّت الجديد، وقد يطلب أندرويد تأكيدك. حين يتصل Obtainium أو المتصفح بـ GitHub يرى GitHub عنوان IP الخاص بك كأي موقع. ويمكنك التحديث يدوياً من صفحة الإصدارات.</string>
+    <string name="updates_version">الإصدار %1$s</string>
+    <string name="updates_obtainium">حدّثه تلقائياً عبر Obtainium</string>
+    <string name="updates_obtainium_sub">تطبيق مجاني مستقل يتابع إصداراتنا على GitHub</string>
+    <string name="updates_check">ابحث عن تحديث</string>
+    <string name="updates_check_sub">يفتح صفحة الإصدارات على GitHub في المتصفح</string>
+    <string name="obtainium_missing_title">Obtainium غير مثبّت</string>
+    <string name="obtainium_missing_body">Obtainium تطبيق مجاني مفتوح المصدر من مطوّر مستقل (ليس من FastKiwi). ثبّته أولاً ثم اضغط «حدّثه تلقائياً عبر Obtainium» مرة أخرى.</string>
+    <string name="obtainium_download">نزّل Obtainium</string>
+    <string name="msg_no_browser">لا يوجد متصفح على الهاتف لفتح الرابط.</string>
     <plurals name="page_count">
         <item quantity="zero">لا صفحات</item>
         <item quantity="one">صفحة واحدة</item>

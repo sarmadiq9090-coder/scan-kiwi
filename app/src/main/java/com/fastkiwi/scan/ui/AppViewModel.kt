@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 FastKiwi
+// SPDX-License-Identifier: Apache-2.0
 package com.fastkiwi.scan.ui
 
 import android.app.Application
@@ -14,6 +16,8 @@ import com.fastkiwi.scan.BuildConfig
 import com.fastkiwi.scan.R
 import com.fastkiwi.scan.core.Filter
 import com.fastkiwi.scan.core.Quad
+import com.fastkiwi.scan.core.StampMapper
+import com.fastkiwi.scan.data.Stamp
 import com.fastkiwi.scan.data.DocumentStore
 import com.fastkiwi.scan.data.ScanDocument
 import com.fastkiwi.scan.data.ScanPage
@@ -46,13 +50,21 @@ sealed interface Screen {
     data class Page(val docId: String, val index: Int) : Screen
     data class Crop(val docId: String, val pageId: String) : Screen
     data class Sign(val docId: String, val pageId: String) : Screen
+    /** «أبلغنا عن مشكلة أو اقتراح»; [errorCode]/[errorClass] are set when opened from an error message. */
+    data class Feedback(val errorCode: String? = null, val errorClass: String? = null) : Screen
     data object Settings : Screen
 }
 
 data class DocEntry(val doc: ScanDocument, val text: String)
 
 /** A user-visible message: string resource + optional argument. */
-data class UiMessage(val res: Int, val arg: String? = null, val undoDocId: String? = null)
+data class UiMessage(
+    val res: Int,
+    val arg: String? = null,
+    val undoDocId: String? = null,
+    /** Offers «أبلغ عن هذه المشكلة»: (error code, exception class name). Never a message text. */
+    val report: Pair<String, String>? = null,
+)
 
 /** Outcome of one camera shot. [needsReview]: the outline is doubtful, open the crop editor. */
 data class CaptureResult(val docId: String, val pageId: String?, val needsReview: Boolean)
@@ -78,6 +90,34 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     val busy = mutableStateOf(0)
     val progress = mutableStateOf<Pair<Int, Int>?>(null)
 
+    /** A running export (Share / Save): which page, and whether it is reading text (OCR). */
+    data class ExportProgress(val page: Int, val total: Int, val readingText: Boolean)
+
+    val exportState = mutableStateOf<ExportProgress?>(null)
+    private var exportJob: kotlinx.coroutines.Job? = null
+
+    /** Stops the running export; OCR is interrupted and the half-written file deleted. */
+    fun cancelExport() {
+        val j = exportJob ?: return
+        if (j.isActive) {
+            j.cancel()
+            viewModelScope.launch { _messages.send(UiMessage(R.string.msg_export_cancelled)) }
+        }
+    }
+
+    /** Starts an export job; only one at a time (a second tap is ignored while one runs). */
+    private fun launchExport(block: suspend () -> Unit) {
+        if (exportJob?.isActive == true) return
+        exportState.value = ExportProgress(0, 0, false) // instant feedback on tap
+        exportJob = viewModelScope.launch {
+            try {
+                block()
+            } finally {
+                exportState.value = null
+            }
+        }
+    }
+
     private val _messages = Channel<UiMessage>(Channel.BUFFERED)
     val messages = _messages.receiveAsFlow()
     private val _exports = Channel<ExportResult>(Channel.BUFFERED)
@@ -101,10 +141,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val startedAt = System.currentTimeMillis()
 
     init {
+        BitmapIO.configureForDevice(app)
         refresh()
         // Page files are kept after delete/retake so Undo can bring them back;
         // anything no longer referenced is cleaned up on the next start. Files
-        // written since this start (an import from "Share to Kiwi Scan" may already
+        // written since this start (an import from "Share to Scan Kiwi" may already
         // be running) are left alone; 2 s margin for coarse file-system clocks.
         viewModelScope.launch(Dispatchers.IO) {
             runCatching { store.collectGarbage(olderThan = startedAt - 2_000) }
@@ -188,12 +229,16 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         return getApplication<Application>().getString(R.string.default_doc_name, stamp)
     }
 
-    private suspend fun <T> job(block: suspend () -> T): T? {
+    /**
+     * Runs [block] off the main thread with a progress indicator and turns
+     * failures into messages. [code] names the operation for problem reports.
+     */
+    private suspend fun <T> job(code: String = "GENERAL", block: suspend () -> T): T? {
         busy.value++
         return try {
             withContext(Dispatchers.Default) { block() }
         } catch (e: OutOfMemoryError) {
-            _messages.send(UiMessage(R.string.msg_out_of_memory)); null
+            _messages.send(UiMessage(R.string.msg_out_of_memory, report = code to "OutOfMemoryError")); null
         } catch (e: PdfImporter.ProtectedPdfException) {
             _messages.send(UiMessage(R.string.msg_pdf_protected)); null
         } catch (e: CancellationException) {
@@ -201,8 +246,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         } catch (e: Exception) {
             // Exception texts can carry document content (org.json quotes the whole
             // file it failed on), so release builds log nothing and show a short text.
-            if (BuildConfig.DEBUG) android.util.Log.w("KiwiScan", "job failed", e)
-            _messages.send(UiMessage(R.string.msg_error, (e.message ?: e.javaClass.simpleName).take(120))); null
+            if (BuildConfig.DEBUG) android.util.Log.w("ScanKiwi", "job failed", e)
+            _messages.send(UiMessage(R.string.msg_error, (e.message ?: e.javaClass.simpleName).take(120), report = code to e.javaClass.simpleName)); null
         } finally {
             busy.value--
             progress.value = null
@@ -257,7 +302,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      */
     fun addCapture(target: Screen.Camera, jpeg: ByteArray, rotation: Int, liveQuad: Quad?, onDone: (CaptureResult?) -> Unit) {
         viewModelScope.launch {
-            val result = job {
+            val result = job("CAPTURE") {
                 val bmp = BitmapIO.decodeBytes(jpeg, rotation) ?: error("decode")
                 val det = BitmapIO.detectPage(bmp)
                 val corners = det?.quad ?: liveQuad
@@ -351,7 +396,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun importUris(docId: String?, uris: List<Uri>, onDone: (String) -> Unit) {
         if (uris.isEmpty()) return
         viewModelScope.launch {
-            val id = job {
+            val id = job("IMPORT") {
                 val ctx = getApplication<Application>()
                 val existing = docId?.let { store.load(it) }
                 val doc = existing ?: store.create(defaultName())
@@ -462,8 +507,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     val doc = store.load(docId) ?: return@job
                     val idx = doc.pages.indexOfFirst { it.id == pageId }
                     if (idx < 0) return@job
-                    val edited = edit(doc.pages[idx])
-                    if (edited == doc.pages[idx]) return@job
+                    val before = doc.pages[idx]
+                    val edited = keepStampsOnPaper(docId, before, edit(before))
+                    if (edited == before) return@job
                     val page = edited.copy(revision = edited.revision + 1)
                     pushUndo(doc)
                     PageRenderer.renderAndSave(store, docId, page)?.recycle()
@@ -472,6 +518,21 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 }
             }
         }
+    }
+
+    /**
+     * A re-crop or rotation moves the page content; signatures placed earlier
+     * are moved with it so they stay on the same spot of the paper.
+     */
+    private fun keepStampsOnPaper(docId: String, before: ScanPage, after: ScanPage): ScanPage {
+        if (before.stamps.isEmpty() || after.stamps != before.stamps) return after
+        if (after.corners == before.corners && after.rotation == before.rotation) return after
+        val (w, h) = BitmapIO.imageSize(store.srcFile(docId, before.id)) ?: return after
+        val mapped = StampMapper.remap(
+            before.stamps.map { floatArrayOf(it.cx, it.cy, it.width) },
+            w.toFloat(), h.toFloat(), before.corners, before.rotation, after.corners, after.rotation,
+        ) ?: return after
+        return after.copy(stamps = mapped.map { Stamp(it[0], it[1], it[2]) })
     }
 
     /** Words from the recognised text, offered as a document name ("فاتورة كهرباء ..."). */
@@ -508,7 +569,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Merges documents (in list order) into a new document; originals are kept. */
     fun merge(ids: List<String>, onDone: (String) -> Unit) {
         viewModelScope.launch {
-            val id = job {
+            val id = job("MERGE") {
                 docLock.withLock {
                     val target = store.create(defaultName())
                     val pages = ArrayList<ScanPage>()
@@ -527,17 +588,25 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     private suspend fun exportPdf(doc: ScanDocument, opt: ExportOptions): File {
         var noOcr = false
-        val file = exporter.exportPdf(doc, opt, onOcrUnavailable = { noOcr = true }) { a, b -> progress.value = a to b }
-        if (noOcr) _messages.send(UiMessage(R.string.msg_ocr_unavailable))
+        var reading = false
+        val file = exporter.exportPdf(
+            doc, opt,
+            onOcrUnavailable = { noOcr = true },
+            phase = { reading = it == Exporter.Phase.READING_TEXT; exportState.value = exportState.value?.copy(readingText = reading) },
+        ) { a, b ->
+            progress.value = a to b
+            exportState.value = ExportProgress(a, b, reading)
+        }
+        if (noOcr) _messages.send(UiMessage(R.string.msg_ocr_unavailable, report = "OCR_INIT" to "OcrUnavailable"))
         return file
     }
 
     fun share(docId: String, opt: ExportOptions, asJpeg: Boolean) {
-        viewModelScope.launch {
-            val r = job {
+        launchExport {
+            val r = job("EXPORT") {
                 val doc = store.load(docId) ?: return@job null
                 if (doc.pages.isEmpty()) return@job null
-                if (asJpeg) ExportResult.Share(exporter.exportJpegs(doc, opt) { a, b -> progress.value = a to b }, "image/jpeg")
+                if (asJpeg) ExportResult.Share(exporter.exportJpegs(doc, opt) { a, b -> progress.value = a to b; exportState.value = ExportProgress(a, b, false) }, "image/jpeg")
                 else ExportResult.Share(listOf(exportPdf(doc, opt)), "application/pdf")
             }
             if (r != null) {
@@ -549,8 +618,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Writes the PDF to a location the user picked with the system "Save as" dialog. */
     fun saveTo(docId: String, opt: ExportOptions, target: Uri) {
-        viewModelScope.launch {
-            val r = job {
+        launchExport {
+            val r = job("EXPORT") {
                 val doc = store.load(docId) ?: return@job null
                 val file = exportPdf(doc, opt)
                 try {
@@ -572,10 +641,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Saves every page as JPEG into a folder the user picked (Storage Access Framework). */
     fun saveJpegsTo(docId: String, opt: ExportOptions, tree: Uri) {
-        viewModelScope.launch {
-            val r = job {
+        launchExport {
+            val r = job("EXPORT") {
                 val doc = store.load(docId) ?: return@job null
-                val files = exporter.exportJpegs(doc, opt) { a, b -> progress.value = a to b }
+                val files = exporter.exportJpegs(doc, opt) { a, b -> progress.value = a to b; exportState.value = ExportProgress(a, b, false) }
                 try {
                     val cr = getApplication<Application>().contentResolver
                     val parent = DocumentsContract.buildDocumentUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree))

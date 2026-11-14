@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 FastKiwi
+// SPDX-License-Identifier: Apache-2.0
 package com.fastkiwi.scan.data
 
 import com.fastkiwi.scan.core.Quad
@@ -19,7 +21,7 @@ class DocumentStoreTest {
 
     /**
      * Regression (1.1.1): garbage collection runs at app start, in parallel with an
-     * import started by "Share to Kiwi Scan". 1.1.0 deleted the page files that
+     * import started by "Share to Scan Kiwi". 1.1.0 deleted the page files that
      * import had just written (not yet listed in doc.json), losing those pages.
      */
     @Test

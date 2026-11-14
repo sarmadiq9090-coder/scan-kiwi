@@ -1,0 +1,30 @@
+version = 1
+
+[[annotations]]
+path = "**"
+SPDX-FileCopyrightText = "2026 FastKiwi"
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = ["app/src/main/assets/tessdata/**", "app/src/main/assets/fonts/glyphless.ttf"]
+precedence = "override"
+SPDX-FileCopyrightText = "Tesseract contributors"
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = ["gradle/wrapper/**", "gradlew", "gradlew.bat"]
+precedence = "override"
+SPDX-FileCopyrightText = "Gradle, Inc."
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = "app/src/main/assets/icc/sRGB-v2-micro.icc"
+precedence = "override"
+SPDX-FileCopyrightText = "Clinton Ingram (Compact-ICC-Profiles)"
+SPDX-License-Identifier = "CC0-1.0"
+
+[[annotations]]
+path = "app/src/main/assets/THIRD_PARTY_NOTICES.txt"
+precedence = "override"
+SPDX-FileCopyrightText = "2026 FastKiwi and the third parties named in the file"
+SPDX-License-Identifier = "Apache-2.0 AND BSD-2-Clause AND IJG AND BSD-3-Clause AND Zlib AND Libpng"

@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 FastKiwi
+// SPDX-License-Identifier: Apache-2.0
 package com.fastkiwi.scan
 
 import android.graphics.Bitmap
@@ -386,7 +388,7 @@ class AppUiEnglishTest {
 
     @Test
     fun englishHomeRenders() {
-        rule.onNodeWithText("Kiwi Scan").assertExists()
+        rule.onNodeWithText("Scan Kiwi").assertExists()
         rule.onNodeWithText("Scan", useUnmergedTree = true).assertExists()
         rule.waitForIdle()
         File("../screenshots").mkdirs()

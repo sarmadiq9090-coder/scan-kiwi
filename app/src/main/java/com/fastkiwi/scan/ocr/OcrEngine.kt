@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 FastKiwi
+// SPDX-License-Identifier: Apache-2.0
 package com.fastkiwi.scan.ocr
 
 import android.content.Context
@@ -17,7 +19,7 @@ enum class OcrLanguage(val code: String) { ARABIC_ENGLISH("ara+eng"), ENGLISH("e
  * models for Arabic and English. No network, no Google Play services.
  */
 class OcrEngine(private val ctx: Context) {
-    private var api: TessBaseAPI? = null
+    @Volatile private var api: TessBaseAPI? = null
     private var loaded: String? = null
 
     private fun dataDir(): File {
@@ -63,8 +65,8 @@ class OcrEngine(private val ctx: Context) {
     @Synchronized
     fun recognize(page: Bitmap, lang: OcrLanguage): List<OcrWord> {
         val a = ensure(lang)
-        // Tesseract works best around 300 dpi; our pages are <= 3200 px so keep them.
-        val k = 3200f / max(page.width, page.height)
+        // ~200 dpi on A4 is plenty for Tesseract and about 1.8x faster than 3200 px pages.
+        val k = WORK_SIDE.toFloat() / max(page.width, page.height)
         val bmp = if (k < 1f) Bitmap.createScaledBitmap(page, (page.width * k).toInt(), (page.height * k).toInt(), true) else page
         val px = IntArray(bmp.width * bmp.height)
         bmp.getPixels(px, 0, bmp.width, 0, 0, bmp.width, bmp.height)
@@ -90,10 +92,20 @@ class OcrEngine(private val ctx: Context) {
         return words
     }
 
+    /** Interrupts a running [recognize] from another thread (export cancelled). */
+    fun stop() {
+        runCatching { api?.stop() }
+    }
+
     @Synchronized
     fun close() {
         api?.recycle()
         api = null
         loaded = null
+    }
+
+    companion object {
+        /** Longest side of the image Tesseract reads. */
+        const val WORK_SIDE = 2400
     }
 }

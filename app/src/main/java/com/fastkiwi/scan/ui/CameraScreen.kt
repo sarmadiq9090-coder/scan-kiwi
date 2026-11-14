@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 FastKiwi
+// SPDX-License-Identifier: Apache-2.0
 package com.fastkiwi.scan.ui
 
 import android.Manifest
@@ -40,6 +42,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -85,6 +88,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import com.fastkiwi.scan.R
+import com.fastkiwi.scan.core.AutoCapture
 import com.fastkiwi.scan.core.GrayImage
 import com.fastkiwi.scan.core.Pt
 import com.fastkiwi.scan.core.Quad
@@ -94,7 +98,12 @@ import java.util.concurrent.Executors
 import kotlin.math.max
 
 /** Live detection result in normalised, upright preview coordinates. */
-private data class Live(val quad: Quad?, val aspect: Float, val stableFrames: Int)
+private data class Live(
+    val quad: Quad?,
+    val aspect: Float,
+    val state: AutoCapture.State = AutoCapture.State.SEARCHING,
+    val progress: Float = 0f,
+)
 
 @Composable
 fun CameraScreen(vm: AppViewModel, target: Screen.Camera) {
@@ -155,7 +164,10 @@ private fun CameraContent(vm: AppViewModel, initial: Screen.Camera, onClose: () 
     // Camera state lives in the back stack entry, so it survives activity recreation.
     val target = initial
     val captured = target.captured
-    var live by remember { mutableStateOf(Live(null, 3f / 4f, 0)) }
+    var live by remember { mutableStateOf(Live(null, 3f / 4f)) }
+    // Auto-capture decisions (time based, re-arms only when the page changes).
+    val gate = remember { AutoCapture() }
+    val autoFlag = remember { java.util.concurrent.atomic.AtomicBoolean(vm.settings.autoCapture) }
     var torch by remember { mutableStateOf(false) }
     var auto by remember { mutableStateOf(vm.settings.autoCapture) }
     var capturing by remember { mutableStateOf(false) }
@@ -185,6 +197,7 @@ private fun CameraContent(vm: AppViewModel, initial: Screen.Camera, onClose: () 
         capturing = true
         status = R.string.status_capturing
         val liveQuad = live.quad
+        synchronized(gate) { gate.captured(liveQuad) }
         imageCapture.takePicture(ContextCompat.getMainExecutor(ctx), object : ImageCapture.OnImageCapturedCallback() {
             override fun onCaptureSuccess(image: ImageProxy) {
                 val buf = image.planes[0].buffer
@@ -212,8 +225,6 @@ private fun CameraContent(vm: AppViewModel, initial: Screen.Camera, onClose: () 
     DisposableEffect(lifecycleOwner) {
         val future = ProcessCameraProvider.getInstance(ctx)
         val detector = QuadDetector(320)
-        var last: Quad? = null
-        var stable = 0
         future.addListener({
             val provider = future.get()
             val rotation = previewView.display?.rotation ?: Surface.ROTATION_0
@@ -226,15 +237,16 @@ private fun CameraContent(vm: AppViewModel, initial: Screen.Camera, onClose: () 
             analysis.setAnalyzer(analysisExecutor) { img ->
                 try {
                     val gray = lumaOf(img, 320)
-                    val det = detector.detect(gray)
+                    // Luminance first; if that is doubtful, try "paper-likeness"
+                    // (bright and colourless), which finds white pages on light coloured desks.
+                    val det = detector.detectBest(listOf({ gray }, { paperOf(img, gray) }))
                     val rot = img.imageInfo.rotationDegrees
                     val norm = det?.quad?.map { Pt(it.x / gray.width, it.y / gray.height) }?.rotateNormalized(rot)
                     val upright = if (rot == 90 || rot == 270) img.height.toFloat() / img.width else img.width.toFloat() / img.height
-                    val prev = last
-                    stable = if (norm != null && prev != null && norm.maxCornerShift(prev) < 0.025f) stable + 1 else 0
-                    last = norm
-                    val smooth = if (norm != null && prev != null) blend(prev, norm, 0.5f) else norm
-                    ContextCompat.getMainExecutor(ctx).execute { live = Live(smooth, upright, stable) }
+                    val u = synchronized(gate) {
+                        gate.feed(norm, det?.confident == true, android.os.SystemClock.uptimeMillis(), autoFlag.get())
+                    }
+                    ContextCompat.getMainExecutor(ctx).execute { live = Live(u.quad, upright, u.state, u.progress) }
                 } catch (_: Throwable) {
                 } finally {
                     img.close()
@@ -254,19 +266,20 @@ private fun CameraContent(vm: AppViewModel, initial: Screen.Camera, onClose: () 
     }
 
     // Status + auto-capture state machine (driven by live detection updates).
-    LaunchedEffect(live, auto, capturing) {
+    LaunchedEffect(auto) { autoFlag.set(auto) }
+    LaunchedEffect(live.state, capturing) {
         if (capturing) return@LaunchedEffect
-        val q = live.quad
-        val now = System.currentTimeMillis()
-        if (q == null) {
-            if (status != R.string.status_added || now > cooldownUntil) status = R.string.status_searching
-            return@LaunchedEffect
+        val recentlyAdded = status == R.string.status_added && System.currentTimeMillis() < cooldownUntil
+        status = when (live.state) {
+            AutoCapture.State.SEARCHING -> if (recentlyAdded) status else R.string.status_searching
+            AutoCapture.State.TOO_SMALL -> R.string.status_move_closer
+            AutoCapture.State.FOUND -> R.string.status_found
+            AutoCapture.State.HOLD -> R.string.status_hold
+            // Same page still in view after a shot: say so instead of capturing it again.
+            AutoCapture.State.CAPTURED -> if (recentlyAdded) status else R.string.status_next_page
+            AutoCapture.State.FIRE -> R.string.status_capturing
         }
-        if (q.area() < 0.12f) { status = R.string.status_move_closer; return@LaunchedEffect }
-        if (!auto) { status = R.string.status_found; return@LaunchedEffect }
-        if (now < cooldownUntil) return@LaunchedEffect
-        status = R.string.status_hold
-        if (live.stableFrames >= 12) capture(auto = true)
+        if (live.state == AutoCapture.State.FIRE && auto) capture(auto = true)
     }
 
     LaunchedEffect(torch, camera) { camera?.cameraControl?.enableTorch(torch) }
@@ -357,10 +370,22 @@ private fun CameraContent(vm: AppViewModel, initial: Screen.Camera, onClose: () 
                     }
                 }
                 val shutterLabel = stringResource(R.string.take_photo)
+                val ring = if (auto && live.state == AutoCapture.State.HOLD) live.progress else 0f
+                val ringColor = MaterialTheme.colorScheme.primaryContainer
                 Box(
                     Modifier
                         .size(76.dp)
                         .border(4.dp, Color.White, CircleShape)
+                        // Auto-capture countdown around the shutter while the page is held steady.
+                        .drawWithContent {
+                            drawContent()
+                            if (ring > 0f) {
+                                drawArc(
+                                    ringColor, -90f, 360f * ring, useCenter = false,
+                                    style = androidx.compose.ui.graphics.drawscope.Stroke(5.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round),
+                                )
+                            }
+                        }
                         .padding(8.dp)
                         .background(if (capturing) Color.Gray else Color.White, CircleShape)
                         .clickable(enabled = !capturing) { capture(auto = false) }
@@ -407,11 +432,6 @@ private fun QuadOverlay(live: Live) {
     }
 }
 
-private fun blend(a: Quad, b: Quad, t: Float): Quad {
-    fun m(p: Pt, q: Pt) = Pt(p.x + (q.x - p.x) * t, p.y + (q.y - p.y) * t)
-    return Quad(m(a.tl, b.tl), m(a.tr, b.tr), m(a.br, b.br), m(a.bl, b.bl))
-}
-
 /** Subsamples the Y (luminance) plane of a YUV frame to at most [maxSide] px. */
 private fun lumaOf(img: ImageProxy, maxSide: Int): GrayImage {
     val plane = img.planes[0]
@@ -429,4 +449,29 @@ private fun lumaOf(img: ImageProxy, maxSide: Int): GrayImage {
         }
     }
     return GrayImage(w, h, out)
+}
+
+/**
+ * "Paper-likeness" on the same grid as [lumaOf]: Y minus 1.5 x chroma
+ * (|U-128| + |V-128|), so white pages stand out from light coloured surfaces.
+ */
+private fun paperOf(img: ImageProxy, luma: GrayImage): GrayImage {
+    val u = img.planes[1]
+    val v = img.planes[2]
+    val ub = u.buffer
+    val vb = v.buffer
+    val step = max(1, max(img.width, img.height) / 320) // same grid as lumaOf(img, 320)
+    val out = ByteArray(luma.width * luma.height)
+    for (y in 0 until luma.height) {
+        val sy = (y * step) / 2
+        for (x in 0 until luma.width) {
+            val sx = (x * step) / 2
+            val cu = (ub.get(sy * u.rowStride + sx * u.pixelStride).toInt() and 0xFF) - 128
+            val cv = (vb.get(sy * v.rowStride + sx * v.pixelStride).toInt() and 0xFF) - 128
+            val chroma = kotlin.math.abs(cu) + kotlin.math.abs(cv)
+            val p = luma[x, y] - chroma * 3 / 2
+            out[y * luma.width + x] = p.coerceIn(0, 255).toByte()
+        }
+    }
+    return GrayImage(luma.width, luma.height, out)
 }

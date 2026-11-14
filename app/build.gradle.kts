@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 FastKiwi
+// SPDX-License-Identifier: Apache-2.0
 import java.util.Properties
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
@@ -22,8 +24,8 @@ android {
         applicationId = "com.fastkiwi.scan"
         minSdk = 24
         targetSdk = 36
-        versionCode = 3
-        versionName = "1.1.1"
+        versionCode = 4
+        versionName = "1.2.0"
         // Arabic is the default (values/), English in values-en/.
         resourceConfigurations += listOf("ar", "en")
         ndk {
@@ -125,6 +127,8 @@ dependencies {
     testImplementation("org.apache.pdfbox:pdfbox:3.0.6")
     // JVM UI smoke tests + screenshots (Robolectric native graphics); not shipped.
     testImplementation("org.robolectric:robolectric:4.16.1")
+    // Independent PDF/A validator (veraPDF, MPL-2.0 / GPL-3.0+), used only to check our PDF/A-2b output.
+    testImplementation("org.verapdf:validation-model:1.30.4")
     testImplementation(composeBom)
     testImplementation("androidx.compose.ui:ui-test-junit4")
     debugImplementation("androidx.compose.ui:ui-test-manifest")

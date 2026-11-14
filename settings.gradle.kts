@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 FastKiwi
+// SPDX-License-Identifier: Apache-2.0
 pluginManagement {
     repositories {
         google()
@@ -16,5 +18,5 @@ dependencyResolutionManagement {
         }
     }
 }
-rootProject.name = "KiwiScan"
+rootProject.name = "ScanKiwi"
 include(":app")

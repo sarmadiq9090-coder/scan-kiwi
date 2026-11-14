@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 FastKiwi
+// SPDX-License-Identifier: Apache-2.0
 package com.fastkiwi.scan.core
 
 import kotlin.math.abs
@@ -35,6 +37,20 @@ data class Detection(val quad: Quad, val score: Float, val minSupport: Float = 1
  *  4. score = area x (fraction of each side lying on detected edges)
  */
 class QuadDetector(private val workSize: Int = 320) {
+
+    /**
+     * Tries each channel in turn (e.g. luminance, then [ImageFilters.paperMap])
+     * and keeps the best outline; stops early at the first confident one.
+     */
+    fun detectBest(channels: List<() -> GrayImage>): Detection? {
+        var best: Detection? = null
+        for (make in channels) {
+            val d = detect(make()) ?: continue
+            if (best == null || (d.confident && !best.confident) || (d.confident == best.confident && d.score > best.score)) best = d
+            if (best.confident) break
+        }
+        return best
+    }
 
     fun detect(img: GrayImage): Detection? {
         val scale = max(img.width, img.height).toFloat() / workSize

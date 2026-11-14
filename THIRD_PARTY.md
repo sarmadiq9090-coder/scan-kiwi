@@ -22,11 +22,13 @@ contacts a server at run time. The app ships the full notices in
 | ↳ libpng | bundled native | PNG Reference Library License v2 | PNG codec used by Leptonica |
 | tessdata_fast `ara.traineddata`, `eng.traineddata` | main branch, 2026-11-14 | Apache-2.0 | Arabic and English OCR models |
 | Tesseract `pdf.ttf` (renamed `glyphless.ttf`) | main branch | Apache-2.0 | Invisible font for the searchable-text layer |
+| `sRGB-v2-micro.icc` (Compact-ICC-Profiles by Clinton Ingram) | master, 2026-11-14 | CC0-1.0 | sRGB output intent for PDF/A-2b ("أرشيفي") exports |
 
 Model checksums (SHA-256):
 - `ara.traineddata` `e3206d3dc87fd50c24a0fb9f01838615911d25168f4e64415244b67d2bb3e729`
 - `eng.traineddata` `7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2`
 - `glyphless.ttf` `c7845420925a23d88ed830a63957b8af85a66a8daf8d9fc90e843673b2ef1a59`
+- `sRGB-v2-micro.icc` `0a8a33aea66a6f154a5642ebe168ef287e73265d9f7b51c42a45e6eedbacda7a`
 
 Our own code (edge detection, filters, PDF writer with AES-256, UI) uses only the Android
 framework and the libraries above. No OpenCV, ML Kit, Firebase, Play services, analytics or ad SDKs.
@@ -38,6 +40,15 @@ framework and the libraries above. No OpenCV, ML Kit, Firebase, Play services, a
 | JUnit 4 | 4.13.2 | EPL-1.0 |
 | org.json | 20250517 | Public Domain (JSON-java) |
 | Apache PDFBox | 3.0.6 | Apache-2.0 |
+| Robolectric | 4.16.1 | MIT |
+| androidx.compose.ui:ui-test-junit4 / ui-test-manifest | via Compose BOM 2025.12.01 | Apache-2.0 |
+| veraPDF validation-model | 1.30.4 | MPL-2.0 or GPL-3.0-or-later (we use it under MPL-2.0) |
+
+## Build-only (not in the APK)
+
+| Component | Version | Licence | Use |
+|---|---|---|---|
+| CycloneDX Gradle plugin | 3.x | Apache-2.0 | Generates the release SBOM (`dist/*.cdx.json`) |
 
 ## Build toolchain (downloaded from official sources into `.tools/`, not shipped)
 

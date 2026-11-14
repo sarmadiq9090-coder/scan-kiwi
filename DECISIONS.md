@@ -1,4 +1,4 @@
-# Kiwi Scan — decision log
+# Scan Kiwi (ماسح كيوي) — decision log
 
 Each decision below would normally go to the owner. It was settled by a short internal
 "council" review (options weighed, one chosen, reason recorded), as instructed.

@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 FastKiwi
+// SPDX-License-Identifier: Apache-2.0
 package com.fastkiwi.scan
 
 import android.content.ClipData
@@ -74,7 +76,7 @@ class MainActivity : ComponentActivity() {
         handleIncoming(intent)
     }
 
-    /** Files shared to the app from other apps ("Share > Kiwi Scan"). */
+    /** Files shared to the app from other apps ("Share > Scan Kiwi"). */
     private fun handleIncoming(intent: Intent?) {
         intent ?: return
         // Home-screen shortcut "Scan": straight to the camera.
@@ -115,7 +117,12 @@ private fun App(vm: AppViewModel) {
         vm.messages.collect { m ->
             val text = if (m.arg != null) res.getString(m.res, m.arg) else res.getString(m.res)
             val undoId = m.undoDocId
-            if (undoId == null) {
+            val report = m.report
+            if (report != null) {
+                // Errors offer «أبلغ عن هذه المشكلة»; only the code and type travel along.
+                val r = snackbar.showSnackbar(text, actionLabel = res.getString(R.string.feedback_report_this), duration = SnackbarDuration.Long)
+                if (r == SnackbarResult.ActionPerformed) vm.open(Screen.Feedback(report.first, report.second))
+            } else if (undoId == null) {
                 snackbar.showSnackbar(text)
             } else {
                 val r = snackbar.showSnackbar(text, actionLabel = res.getString(R.string.undo), duration = SnackbarDuration.Long)
@@ -144,6 +151,7 @@ private fun App(vm: AppViewModel) {
             is Screen.Page -> PageScreen(vm, s.docId, s.index, snackbar)
             is Screen.Crop -> CropScreen(vm, s.docId, s.pageId)
             is Screen.Sign -> com.fastkiwi.scan.ui.SignatureScreen(vm, s.docId, s.pageId)
+            is Screen.Feedback -> com.fastkiwi.scan.ui.FeedbackScreen(vm, s)
             Screen.Settings -> SettingsScreen(vm)
         }
     }

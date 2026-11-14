@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 FastKiwi
+// SPDX-License-Identifier: Apache-2.0
 package com.fastkiwi.scan.imaging
 
 import android.content.Context
@@ -18,8 +20,21 @@ import java.io.IOException
 import kotlin.math.max
 
 object BitmapIO {
-    /** Longest side kept for page sources (~270 dpi on an A4 page). */
-    const val MAX_SOURCE_SIDE = 3200
+    /**
+     * Longest side kept for page sources: 3200 px (~270 dpi on A4). Lowered to
+     * 2400 px (~205 dpi, still sharp for text) on low-memory phones; see [configureForDevice].
+     */
+    @Volatile
+    var MAX_SOURCE_SIDE = 3200
+        private set
+
+    /** Picks the source size for this phone: low-RAM devices or small heaps use 2400 px. */
+    fun configureForDevice(ctx: Context) {
+        val am = ctx.getSystemService(Context.ACTIVITY_SERVICE) as? android.app.ActivityManager ?: return
+        // largeHeap is on, so largeMemoryClass is our real budget (MB).
+        val small = am.isLowRamDevice || am.largeMemoryClass < 256
+        MAX_SOURCE_SIDE = if (small) 2400 else 3200
+    }
 
     fun decodeFile(file: File, maxSide: Int = MAX_SOURCE_SIDE): Bitmap? {
         val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
@@ -97,6 +112,13 @@ object BitmapIO {
         }
     }
 
+    /** Pixel size of an image file without decoding it. */
+    fun imageSize(file: File): Pair<Int, Int>? {
+        val o = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(file.absolutePath, o)
+        return if (o.outWidth > 0 && o.outHeight > 0) o.outWidth to o.outHeight else null
+    }
+
     /** Decodes a PNG keeping transparency (used for the signature). */
     fun decodePng(file: File): Bitmap? =
         if (file.exists()) BitmapFactory.decodeFile(file.absolutePath, BitmapFactory.Options().apply { inPreferredConfig = Bitmap.Config.ARGB_8888 }) else null
@@ -112,7 +134,11 @@ object BitmapIO {
         val small = if (k < 1f) Bitmap.createScaledBitmap(bmp, max(1, (bmp.width * k).toInt()), max(1, (bmp.height * k).toInt()), true) else bmp
         val px = IntArray(small.width * small.height)
         small.getPixels(px, 0, small.width, 0, 0, small.width, small.height)
-        val det = QuadDetector(workSize = 480).detect(ImageFilters.toGray(px, small.width, small.height))
+        val sw = small.width
+        val sh = small.height
+        val det = QuadDetector(workSize = 480).detectBest(
+            listOf({ ImageFilters.toGray(px, sw, sh) }, { ImageFilters.paperMap(px, sw, sh) }),
+        )
         val w = small.width.toFloat()
         val h = small.height.toFloat()
         if (small !== bmp) small.recycle()

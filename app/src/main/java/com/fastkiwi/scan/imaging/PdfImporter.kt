@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 FastKiwi
+// SPDX-License-Identifier: Apache-2.0
 package com.fastkiwi.scan.imaging
 
 import android.content.Context
@@ -5,6 +7,8 @@ import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.pdf.PdfRenderer
 import android.net.Uri
+import android.os.ParcelFileDescriptor
+import java.io.File
 import kotlin.math.max
 
 /**
@@ -15,8 +19,36 @@ import kotlin.math.max
 object PdfImporter {
     class ProtectedPdfException : Exception()
 
+    /**
+     * PdfRenderer needs a seekable file. Some providers (cloud drives, mail
+     * apps) only hand out a pipe, so in that case the PDF is first copied to a
+     * private temporary file, which is deleted right after.
+     */
     suspend fun importPages(ctx: Context, uri: Uri, onPage: suspend (Bitmap) -> Unit): Int {
-        val pfd = ctx.contentResolver.openFileDescriptor(uri, "r") ?: return 0
+        val direct = runCatching { ctx.contentResolver.openFileDescriptor(uri, "r") }.getOrNull()
+        if (direct != null && isSeekable(direct)) return render(direct, onPage)
+        direct?.close()
+        val tmp = File.createTempFile("import", ".pdf", File(ctx.cacheDir, "imports").apply { mkdirs() })
+        try {
+            val copied = ctx.contentResolver.openInputStream(uri)?.use { input ->
+                tmp.outputStream().use { input.copyTo(it) }
+            } ?: return 0
+            if (copied <= 0L) return 0
+            return render(ParcelFileDescriptor.open(tmp, ParcelFileDescriptor.MODE_READ_ONLY), onPage)
+        } finally {
+            tmp.delete()
+        }
+    }
+
+    /** True for a real file descriptor; false for a pipe or socket. */
+    private fun isSeekable(pfd: ParcelFileDescriptor): Boolean = try {
+        android.system.Os.lseek(pfd.fileDescriptor, 0L, android.system.OsConstants.SEEK_SET)
+        pfd.statSize >= 0
+    } catch (e: Exception) {
+        false
+    }
+
+    private suspend fun render(pfd: ParcelFileDescriptor, onPage: suspend (Bitmap) -> Unit): Int {
         pfd.use {
             val renderer = try {
                 PdfRenderer(it)

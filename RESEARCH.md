@@ -1,4 +1,4 @@
-# Kiwi Scan — competitor research
+# Scan Kiwi — competitor research
 
 Written 2026-11-14, before building. Facts marked **(verified)** were checked against
 public sources on that date; the rest come from general product knowledge and should be
@@ -77,7 +77,7 @@ re-checked before being quoted publicly, because free-tier limits change often.
 | Microsoft Lens (before retirement) | ~50–80 MB |
 | Google Drive (scan is part of it) | ~100+ MB |
 | Genius Scan | ~40–60 MB |
-| **Kiwi Scan v1.0.0** | **14.2 MB APK (all three ABIs, incl. Arabic + English OCR models)** |
+| **Scan Kiwi v1.0.0** | **14.2 MB APK (all three ABIs, incl. Arabic + English OCR models)** |
 
 Big apps start slowly on cheap phones, which are common in our Arabic-speaking market. Cloud OCR is also slow
 or impossible on weak connections.

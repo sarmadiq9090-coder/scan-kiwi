@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 FastKiwi
+// SPDX-License-Identifier: Apache-2.0
 package com.fastkiwi.scan.ui
 
 import android.graphics.Bitmap
@@ -149,11 +151,20 @@ fun CropScreen(vm: AppViewModel, docId: String, pageId: String) {
                 if (l == null) {
                     CircularProgressIndicator()
                 } else {
-                    val view = remember(l.first, rotation) {
-                        val copy = l.first.copy(Bitmap.Config.ARGB_8888, false)
-                        BitmapIO.rotate(copy, rotation).asImageBitmap()
+                    // The rotated preview is built off the main thread (a 2048 px copy).
+                    val view by produceState<Pair<Int, ImageBitmap>?>(null, l.first, rotation) {
+                        val r = rotation
+                        value = withContext(Dispatchers.Default) {
+                            val bmp = if (r == 0) l.first else BitmapIO.rotate(l.first.copy(Bitmap.Config.ARGB_8888, false), r)
+                            r to bmp.asImageBitmap()
+                        }
                     }
-                    CornerEditor(view, corners, rotation, detected, problem != null) { corners = it }
+                    val v = view
+                    if (v == null || v.first != rotation) {
+                        CircularProgressIndicator()
+                    } else {
+                        CornerEditor(v.second, corners, rotation, detected, problem != null) { corners = it }
+                    }
                 }
             }
         }
