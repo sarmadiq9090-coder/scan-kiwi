@@ -133,7 +133,7 @@
     <string name="licenses_body">مكتبات مفتوحة المصدر: Jetpack Compose وCameraX وAndroidX وKotlin (Apache-2.0)، Tesseract4Android وTesseract وبيانات tessdata_fast (Apache-2.0)، Leptonica (BSD-2)، libjpeg-turbo (IJG/BSD)، libpng (رخصة libpng).</string>
 
     <!-- v1.1 -->
-    <string name="crop_all">الكل</string>
+    <string name="crop_all">الصورة كاملة</string>
     <string name="crop_reset_detected">إعادة الكشف</string>
     <string name="crop_problem_crossed">الزوايا متقاطعة: الشكل ليس رباعيًا صالحًا.</string>
     <string name="crop_problem_concave">الشكل منبعج للداخل: اسحب الزاوية إلى الخارج.</string>
@@ -234,6 +234,9 @@
     <string name="delete_document">حذف المستند</string>
     <string name="more_options">خيارات أخرى</string>
     <string name="rotate">تدوير</string>
+    <string name="crop_title">تعديل الحواف</string>
+    <string name="done">تم</string>
+    <string name="crop_hint_short">اسحب الزوايا إلى حواف الورقة</string>
     <plurals name="page_count">
         <item quantity="zero">لا صفحات</item>
         <item quantity="one">صفحة واحدة</item>

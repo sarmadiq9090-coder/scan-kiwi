@@ -42,6 +42,11 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
+import com.fastkiwi.scan.ui.theme.Dimens
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
@@ -100,53 +105,35 @@ fun CropScreen(vm: AppViewModel, docId: String, pageId: String) {
     }
     var rotation by androidx.compose.runtime.saveable.rememberSaveable(docId, pageId) { mutableIntStateOf(page?.rotation ?: 0) }
     val detected = loaded?.second?.quad
+    // The drag hint shows until the first drag, once per install.
+    var showHint by remember { mutableStateOf(!vm.settings.cropHintSeen) }
 
     val problem = CropGeometry.validate(corners, 1f, 1f, 0.005f)
 
     Scaffold(
-        topBar = {
-            TopAppBar(
-                navigationIcon = { IconButton(onClick = { vm.back() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.cancel)) } },
-                title = { Text(stringResource(R.string.crop)) },
-                actions = {
+        topBar = { KiwiTopBar(stringResource(R.string.crop_title), NavIcon.CLOSE, { vm.back() }) },
+        bottomBar = {
+            Column {
+                ActionToolbar(systemInsets = false) {
+                    ToolbarAction(KiwiIcons.rotateRight(), stringResource(R.string.rotate), { rotation = (rotation + 90) % 360 })
+                    ToolbarAction(KiwiIcons.cropFree(), stringResource(R.string.crop_all), { corners = BitmapIO.FULL })
+                    ToolbarAction(KiwiIcons.redetect(), stringResource(R.string.crop_reset_detected), { detected?.let { corners = it } }, enabled = detected != null)
+                }
+                BottomActionBar {
                     Button(
                         onClick = {
                             vm.editPage(docId, pageId) { it.copy(corners = corners, rotation = rotation) }
                             vm.back()
                         },
                         enabled = problem == null && page != null,
-                        modifier = Modifier.padding(end = 8.dp),
-                    ) { Icon(Icons.Filled.Check, null); Text(" " + stringResource(R.string.apply)) }
-                },
-            )
-        },
-        bottomBar = {
-            Surface(tonalElevation = 3.dp) {
-                Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 6.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                ) {
-                    ToolButton(Icons.Filled.Rotate90DegreesCw, R.string.rotate_right) { rotation = (rotation + 90) % 360 }
-                    ToolButton(Icons.Filled.CropFree, R.string.crop_all) { corners = BitmapIO.FULL }
-                    ToolButton(Icons.Filled.AutoFixHigh, R.string.crop_reset_detected, enabled = detected != null) {
-                        detected?.let { corners = it }
-                    }
+                        modifier = Modifier.fillMaxWidth().heightIn(min = Dimens.buttonLarge),
+                    ) { Icon(KiwiIcons.check(), null, Modifier.size(20.dp)); Spacer(Modifier.width(Dimens.s)); Text(stringResource(R.string.done)) }
                 }
             }
         },
     ) { padding ->
-        Column(Modifier.padding(padding).fillMaxSize()) {
-            if (problem != null) {
-                ProblemBanner(problem) {
-                    CropGeometry.fix(corners, 1f, 1f)?.let { corners = it } ?: run { corners = detected ?: BitmapIO.FULL }
-                }
-            } else {
-                Text(
-                    stringResource(R.string.crop_hint), style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                )
-            }
-            Box(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp), contentAlignment = Alignment.Center) {
+        Box(Modifier.padding(padding).fillMaxSize().background(MaterialTheme.colorScheme.surfaceContainerHighest)) {
+            Box(Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = Dimens.l), contentAlignment = Alignment.Center) {
                 val l = loaded
                 if (l == null) {
                     CircularProgressIndicator()
@@ -163,9 +150,20 @@ fun CropScreen(vm: AppViewModel, docId: String, pageId: String) {
                     if (v == null || v.first != rotation) {
                         CircularProgressIndicator()
                     } else {
-                        CornerEditor(v.second, corners, rotation, detected, problem != null) { corners = it }
+                        CornerEditor(v.second, corners, rotation, detected, problem != null) {
+                            corners = it
+                            if (showHint) { showHint = false; vm.settings.cropHintSeen = true }
+                        }
                     }
                 }
+            }
+            // Overlays at the top of the canvas: the invalid-shape bar, or the one-time hint.
+            if (problem != null) {
+                ProblemBanner(problem, Modifier.align(Alignment.TopCenter).padding(Dimens.m)) {
+                    CropGeometry.fix(corners, 1f, 1f)?.let { corners = it } ?: run { corners = detected ?: BitmapIO.FULL }
+                }
+            } else if (showHint) {
+                HintPill(stringResource(R.string.crop_hint_short), Modifier.align(Alignment.TopCenter).padding(Dimens.m))
             }
         }
     }
@@ -177,17 +175,7 @@ private val QuadSaver = androidx.compose.runtime.saveable.Saver<Quad, FloatArray
 )
 
 @Composable
-private fun ToolButton(icon: androidx.compose.ui.graphics.vector.ImageVector, label: Int, enabled: Boolean = true, onClick: () -> Unit) {
-    TextButton(onClick = onClick, enabled = enabled, modifier = Modifier.heightIn(min = 56.dp)) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(icon, null)
-            Text(stringResource(label), style = MaterialTheme.typography.labelMedium, textAlign = TextAlign.Center)
-        }
-    }
-}
-
-@Composable
-private fun ProblemBanner(problem: QuadProblem, onFix: () -> Unit) {
+private fun ProblemBanner(problem: QuadProblem, modifier: Modifier, onFix: () -> Unit) {
     val msg = stringResource(
         when (problem) {
             QuadProblem.CROSSED -> R.string.crop_problem_crossed
@@ -195,17 +183,18 @@ private fun ProblemBanner(problem: QuadProblem, onFix: () -> Unit) {
             QuadProblem.TOO_SMALL -> R.string.crop_problem_small
         },
     )
-    Surface(color = MaterialTheme.colorScheme.errorContainer, modifier = Modifier.fillMaxWidth()) {
+    Surface(color = MaterialTheme.colorScheme.errorContainer, shape = MaterialTheme.shapes.large, modifier = modifier.fillMaxWidth()) {
         Row(
-            Modifier.padding(horizontal = 16.dp, vertical = 6.dp).semantics { liveRegion = LiveRegionMode.Assertive },
+            Modifier.padding(start = Dimens.l, end = Dimens.xs).semantics { liveRegion = LiveRegionMode.Assertive },
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(Icons.Filled.Warning, null, tint = MaterialTheme.colorScheme.onErrorContainer)
-            Text(msg, Modifier.weight(1f).padding(horizontal = 12.dp), color = MaterialTheme.colorScheme.onErrorContainer, style = MaterialTheme.typography.bodyMedium)
-            TextButton(onClick = onFix) { Text(stringResource(R.string.crop_fix)) }
+            Icon(KiwiIcons.warning(), null, tint = MaterialTheme.colorScheme.onErrorContainer)
+            Text(msg, Modifier.weight(1f).padding(horizontal = Dimens.m, vertical = Dimens.s), color = MaterialTheme.colorScheme.onErrorContainer, style = MaterialTheme.typography.bodyMedium)
+            TextButton(onClick = onFix, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.crop_fix)) }
         }
     }
 }
+
 
 /**
  * [corners] and [detected] are normalised in the source image; the view shows the
@@ -320,8 +309,9 @@ private fun CornerEditor(
             }
             drawPath(scrim, Color.Black.copy(alpha = 0.45f))
             val lineColor = if (invalid) error else primary
-            drawPath(outline, Color.White, style = Stroke(width = 5.dp.toPx()))
-            drawPath(outline, lineColor, style = Stroke(width = 3.dp.toPx()))
+            // 2.5 dp outline over a 4 dp white halo: visible on any photo.
+            drawPath(outline, Color.White, style = Stroke(width = 4.dp.toPx()))
+            drawPath(outline, lineColor, style = Stroke(width = 2.5.dp.toPx()))
 
             // Side handles: white capsules along each side.
             for (s in 0 until 4) {
@@ -330,8 +320,8 @@ private fun CornerEditor(
                 val mid = Offset((a.x + b.x) / 2f, (a.y + b.y) / 2f)
                 val angle = Math.toDegrees(atan2((b.y - a.y).toDouble(), (b.x - a.x).toDouble())).toFloat()
                 val isActive = active == Handle(Handle.Kind.EDGE, s)
-                val len = (if (isActive) 40.dp else 32.dp).toPx()
-                val thick = 12.dp.toPx()
+                val len = (if (isActive) 34.dp else 28.dp).toPx()
+                val thick = 10.dp.toPx()
                 rotate(angle, pivot = mid) {
                     drawRoundRect(
                         if (isActive) primary else Color.White,
@@ -347,10 +337,10 @@ private fun CornerEditor(
             // Corner handles.
             pts.forEachIndexed { i, p ->
                 val isActive = active == Handle(Handle.Kind.CORNER, i)
-                val r = (if (isActive) 18.dp else 15.dp).toPx()
-                drawCircle(Color.White, radius = r + 3.dp.toPx(), center = p)
-                drawCircle(if (isActive) primary else handleFill, radius = r, center = p)
-                drawCircle(lineColor, radius = r + 3.dp.toPx(), center = p, style = Stroke(2.dp.toPx()))
+                // 22 dp white disc with a 3 dp ring (grab area stays 72 dp).
+                val r = (if (isActive) 14.dp else 11.dp).toPx()
+                drawCircle(if (isActive) handleFill else Color.White, radius = r, center = p)
+                drawCircle(lineColor, radius = r, center = p, style = Stroke(3.dp.toPx()))
             }
 
             // Magnifier above the finger (below it when near the top), never under it.

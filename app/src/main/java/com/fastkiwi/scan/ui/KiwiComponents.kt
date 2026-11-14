@@ -178,10 +178,10 @@ fun RowScope.ToolbarAction(icon: ImageVector, label: String, onClick: () -> Unit
 
 /** Up to five [ToolbarAction]s in a bottom bar. */
 @Composable
-fun ActionToolbar(content: @Composable RowScope.() -> Unit) {
+fun ActionToolbar(systemInsets: Boolean = true, content: @Composable RowScope.() -> Unit) {
     Surface(color = MaterialTheme.colorScheme.surfaceContainer) {
         Row(
-            Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = Dimens.s, vertical = Dimens.xs),
+            Modifier.fillMaxWidth().then(if (systemInsets) Modifier.navigationBarsPadding() else Modifier).padding(horizontal = Dimens.s, vertical = Dimens.xs),
             verticalAlignment = Alignment.CenterVertically,
             content = content,
         )
