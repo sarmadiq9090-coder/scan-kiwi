@@ -107,20 +107,27 @@ class DocumentStore(root: File) {
 
     // --------------------------------------------------------------- OCR cache
 
-    fun saveOcr(docId: String, page: ScanPage, words: List<OcrWord>) {
+    fun saveOcr(docId: String, page: ScanPage, words: List<OcrWord>, lang: String? = null) {
         val arr = JSONArray()
         for (w in words) arr.put(JSONArray().put(w.text).put(w.left).put(w.top).put(w.right).put(w.bottom))
         val o = JSONObject().put("revision", page.revision).put("words", arr)
+        if (lang != null) o.put("lang", lang)
         writeAtomically(ocrFile(docId, page.id)) { it.write(o.toString().toByteArray(Charsets.UTF_8)) }
     }
 
-    /** Cached OCR words if they match the page's current revision. */
-    fun loadOcr(docId: String, page: ScanPage): List<OcrWord>? {
+    /**
+     * Cached OCR words if they match the page's current revision and, when [lang] is
+     * given (an export), the OCR language too: words read as English only must not
+     * stand in for an Arabic + English export. Search passes no language and uses any
+     * cached text, including 1.1.x caches that did not record one.
+     */
+    fun loadOcr(docId: String, page: ScanPage, lang: String? = null): List<OcrWord>? {
         val f = ocrFile(docId, page.id)
         if (!f.exists()) return null
         return runCatching {
             val o = JSONObject(f.readText())
             if (o.optInt("revision", -1) != page.revision) return null
+            if (lang != null && o.optString("lang") != lang) return null
             val arr = o.getJSONArray("words")
             List(arr.length()) {
                 val a = arr.getJSONArray(it)

@@ -26,12 +26,12 @@ class Settings(ctx: Context) {
         get() = p.getBoolean("auto_capture", true)
         set(v) = p.edit().putBoolean("auto_capture", v).apply()
 
-    /** Open the outline editor after each manual shot (auto-captured batches skip it). */
     /** The crop screen's drag hint was dismissed (shown once per install). */
     var cropHintSeen: Boolean
         get() = p.getBoolean("crop_hint_seen", false)
         set(v) = p.edit().putBoolean("crop_hint_seen", v).apply()
 
+    /** Open the outline editor after each manual shot (auto-captured batches skip it). */
     var reviewAfterCapture: Boolean
         get() = p.getBoolean("review_after_capture", true)
         set(v) = p.edit().putBoolean("review_after_capture", v).apply()

@@ -20,6 +20,28 @@ object PdfImporter {
     class ProtectedPdfException : Exception()
 
     /**
+     * True for a PDF. Mail and cloud apps often give no MIME type (or a generic one)
+     * and a URI without a file name, so when neither says "PDF" the first bytes are
+     * checked for the "%PDF-" header (ISO 32000: within the first 1024 bytes).
+     */
+    fun isPdf(ctx: Context, uri: Uri, type: String): Boolean {
+        if (type == "application/pdf" || uri.toString().endsWith(".pdf", true)) return true
+        if (type.startsWith("image/")) return false
+        return runCatching {
+            ctx.contentResolver.openInputStream(uri)?.use { input ->
+                val head = ByteArray(1024)
+                var n = 0
+                while (n < head.size) {
+                    val r = input.read(head, n, head.size - n)
+                    if (r < 0) break
+                    n += r
+                }
+                String(head, 0, n, Charsets.ISO_8859_1).contains("%PDF-")
+            } ?: false
+        }.getOrDefault(false)
+    }
+
+    /**
      * PdfRenderer needs a seekable file. Some providers (cloud drives, mail
      * apps) only hand out a pipe, so in that case the PDF is first copied to a
      * private temporary file, which is deleted right after.

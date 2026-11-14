@@ -15,6 +15,7 @@ contacts a server at run time. The app ships the full notices in
 | androidx.core:core-ktx | 1.17.0 | Apache-2.0 | FileProvider, IntentCompat |
 | androidx.lifecycle (viewmodel-compose, runtime-compose) | 2.9.4 | Apache-2.0 | ViewModel and state |
 | androidx.camera (camera2, lifecycle, view) | 1.5.3 | Apache-2.0 | Camera preview, analysis and capture |
+| ↳ libyuv (inside camera-core, `libimage_processing_util_jni.so`) | bundled native | BSD-3-Clause | YUV conversion used by CameraX |
 | cz.adaptech.tesseract4android:tesseract4android | 4.9.0 (JitPack) | Apache-2.0 | OCR JNI wrapper |
 | ↳ Tesseract OCR | 5.x (bundled native) | Apache-2.0 | OCR engine |
 | ↳ Leptonica | bundled native | BSD-2-Clause-style (Leptonica licence) | Image library used by Tesseract |
@@ -25,6 +26,7 @@ contacts a server at run time. The app ships the full notices in
 | `sRGB-v2-micro.icc` (Compact-ICC-Profiles by Clinton Ingram) | master, 2026-11-14 | CC0-1.0 | sRGB output intent for PDF/A-2b ("أرشيفي") exports |
 | Noto Sans Arabic Regular / Medium / Bold (unhinted static TTF) | 2.013 (notofonts/arabic release) | OFL-1.1 | Bundled UI font (`res/font/`) |
 | Material Symbols Rounded (vector drawables, weight 400, grade 0, 24 dp) | google/material-design-icons, master 2026-11-14 | Apache-2.0 | UI icons (`res/drawable/ic_*.xml`) |
+| Other transitive libraries (more AndroidX modules, `com.google.guava:listenablefuture`, `com.google.auto.value:auto-value-annotations`, `org.jspecify:jspecify`) | see the SBOM | Apache-2.0 | Pulled in by the libraries above; the full list with versions is in the release SBOM (`ScanKiwi-<version>.cdx.json`) |
 
 Model checksums (SHA-256):
 - `ara.traineddata` `e3206d3dc87fd50c24a0fb9f01838615911d25168f4e64415244b67d2bb3e729`

@@ -121,7 +121,7 @@ class Exporter(private val ctx: Context, private val store: DocumentStore) {
                     val page = doc.pages[i]
                     val bitonal = page.filter == Filter.BW
                     val engine = ocr
-                    val cachedWords = if (engine != null) store.loadOcr(doc.id, page) else null
+                    val cachedWords = if (engine != null) store.loadOcr(doc.id, page, opt.ocrLanguage.code) else null
                     val needOcr = engine != null && cachedWords == null
                     // Decode only as large as needed: the export size, or OCR's working size.
                     val target = if (bitonal) opt.quality.bitonalLongSide else opt.quality.longSide
@@ -132,7 +132,7 @@ class Exporter(private val ctx: Context, private val store: DocumentStore) {
                         words = try {
                             engine.recognize(full, opt.ocrLanguage).also {
                                 currentCoroutineContext().ensureActive() // a stopped page is not cached
-                                store.saveOcr(doc.id, page, it)
+                                store.saveOcr(doc.id, page, it, opt.ocrLanguage.code)
                             }
                         } catch (e: Throwable) {
                             // OOM and cancellation keep their meaning; anything else (no native

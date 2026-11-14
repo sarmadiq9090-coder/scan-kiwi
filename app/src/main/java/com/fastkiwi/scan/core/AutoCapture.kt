@@ -30,6 +30,8 @@ class AutoCapture(
     private var holdStart = 0L
     private var misses = 0
     private var firedQuad: Quad? = null
+    /** State of the last frame that had an outline and no countdown (FOUND or TOO_SMALL). */
+    private var lastSeen = State.FOUND
 
     fun reset() {
         smooth = null; anchor = null; misses = 0; firedQuad = null
@@ -54,7 +56,13 @@ class AutoCapture(
                 return Update(State.SEARCHING, null, 0f)
             }
             val s = smooth ?: return Update(State.SEARCHING, null, 0f)
-            return Update(if (firedQuad != null) State.CAPTURED else State.HOLD, s, progress(timeMs))
+            // Keep showing what the last real frame showed: only a running countdown is HOLD.
+            val state = when {
+                firedQuad != null -> State.CAPTURED
+                anchor != null -> State.HOLD
+                else -> lastSeen
+            }
+            return Update(state, s, progress(timeMs))
         }
         misses = 0
         val prev = smooth
@@ -63,6 +71,7 @@ class AutoCapture(
 
         if (quad.area() < minArea) {
             anchor = null
+            lastSeen = State.TOO_SMALL
             return Update(State.TOO_SMALL, s, 0f)
         }
         val fired = firedQuad
@@ -70,6 +79,7 @@ class AutoCapture(
             if (quad.maxCornerShift(fired) > rearmShift) firedQuad = null
             else return Update(State.CAPTURED, s, 0f)
         }
+        lastSeen = State.FOUND
         if (!enabled || !confident) {
             anchor = null
             return Update(State.FOUND, s, 0f)

@@ -37,6 +37,19 @@ object Feedback {
     /** GitHub rejects very long URLs (~8 KB); stay well below. */
     const val MAX_URL = 7000
 
+    /** Longest text the form accepts (the counter shows it). */
+    const val MAX_TEXT = 4000
+
+    /**
+     * Applies the [MAX_TEXT] limit to typed or pasted text: a longer paste is cut
+     * (it used to be ignored completely), never in the middle of a surrogate pair.
+     */
+    fun clipInput(s: String): String {
+        if (s.length <= MAX_TEXT) return s
+        val end = if (Character.isHighSurrogate(s[MAX_TEXT - 1])) MAX_TEXT - 1 else MAX_TEXT
+        return s.substring(0, end)
+    }
+
     fun subject(kind: FeedbackKind, appVersion: String) = "[Scan Kiwi $appVersion] ${kind.arabic}"
 
     /** Exactly the lines attached when the box is ticked (also shown on screen). */
@@ -72,9 +85,11 @@ object Feedback {
         while (true) {
             val url = "$base&description=${encode(t)}$device"
             if (url.length <= MAX_URL || t.isEmpty()) return url
-            // Cut by characters (not bytes) so a surrogate pair is never split.
-            val cut = (t.length * 0.9).toInt().coerceAtMost(t.length - 1)
-            t = t.substring(0, if (cut > 0 && Character.isHighSurrogate(t[cut - 1])) cut - 1 else cut).trimEnd() + "…"
+            // Cut by characters (not bytes) so a surrogate pair is never split. The text
+            // always gets shorter (cut + "…" < length), so the loop ends.
+            var cut = minOf((t.length * 0.9).toInt(), t.length - 2)
+            if (cut > 0 && Character.isHighSurrogate(t[cut - 1])) cut--
+            t = if (cut <= 0) "" else t.substring(0, cut).trimEnd() + "…"
             if (t == "…") t = ""
         }
     }

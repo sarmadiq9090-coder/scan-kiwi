@@ -138,7 +138,8 @@ dependencies {
 // ---------------------------------------------------------------------------
 // Release SBOM (CycloneDX). The plugin lists the Maven dependencies shipped in
 // the APK; `releaseSbom` adds what Maven cannot see: the native libraries inside
-// tesseract4android, the bundled OCR models, the glyphless font and the ICC profile.
+// tesseract4android, the bundled OCR models, the glyphless font, the ICC profile,
+// the Noto Sans Arabic UI font and the Material Symbols icons.
 // ---------------------------------------------------------------------------
 tasks.named<org.cyclonedx.gradle.CyclonedxDirectTask>("cyclonedxDirectBom") {
     includeConfigs.set(listOf("releaseRuntimeClasspath"))
@@ -184,6 +185,35 @@ tasks.register("releaseSbom") {
         components += data("tessdata/eng.traineddata", "tessdata_fast eng.traineddata", "Apache-2.0", "https://github.com/tesseract-ocr/tessdata_fast")
         components += data("fonts/glyphless.ttf", "Tesseract pdf.ttf (GlyphLessFont)", "Apache-2.0", "https://github.com/tesseract-ocr/tesseract/tree/main/tessdata")
         components += data("icc/sRGB-v2-micro.icc", "sRGB-v2-micro.icc", "CC0-1.0", "https://github.com/saucecontrol/Compact-ICC-Profiles")
+        // Bundled UI font (res/font) and icons (res/drawable), which Maven does not list either.
+        val fonts = file("src/main/res/font")
+        for (w in listOf("regular", "medium", "bold")) {
+            val f = File(fonts, "noto_sans_arabic_$w.ttf")
+            components += mapOf(
+                "type" to "data", "bom-ref" to "font:noto_sans_arabic_$w.ttf", "name" to "Noto Sans Arabic ${w.replaceFirstChar { it.uppercase() }}",
+                "version" to "2.013",
+                "hashes" to listOf(mapOf("alg" to "SHA-256", "content" to sha256(f))),
+                "licenses" to listOf(mapOf("license" to mapOf("id" to "OFL-1.1"))),
+                "externalReferences" to listOf(mapOf("type" to "distribution", "url" to "https://github.com/notofonts/arabic/releases")),
+            )
+        }
+        components += mapOf(
+            "type" to "data", "bom-ref" to "asset:res/drawable/ic_sym_*.xml", "name" to "Material Symbols Rounded (vector drawables)",
+            "licenses" to listOf(mapOf("license" to mapOf("id" to "Apache-2.0"))),
+            "externalReferences" to listOf(mapOf("type" to "distribution", "url" to "https://github.com/google/material-design-icons")),
+        )
+        // Fix licence metadata the POMs get wrong or leave out.
+        @Suppress("UNCHECKED_CAST")
+        for (c in components.filterIsInstance<MutableMap<String, Any?>>()) {
+            if (c["group"] == "cz.adaptech.tesseract4android" && c["licenses"] == null) {
+                c["licenses"] = listOf(mapOf("license" to mapOf("id" to "Apache-2.0")))
+            }
+            // camera-core's POM names libyuv's licence "BSD License", which the plugin maps to
+            // BSD-4-Clause; libyuv is BSD-3-Clause.
+            if (c["group"] == "androidx.camera" && c["name"] == "camera-core") {
+                c["licenses"] = listOf(mapOf("license" to mapOf("id" to "Apache-2.0")), mapOf("license" to mapOf("id" to "BSD-3-Clause")))
+            }
+        }
         output.parentFile.mkdirs()
         output.writeText(groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(bom)) + "\n")
     }

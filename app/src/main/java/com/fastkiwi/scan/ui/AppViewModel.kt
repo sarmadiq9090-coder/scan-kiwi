@@ -427,7 +427,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     val before = added
                     try {
                         val type = ctx.contentResolver.getType(uri) ?: ""
-                        if (type == "application/pdf" || uri.toString().endsWith(".pdf", true)) {
+                        if (PdfImporter.isPdf(ctx, uri, type)) {
                             PdfImporter.importPages(ctx, uri) { bmp ->
                                 pending.add(addSource(doc.id, bmp, null, Filter.ORIGINAL))
                                 bmp.recycle()

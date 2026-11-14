@@ -139,9 +139,9 @@ fun FeedbackScreen(vm: AppViewModel, start: Screen.Feedback) {
             )
             OutlinedTextField(
                 value = text,
-                onValueChange = { if (it.length <= 4000) text = it },
+                onValueChange = { text = Feedback.clipInput(it) },
                 label = { Text(stringResource(if (kind == FeedbackKind.PROBLEM) R.string.feedback_hint_problem else R.string.feedback_hint_suggestion)) },
-                supportingText = { Text(LocalFormat.count(text.length) + " / " + LocalFormat.count(4000)) },
+                supportingText = { Text(LocalFormat.count(text.length) + " / " + LocalFormat.count(Feedback.MAX_TEXT)) },
                 minLines = 5,
                 modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
             )
