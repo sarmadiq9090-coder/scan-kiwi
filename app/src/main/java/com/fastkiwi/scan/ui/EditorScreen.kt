@@ -109,7 +109,7 @@ fun EditorScreen(vm: AppViewModel, docId: String, snackbar: SnackbarHostState) {
         return
     }
     val subtitle = pluralStringResource(R.plurals.page_count, doc.pages.size, doc.pages.size) +
-        LocalFormat.metaSep(ctx.resources.configuration.locales[0]) +
+        LocalFormat.metaSep(androidx.compose.ui.platform.LocalConfiguration.current.locales[0]) +
         stringResource(R.string.modified_at, LocalFormat.docDate(ctx, doc.modified))
 
     Scaffold(
@@ -315,7 +315,7 @@ fun ExportSheet(vm: AppViewModel, docId: String, onDismiss: () -> Unit) {
             val pagesText = pluralStringResource(R.plurals.page_count, pageCount, pageCount)
             val sizeText = estimate?.let { stringResource(R.string.estimated_size, formatSize(it)) } ?: stringResource(R.string.estimating_size)
             Text(
-                pagesText + LocalFormat.metaSep(ctx.resources.configuration.locales[0]) + sizeText,
+                pagesText + LocalFormat.metaSep(androidx.compose.ui.platform.LocalConfiguration.current.locales[0]) + sizeText,
                 style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.semantics { liveRegion = androidx.compose.ui.semantics.LiveRegionMode.Polite },
             )
@@ -443,7 +443,7 @@ fun ExportSheet(vm: AppViewModel, docId: String, onDismiss: () -> Unit) {
 /** «A4 (٢١ × ٢٩٫٧ سم)»: name plus size in the locale's digits. */
 @Composable
 private fun pageSizeLabel(ps: PageSize): String {
-    val locale = LocalContext.current.resources.configuration.locales[0]
+    val locale = androidx.compose.ui.platform.LocalConfiguration.current.locales[0]
     val nf = java.text.NumberFormat.getNumberInstance(locale).apply { maximumFractionDigits = 1 }
     @Composable fun dims(w: Double, h: Double, unit: Int) = stringResource(R.string.size_dims, nf.format(w), nf.format(h), stringResource(unit))
     return when (ps) {

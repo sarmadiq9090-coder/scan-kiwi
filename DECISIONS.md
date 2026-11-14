@@ -143,3 +143,27 @@ See `STANDARDS.md`. Notable choices: PDF/A-2b was feasible without bloat (456-by
 XMP) and is validated with veraPDF; Gradle dependency verification enabled (Linux/macOS aapt2 hashes added by hand
 so CI can verify); CycloneDX SBOM from the build; unsigned SLSA L1 provenance because signing is local;
 MASVS-RESILIENCE deliberately not pursued (open source, no secrets).
+
+### D31 — Professional redesign («تصميم ... اكثر احترافيه») in 1.2.0
+The design council's spec (FastKiwi design council, 2026-11-14) was implemented in 1.2.0 instead of 1.3.0 on the
+coordinator's decision (one writer, so no merge risk), as 15 commits, one per spec step, with the full test suite
+green after each. Summary: complete Material 3 colour scheme from the kiwi seed; bundled Noto Sans Arabic;
+Arabic-tuned type scale; one primary action per screen in the thumb zone; paired buttons secondary-first,
+primary at the end; centred scan FAB; card-less page grid with «إضافة صفحات» / «تصدير»; swipe pager page
+editor with a labelled toolbar; crop with a full-width «تم»; export sheet with segmented choices and a size
+dropdown; grouped Settings with dialogs, theme choice and opt-in dynamic colour; Updates as its own screen;
+camera with a centred shutter and a «تم» pill; Material Symbols Rounded icons; locale digits and the Arabic comma.
+
+Deviations from the spec, with reasons:
+- **Release**: 1.2.0, not 1.3.0 (coordinator decision).
+- **Font build**: static unhinted Noto Sans Arabic 2.013 from the notofonts release (OFL). It has no Latin
+  glyphs, so Latin text falls back to the system sans (Roboto/Noto Sans), which is visually close. The Google
+  Fonts variable build with Latin would need variable-font support (API 26+) while minSdk is 24.
+- **Not built**: shared-axis screen transitions, the thumbnail "flight" into the «تم» pill, swipe-to-switch
+  camera mode, and the optional Home sort menu. The capture flash, confirm haptic and auto-capture ring are in.
+  These are motion polish; left out to keep the release stable.
+- **FAB collapse**: collapses once the first list row scrolls away (not on scroll direction); same effect, simpler.
+- **Updates hero**: shows version and versionCode but no release date (a build date would make builds
+  non-reproducible). The full D-077 network statement is shown on the screen, word for word, instead of behind «لماذا؟».
+- **Fill 1 icons**: only `check_circle` (selection); other selected states use colour.
+- **Rename**: «الكل» in the crop tools is now «الصورة كاملة» as the spec asks.

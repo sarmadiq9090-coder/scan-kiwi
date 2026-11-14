@@ -35,9 +35,11 @@ Status: **Met** · **Partial** (met with a stated limit) · **Gap** (not met, wi
 | Criterion | Status | How |
 |---|---|---|
 | 1.4.3 Contrast (minimum) | Met | Material 3 colour roles chosen for ≥ 4.5:1 text contrast in light and dark themes. |
-| 2.5.8 Target size / Android 48 dp | Met | Material components (48 dp minimum); custom rows use `heightIn(min = 48–56 dp)`; crop handles have a 72 dp grab area. |
+| 2.5.8 Target size / Android 48 dp | Met | A test walks every clickable node on Home, Editor, Settings, Updates and Feedback and asserts ≥ 48 × 48 dp; crop handles have a 72 dp grab area. |
 | 4.1.2 Name, role, value (TalkBack) | Met | Content descriptions on icons, roles on custom controls, headings, live regions for camera status and warnings; page/document actions also exposed as accessibility actions. |
-| 1.4.4 Resize text (200 %) | Partial | Layouts use `sp` text and scroll; long Arabic labels wrap. Not verified on a device at 200 % font size. |
+| 1.4.4 Resize text (200 %) | Met (emulated) | Robolectric test at `fontScale = 2.0` on Home, Editor, Export and Settings: primary actions stay visible inside the window; button pairs stack at ≥ 1.5×; screenshots `30–33-*-200pct`. Not yet checked on a physical phone. |
+| Dark theme / contrast in dark | Met | Full dark scheme from the same seed; screenshots `20–23-*-dark`; contrast pairs per the design spec's WCAG table. |
+| Reading order in RTL | Met | Test asserts the primary «تصدير» is left of «إضافة صفحات» in Arabic and right of "Add pages" in English. |
 | 1.4.1 Use of colour | Met | Invalid crop shape: red outline **plus** a warning bar with text; selection states have text/state descriptions. |
 | Manual check with TalkBack on a phone | Gap | No device or emulator available to the build; to be done before a store listing. |
 
@@ -46,7 +48,7 @@ Status: **Met** · **Partial** (met with a stated limit) · **Gap** (not met, wi
 | Standard | Status | How |
 |---|---|---|
 | Android core app quality | Partial | Back navigation, state survives recreation, no ANR-prone work on the main thread (share lag fixed and tested), offline behaviour, permissions requested in context. Not run through the full device test list (no device). |
-| Material 3 | Met | Compose Material 3 components, dynamic-free brand colour scheme, light/dark. A redesign spec is pending (owner request). |
+| Material 3 | Met | Stable Compose Material 3 components only, complete colour roles (no baseline fallbacks), M3 type/shape tokens, Material Symbols Rounded icons, optional Material You dynamic colour (Android 12+, off by default). The FastKiwi design council's spec is implemented (DECISIONS.md D31). |
 | Target API policy | Met | targetSdk 36 (Google Play requirement since 31 Aug 2026). |
 | 16 KB page size | Met | All 64-bit native libraries have 16 KB ELF segment alignment (checked on every release). |
 

@@ -10,7 +10,7 @@ contacts a server at run time. The app ships the full notices in
 |---|---|---|---|
 | Kotlin stdlib | 2.2.21 | Apache-2.0 | Language runtime |
 | kotlinx-coroutines-android | 1.10.2 | Apache-2.0 | Background work |
-| AndroidX Compose BOM (ui, foundation, material3, material-icons-extended) | 2025.12.01 | Apache-2.0 | Material 3 UI |
+| AndroidX Compose BOM (ui, foundation, material3) | 2025.12.01 | Apache-2.0 | Material 3 UI |
 | androidx.activity:activity-compose | 1.11.0 | Apache-2.0 | Activity + result APIs (SAF pickers) |
 | androidx.core:core-ktx | 1.17.0 | Apache-2.0 | FileProvider, IntentCompat |
 | androidx.lifecycle (viewmodel-compose, runtime-compose) | 2.9.4 | Apache-2.0 | ViewModel and state |

@@ -20,6 +20,8 @@ Each release section is written in Arabic first, then English.
 - عدّاد دائري حول زر التصوير أثناء الالتقاط التلقائي.
 
 #### تغيّر
+- **تصميم جديد أكثر احترافية**: زر رئيسي واحد في كل شاشة وفي متناول الإبهام، أزرار ثابتة المواضع، خط Noto Sans Arabic موحّد، ألوان كاملة من هوية الكيوي، سمة داكنة اختيارية وألوان خلفية الهاتف (أندرويد ١٢+)، أيقونات Material Symbols، أرقام بحسب لغة الهاتف.
+- زر التصوير في المنتصف دائمًا، وزر «تم» يعرض آخر صفحة وعددها؛ الإعدادات مجمّعة في مجموعات؛ التحديثات في شاشة خاصة.
 - المشاركة أسرع وأخف: تقدير الحجم لم يعد يعيد ضغط الصفحات، ويُعاد استخدام آخر ملف إن لم يتغير شيء، والتعرّف على النص يعمل على صورة أصغر (بكسلات أقل بنحو 45٪).
 - الالتقاط التلقائي أثبت: يعتمد على الزمن لا عدد الإطارات، يتحمّل فقدان إطار أو اثنين، ولا يصوّر الصفحة نفسها مرتين.
 - كشف الحواف أفضل للورق الأبيض على سطح فاتح ملوّن.
@@ -46,6 +48,11 @@ Each release section is written in Arabic first, then English.
 - Countdown ring around the shutter during auto capture.
 
 #### Changed
+- **Professional redesign**: one primary action per screen within thumb reach, buttons in fixed places, one
+  Arabic UI font (Noto Sans Arabic), a complete kiwi colour scheme, optional dark theme and wallpaper colours
+  (Android 12+), Material Symbols icons, numbers in the phone's digits.
+- The shutter is always centred and a "Done" pill shows the last page and the count; Settings are grouped;
+  Updates has its own screen.
 - Sharing is faster and lighter: the size estimate no longer re-encodes pages, an unchanged export is reused,
   and OCR reads a smaller image (about 45% fewer pixels).
 - Steadier auto capture: time based instead of frame based, tolerates dropped frames, never captures the same page twice.

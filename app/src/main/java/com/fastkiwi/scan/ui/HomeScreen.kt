@@ -245,7 +245,7 @@ private fun DocRow(
     var menu by remember { mutableStateOf(false) }
     val date = remember(doc.modified) { LocalFormat.docDate(ctx, doc.modified) }
     val pagesText = pluralStringResource(R.plurals.page_count, doc.pages.size, doc.pages.size)
-    val sep = LocalFormat.metaSep(ctx.resources.configuration.locales[0])
+    val sep = LocalFormat.metaSep(androidx.compose.ui.platform.LocalConfiguration.current.locales[0])
     val selectedLabel = stringResource(if (selected) R.string.selected else R.string.not_selected)
     val aShare = stringResource(R.string.share_pdf)
     val aRename = stringResource(R.string.rename)

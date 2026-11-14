@@ -1,4 +1,4 @@
-# Scan Kiwi v1.1.1 — feature checklist
+# Scan Kiwi v1.2.0 — feature checklist
 
 Legend: [x] done · [~] done with a stated limit · [ ] not done
 
@@ -40,6 +40,20 @@ Legend: [x] done · [~] done with a stated limit · [ ] not done
 - [~] Arabic OCR: shadow/illumination normalisation before Tesseract (model unchanged; not measured on a phone)
 - [x] EXIF: all 8 orientations (including mirrored) handled for imported photos
 
+## New in 1.2.0
+
+- [x] English name **Scan Kiwi** (Arabic «ماسح كيوي» unchanged); open source under Apache-2.0
+- [x] Professional redesign per the design council's spec (DECISIONS.md D31), light and dark, Noto Sans Arabic, Material Symbols
+- [x] «أبلغنا عن مشكلة أو اقتراح» by mail or GitHub issue (hand-off only; device info opt-in; never documents)
+- [x] «التحديثات»: Obtainium link and releases page (no network code, no new permissions)
+- [x] Share: instant progress, real Cancel (stops OCR), identical export reused, cheap size estimate
+- [x] «أرشيفي (PDF/A)»: PDF/A-2b validated with veraPDF
+- [x] Signature stays on the paper after re-crop/rotation; pipe-only PDF providers import; crop preview off the main thread
+- [x] Steadier auto capture (time based, never the same page twice) and better detection on light coloured desks
+- [x] Low-memory phones: 2400 px page sources; OCR on ≤ 2400 px images
+- [ ] Book mode (split facing pages) — not now (D26)
+- [~] Better Arabic OCR — preprocessing only; `tessdata_best` not bundled (size/speed, D26)
+
 ## Standards and privacy
 
 - [x] Material 3 (Compose), light and dark themes, WCAG AA colour pairs
@@ -73,7 +87,7 @@ Legend: [x] done · [~] done with a stated limit · [ ] not done
 - Atomic, synced writes for doc.json, page images and OCR cache; a failed JPEG write no longer replaces the page.
 - Release builds log nothing; exports are removed from the cache after "Save" and after an hour otherwise.
 
-## What was tested (49 automated tests, all passing)
+## What was tested (77 automated tests, all passing)
 
 | Area | How | Result |
 |---|---|---|
