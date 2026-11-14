@@ -23,12 +23,17 @@ contacts a server at run time. The app ships the full notices in
 | tessdata_fast `ara.traineddata`, `eng.traineddata` | main branch, 2026-11-14 | Apache-2.0 | Arabic and English OCR models |
 | Tesseract `pdf.ttf` (renamed `glyphless.ttf`) | main branch | Apache-2.0 | Invisible font for the searchable-text layer |
 | `sRGB-v2-micro.icc` (Compact-ICC-Profiles by Clinton Ingram) | master, 2026-11-14 | CC0-1.0 | sRGB output intent for PDF/A-2b ("أرشيفي") exports |
+| Noto Sans Arabic Regular / Medium / Bold (unhinted static TTF) | 2.013 (notofonts/arabic release) | OFL-1.1 | Bundled UI font (`res/font/`) |
+| Material Symbols Rounded (vector drawables, weight 400, grade 0, 24 dp) | google/material-design-icons, master 2026-11-14 | Apache-2.0 | UI icons (`res/drawable/ic_*.xml`) |
 
 Model checksums (SHA-256):
 - `ara.traineddata` `e3206d3dc87fd50c24a0fb9f01838615911d25168f4e64415244b67d2bb3e729`
 - `eng.traineddata` `7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2`
 - `glyphless.ttf` `c7845420925a23d88ed830a63957b8af85a66a8daf8d9fc90e843673b2ef1a59`
 - `sRGB-v2-micro.icc` `0a8a33aea66a6f154a5642ebe168ef287e73265d9f7b51c42a45e6eedbacda7a`
+- `noto_sans_arabic_regular.ttf` `bd86ca02f087d7f3c3788ba458fb6b73744c7639ed276b8d870dba6def6c40d0`
+- `noto_sans_arabic_medium.ttf` `a66dfdfd2fd345d500a8f169d07297eb29fc683938c61d6bdd5717cafca86d51`
+- `noto_sans_arabic_bold.ttf` `f4cb79f842a07d1bcf597879574358fb7010f73761396d1d0f2445dfedb4d2ca`
 
 Our own code (edge detection, filters, PDF writer with AES-256, UI) uses only the Android
 framework and the libraries above. No OpenCV, ML Kit, Firebase, Play services, analytics or ad SDKs.
