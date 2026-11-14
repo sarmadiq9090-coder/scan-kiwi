@@ -1,4 +1,4 @@
-# Kiwi Scan v1.1.0 — feature checklist
+# Kiwi Scan v1.1.1 — feature checklist
 
 Legend: [x] done · [~] done with a stated limit · [ ] not done
 
@@ -58,7 +58,22 @@ Legend: [x] done · [~] done with a stated limit · [ ] not done
 - [ ] Tested on a real phone or emulator by me — the build PC has no hypervisor; the owner tested 1.0.0 on his phone
 - [~] Edge detection is classical CV: may miss white paper on a white surface; manual crop always works
 
-## What was tested (32 automated tests, all passing)
+## Fixed in 1.1.1 (independent bug hunt, no new features)
+
+- Parallel edits no longer overwrite each other (a capture while a crop was being applied, an import while
+  deleting, two quick rotations): every document change is serialised.
+- Adding pages (camera, import) is now an undo step; Undo used to drop pages added since the last edit, and
+  it no longer reverts a rename.
+- Start-up clean-up no longer deletes pages that a "Share to Kiwi Scan" import is still writing.
+- A side dragged past the opposite side (mirrored outline) is flagged with «إصلاح» instead of giving a mirrored page.
+- PDF export streams page by page (200-page documents on 2–3 GB phones); missing OCR engine/model exports
+  without a text layer instead of failing or crashing.
+- Shared-in file:// and own-provider URIs are refused (they could pull the private signature into a document);
+  unreadable imports are skipped and never leave an empty document.
+- Atomic, synced writes for doc.json, page images and OCR cache; a failed JPEG write no longer replaces the page.
+- Release builds log nothing; exports are removed from the cache after "Save" and after an hour otherwise.
+
+## What was tested (49 automated tests, all passing)
 
 | Area | How | Result |
 |---|---|---|
@@ -70,6 +85,7 @@ Legend: [x] done · [~] done with a stated limit · [ ] not done
 | Undo (1.1) | Robolectric: delete page + filter change, undo twice, page order and files restored; signature stamp saved and rendered | Pass |
 | Image pipeline | Robolectric: detect on synthetic photos → perspective warp → filters → thumbnails → 3-page PDF export (79.8 KB with "Small") and password export | Pass |
 | Release APK | apksigner verify (v2), aapt2 permissions (CAMERA only), 16 KB ELF alignment of every 64-bit .so, Android lint (0 errors) | Pass |
+| 1.1.1 regressions | Robolectric: parallel edits kept, undo after capture, unreadable import, OCR unavailable, capture after leaving camera, incoming-URI filter, safe file names, EXIF on real pixels. JVM: GC age cutoff, atomic write, strict xref offsets, streamed writer keeps no pages, 200-page encrypted PDF, Arabic text layer, empty password. The bug cases were also run against the 1.1.0 code (8 proof tests) and all 8 failed there; the others cover areas that were already right | Pass (17 new) |
 
 Not tested: live CameraX preview/auto-capture, real photos, Tesseract OCR on device, share sheet and
 Storage Access Framework dialogs, TalkBack walk-through, performance and memory on low-end phones.

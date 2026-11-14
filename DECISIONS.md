@@ -71,3 +71,20 @@ Viewpoints: **U** everyday user, **P** privacy/security, **A** accessibility/Ara
 ### D23 — Version and signing
 
 **1.1.0 (versionCode 2)**, signed with the same release key as 1.0.0 so it installs over it and keeps the user's documents.
+
+## v1.1.1 — independent bug hunt (2026-11-14)
+
+### D24 — Fix-only release
+
+Bugs found by an adversarial review and each proven by a test (the bug cases fail on 1.1.0). No features added.
+**1.1.1 (versionCode 3)**, same release key. Choices made on the way:
+
+- **Undo after adding pages**: adding pages (camera, import) became an undo step, rather than clearing the history.
+  Either fixes the data loss; this one keeps earlier undo steps and makes "Undo" mean "undo the last change".
+- **Serialising edits**: one lock for every document read-modify-write, held during the page re-render. Simpler and
+  safer than merging concurrent changes; heavy work for captures and imports stays outside the lock.
+- **OCR unavailable**: export continues without a text layer and says so, rather than failing every export while
+  the remembered OCR switch is on.
+- **Not fixed (S3, would change behaviour)**: a signature placed before a later rotation or re-crop keeps its page
+  position instead of following the content; PDFs from providers that only offer a pipe (not seekable) cannot be
+  imported; the crop screen copies its preview bitmap on the main thread when rotating.
