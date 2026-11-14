@@ -151,7 +151,7 @@
     <string name="signature_pad_desc">لوحة رسم التوقيع</string>
     <string name="signature_draw_hint">ارسم توقيعك بإصبعك. يُحفظ داخل الهاتف فقط.</string>
     <string name="signature_clear">مسح اللوحة</string>
-    <string name="signature_place_hint">اسحب التوقيع إلى مكانه على الصفحة وغيّر حجمه.</string>
+    <string name="signature_place_hint">اسحب التوقيع إلى مكانه، وغيّر حجمه من الأسفل</string>
     <string name="signature_place_desc">معاينة الصفحة مع التوقيع، اسحب لتحريكه</string>
     <string name="signature_size">حجم التوقيع</string>
     <string name="signature_redraw">رسم من جديد</string>

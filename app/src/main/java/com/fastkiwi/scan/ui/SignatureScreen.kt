@@ -46,6 +46,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.Surface
+import androidx.compose.material3.TextButton
+import com.fastkiwi.scan.ui.theme.Dimens
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
@@ -84,12 +90,7 @@ fun SignatureScreen(vm: AppViewModel, docId: String, pageId: String) {
     }
     val page = vm.doc(docId)?.pages?.firstOrNull { it.id == pageId }
 
-    Scaffold(topBar = {
-        TopAppBar(
-            navigationIcon = { IconButton(onClick = { vm.back() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) } },
-            title = { Text(stringResource(R.string.signature)) },
-        )
-    }) { padding ->
+    Scaffold(topBar = { KiwiTopBar(stringResource(R.string.signature), NavIcon.CLOSE, { vm.back() }) }) { padding ->
         Column(Modifier.padding(padding).fillMaxSize().padding(16.dp)) {
             if (drawing || signature == null) {
                 SignaturePad(onCancel = if (signature != null) ({ drawing = false }) else null) { bmp ->
@@ -148,12 +149,13 @@ private fun SignaturePad(onCancel: (() -> Unit)?, onSave: (Bitmap) -> Unit) {
             for (s in strokes + listOf(current)) drawPath(pathOf(s), ink, style = Stroke(strokePx, cap = StrokeCap.Round, join = StrokeJoin.Round))
         }
     }
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        OutlinedButton(onClick = { strokes.clear() }, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.signature_clear)) }
-        if (onCancel != null) OutlinedButton(onClick = onCancel, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.cancel)) }
+    // Footer: secondary «مسح», tertiary «إلغاء», primary «حفظ» at the end.
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Dimens.s), verticalAlignment = Alignment.CenterVertically) {
+        OutlinedButton(onClick = { strokes.clear() }, modifier = Modifier.weight(1f).heightIn(min = Dimens.button)) { Text(stringResource(R.string.signature_clear)) }
+        if (onCancel != null) TextButton(onClick = onCancel, modifier = Modifier.heightIn(min = Dimens.button)) { Text(stringResource(R.string.cancel)) }
         Button(onClick = {
             renderSignature(strokes, padSize, strokePx * 2f, ink)?.let(onSave)
-        }, enabled = strokes.isNotEmpty(), modifier = Modifier.weight(1f)) { Text(stringResource(R.string.save)) }
+        }, enabled = strokes.isNotEmpty(), modifier = Modifier.weight(1f).heightIn(min = Dimens.button)) { Text(stringResource(R.string.save)) }
     }
 }
 
@@ -210,7 +212,6 @@ private fun ColumnScope.Placement(vm: AppViewModel, docId: String, pageId: Strin
     val primary = MaterialTheme.colorScheme.primary
     val placeDesc = stringResource(R.string.signature_place_desc)
 
-    Text(stringResource(R.string.signature_place_hint), style = MaterialTheme.typography.bodyMedium)
     Box(Modifier.weight(1f).fillMaxWidth().padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
         val img = pageImg
         if (img == null) {
@@ -240,24 +241,40 @@ private fun ColumnScope.Placement(vm: AppViewModel, docId: String, pageId: Strin
                     val l = ox + cx * dw - sw / 2
                     val t = oy + cy * dh - sh / 2
                     drawImage(signature, dstOffset = IntOffset(l.toInt(), t.toInt()), dstSize = IntSize(sw.toInt(), sh.toInt()))
-                    drawRect(primary, topLeft = Offset(l, t), size = androidx.compose.ui.geometry.Size(sw, sh), style = Stroke(2.dp.toPx()))
+                    // Selected stamp: dashed primary frame with two resize knobs.
+                    drawRect(
+                        primary, topLeft = Offset(l, t), size = androidx.compose.ui.geometry.Size(sw, sh),
+                        style = Stroke(2.dp.toPx(), pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(10f, 8f))),
+                    )
+                    drawCircle(Color.White, 6.dp.toPx(), Offset(l, t)); drawCircle(primary, 6.dp.toPx(), Offset(l, t), style = Stroke(2.dp.toPx()))
+                    drawCircle(Color.White, 6.dp.toPx(), Offset(l + sw, t + sh)); drawCircle(primary, 6.dp.toPx(), Offset(l + sw, t + sh), style = Stroke(2.dp.toPx()))
                 }
             }
         }
+        HintPill(stringResource(R.string.signature_place_hint), Modifier.align(Alignment.TopCenter).padding(Dimens.s))
     }
-    Text(stringResource(R.string.signature_size), style = MaterialTheme.typography.titleSmall)
-    Slider(value = width, onValueChange = { width = it }, valueRange = 0.12f..0.7f)
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedButton(onClick = onRedraw, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.signature_redraw)) }
-        if (hasStamps) {
-            OutlinedButton(onClick = {
-                vm.editPage(docId, pageId) { it.copy(stamps = emptyList()) }
-                vm.back()
-            }, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.signature_remove)) }
+    Surface(color = MaterialTheme.colorScheme.surfaceContainer, shape = MaterialTheme.shapes.large, modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(Dimens.l)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(stringResource(R.string.signature_size), style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                if (hasStamps) {
+                    TextButton(onClick = {
+                        vm.editPage(docId, pageId) { it.copy(stamps = emptyList()) }
+                        vm.back()
+                    }, modifier = Modifier.heightIn(min = Dimens.button)) { Text(stringResource(R.string.signature_remove), color = MaterialTheme.colorScheme.error) }
+                }
+            }
+            Slider(value = width, onValueChange = { width = it }, valueRange = 0.12f..0.7f)
+            Spacer(Modifier.height(Dimens.s))
+            ButtonPair(
+                secondary = { m -> OutlinedButton(onClick = onRedraw, modifier = m) { Text(stringResource(R.string.signature_redraw)) } },
+                primary = { m ->
+                    Button(onClick = {
+                        vm.editPage(docId, pageId) { it.copy(stamps = it.stamps + Stamp(cx, cy, width)) }
+                        vm.back()
+                    }, modifier = m) { Icon(KiwiIcons.check(), null, Modifier.size(20.dp)); Spacer(Modifier.width(Dimens.s)); Text(stringResource(R.string.done)) }
+                },
+            )
         }
-        Button(onClick = {
-            vm.editPage(docId, pageId) { it.copy(stamps = it.stamps + Stamp(cx, cy, width)) }
-            vm.back()
-        }, modifier = Modifier.weight(1f)) { Icon(Icons.Filled.Check, null); Text(" " + stringResource(R.string.apply)) }
     }
 }
