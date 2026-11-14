@@ -1,0 +1,18 @@
+# Toolchain (JDK, Android SDK, Gradle caches) - local only
+.tools/
+# Build outputs
+.gradle/
+build/
+app/build/
+local.properties
+*.iml
+.idea/
+.kotlin/
+captures/
+# Signing material - NEVER commit
+keystore/
+*.jks
+*.keystore
+keystore.properties
+# Deliverables are produced locally and handed over privately
+dist/
