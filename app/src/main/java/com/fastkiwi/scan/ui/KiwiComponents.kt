@@ -74,7 +74,8 @@ fun TooltipIconButton(icon: ImageVector, label: String, onClick: () -> Unit, ena
         tooltip = { PlainTooltip { Text(label) } },
         state = rememberTooltipState(),
     ) {
-        IconButton(onClick = onClick, enabled = enabled) {
+        // 48 dp on purpose: the tooltip anchor (long-press) must be a full touch target too.
+        IconButton(onClick = onClick, enabled = enabled, modifier = Modifier.size(48.dp)) {
             if (tint != null) Icon(icon, label, tint = tint) else Icon(icon, label)
         }
     }

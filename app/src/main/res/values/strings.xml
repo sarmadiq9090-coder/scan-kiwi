@@ -255,6 +255,7 @@
     <string name="state_off">متوقف</string>
     <string name="size_kb">%1$s ك.ب</string>
     <string name="size_mb">%1$s م.ب</string>
+    <string name="whats_new_line">جديد في هذا الإصدار: تصميم أوضح بأزرار ثابتة المواضع، خط عربي موحّد، سمة داكنة، «أبلغنا عن مشكلة»، مشاركة أسرع مع إلغاء، وخيار أرشيفي PDF/A.</string>
     <plurals name="page_count">
         <item quantity="zero">لا صفحات</item>
         <item quantity="one">صفحة واحدة</item>

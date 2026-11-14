@@ -250,6 +250,7 @@
     <string name="state_off">Off</string>
     <string name="size_kb">%1$s KB</string>
     <string name="size_mb">%1$s MB</string>
+    <string name="whats_new_line">New in this version: a clearer design with buttons in fixed places, one Arabic UI font, dark theme, "Report a problem", faster sharing with Cancel, and an archival PDF/A option.</string>
     <plurals name="page_count">
         <item quantity="one">%d page</item>
         <item quantity="other">%d pages</item>

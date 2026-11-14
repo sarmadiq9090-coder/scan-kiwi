@@ -125,6 +125,8 @@ fun UpdatesScreen(vm: AppViewModel) {
                     }
                 }
                 Spacer(Modifier.height(Dimens.l))
+                Text(stringResource(R.string.whats_new_line), style = MaterialTheme.typography.bodyMedium)
+                Spacer(Modifier.height(Dimens.m))
                 // D-077 wording, word for word.
                 Text(stringResource(R.string.network_statement), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.height(Dimens.xl))
