@@ -88,3 +88,58 @@ Bugs found by an adversarial review and each proven by a test (the bug cases fai
 - **Not fixed (S3, would change behaviour)**: a signature placed before a later rotation or re-crop keeps its page
   position instead of following the content; PDFs from providers that only offer a pipe (not seekable) cannot be
   imported; the crop screen copies its preview bitmap on the main thread when rotating.
+
+## 1.2.0 — rename, open source, standards (2026-11-14)
+
+### D25 — Rename
+English name **Scan Kiwi** (owner: «اسمه scan kiwi»); Arabic name «ماسح كيوي» unchanged. applicationId
+`com.fastkiwi.scan` and the release key stay, so 1.2.0 installs over 1.1.1. Internal identifiers that users never
+see (`Theme.KiwiScan` → renamed anyway to `Theme.ScanKiwi`, folder `kiwi-scan`) do not matter.
+
+### D26 — Council on 1.2.0 improvements (quality over feature count)
+Viewpoints: everyday user (U), privacy/security (P), accessibility/Arabic (A), performance/size (S), competitor parity (C).
+
+| Candidate | Verdict | Reason |
+|---|---|---|
+| S3: signature does not follow re-crop/rotation | **Done** | U: a signature must stay on the signature line. Stamps are mapped back to the photo through the old crop (homography) and forward through the new one; width kept along the baseline. Unit-tested. |
+| S3: pipe-only PDF providers | **Done** | U: cloud/mail apps often hand out pipes. Non-seekable descriptors are copied to a private temp file, deleted right after. |
+| S3: crop preview copy on the main thread | **Done** | S: rotated preview built on `Dispatchers.Default`. |
+| Book mode | **Not now** | U+S: a good result needs spine detection, per-page crop **and** page de-warping; without de-warping the text near the spine stays curved. "Properly or not at all" → not in 1.2.0. |
+| Better Arabic OCR | **Partly** | A wants `tessdata_best` (better Arabic); S rejects it: +12.6 MB (APK ≈ 26 MB, at the 28 MB chat limit) and ~3x slower OCR on phones. A downloadable model is impossible (no INTERNET permission). Kept `tessdata_fast` + shadow normalisation before OCR. |
+| Edge detection on hard backgrounds | **Done** | U: white paper on a light wood/coloured desk. Added a "paper-likeness" channel (bright and colourless) tried when luminance is doubtful, for stills and live frames. Test with a same-brightness coloured desk. |
+| Auto-capture stability | **Done** | U: 1.1 could re-capture the same page after its 2 s cooldown. New time-based gate: holds 0.9 s within 2 %, tolerates 4 missed frames, fires only on confident outlines, re-arms only when the page leaves or changes. Countdown ring on the shutter. Unit-tested. |
+| Speed and memory on low-end phones | **Done** | S: page sources 2400 px on low-RAM/small-heap phones (3200 otherwise); OCR reads ≤ 2400 px; export decodes only as large as needed; size estimate no longer decodes images. |
+| Code-quality refactors | **Limited** | New logic lives in small pure-Kotlin, unit-tested classes (`Homography`, `StampMapper`, `AutoCapture`, `Feedback`). Large screen refactors wait for the design spec to avoid churn twice. SPDX headers everywhere; README "Project layout". |
+| From RESEARCH.md: archival PDF | **Done** | C+U: PDF/A-2b «أرشيفي» option, validated by veraPDF in tests. |
+
+### D27 — Share lag («عند الضغط على زر مشاركة كانه يتاخر او يعلق»)
+Findings on 1.1.1: nothing heavy ran on the main thread, but (1) the export gave no feedback until the first page
+was processed and had no Cancel; (2) the size estimate encoded three full-size pages **in parallel with** the export
+(CPU and ~100 MB of extra bitmaps on a phone); (3) OCR read 3200 px pages (slow per page with `ara+eng`);
+(4) the same export was rebuilt every time Share was tapped again. Fix: progress shown on tap («يجهّز الملف… صفحة ٣ من ١٠»,
+«يقرأ النص…» during OCR), a real Cancel (coroutine cancellation + `TessBaseAPI.stop()`, partial file deleted),
+OCR cache reused (keyed by page revision, which changes with filter/crop/rotation), identical exports reused,
+image-free size estimate, OCR at ≤ 2400 px. Robolectric timings (PC, 2400×3200 pages, no OCR):
+before 1 / 5 / 20 pages = 150 / 368 / 1439 ms; after = 226 / 377 / 1171 ms; main thread busy after tap 0 ms in both;
+cached re-share of 5 pages 62 ms; size estimate 39 ms. The on-phone gain comes mostly from the estimate no longer
+competing with the export, OCR on smaller images and reuse; OCR could not be timed on the PC (native Tesseract).
+
+### D28 — Report a problem or suggestion
+Hand-off only (no network permission): `mailto:` (with subject/body extras) or a prefilled GitHub issue form
+(`bug_report.yml` / `feature_request.yml`, fields `description` and `device`, URL ≤ 7000 chars, cut on character
+boundaries). Device info is off by default and shown verbatim before sending; it has app version, Android version,
+model, language and, from an error, only an error code and exception class. Never documents, images, OCR text,
+file names, the signature or logs. Errors offer «أبلغ عن هذه المشكلة» on the message.
+
+### D29 — Updates (council D-077)
+No network code, no new permissions. Settings ▸ «التحديثات»: version line, «حدّثه تلقائياً عبر Obtainium»
+(`obtainium://add/...`, dialog with «نزّل Obtainium» when not installed), «ابحث عن تحديث» (releases page).
+Required wording used verbatim in the README, the privacy text and About. CI fails if the APK requests any
+permission except CAMERA (the app-internal `DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` from androidx.core is
+a signature permission of this app, not a system permission, and is allowed).
+
+### D30 — Standards
+See `STANDARDS.md`. Notable choices: PDF/A-2b was feasible without bloat (456-byte CC0 sRGB profile, uncompressed
+XMP) and is validated with veraPDF; Gradle dependency verification enabled (Linux/macOS aapt2 hashes added by hand
+so CI can verify); CycloneDX SBOM from the build; unsigned SLSA L1 provenance because signing is local;
+MASVS-RESILIENCE deliberately not pursued (open source, no secrets).

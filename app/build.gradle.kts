@@ -1,5 +1,6 @@
 // SPDX-FileCopyrightText: 2026 FastKiwi
 // SPDX-License-Identifier: Apache-2.0
+import java.security.MessageDigest
 import java.util.Properties
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
@@ -7,6 +8,7 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
+    id("org.cyclonedx.bom") version "3.6.1"
 }
 
 // Release signing material lives in the git-ignored keystore/ folder.
@@ -132,4 +134,58 @@ dependencies {
     testImplementation(composeBom)
     testImplementation("androidx.compose.ui:ui-test-junit4")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
+}
+
+// ---------------------------------------------------------------------------
+// Release SBOM (CycloneDX). The plugin lists the Maven dependencies shipped in
+// the APK; `releaseSbom` adds what Maven cannot see: the native libraries inside
+// tesseract4android, the bundled OCR models, the glyphless font and the ICC profile.
+// ---------------------------------------------------------------------------
+tasks.named<org.cyclonedx.gradle.CyclonedxDirectTask>("cyclonedxDirectBom") {
+    includeConfigs.set(listOf("releaseRuntimeClasspath"))
+    projectType.set(org.cyclonedx.model.Component.Type.APPLICATION)
+    componentGroup.set("com.fastkiwi")
+    componentName.set("scan-kiwi")
+    componentVersion.set(android.defaultConfig.versionName)
+    jsonOutput.set(layout.buildDirectory.file("reports/sbom/scan-kiwi.cdx.json"))
+}
+
+tasks.register("releaseSbom") {
+    description = "Writes dist/ScanKiwi-<version>.cdx.json (CycloneDX SBOM of the release APK)."
+    dependsOn("cyclonedxDirectBom")
+    val input = layout.buildDirectory.file("reports/sbom/scan-kiwi.cdx.json")
+    val version = android.defaultConfig.versionName
+    val assets = file("src/main/assets")
+    val output = rootProject.file("dist/ScanKiwi-$version.cdx.json")
+    inputs.file(input)
+    outputs.file(output)
+    doLast {
+        @Suppress("UNCHECKED_CAST")
+        val bom = groovy.json.JsonSlurper().parse(input.get().asFile) as MutableMap<String, Any?>
+        @Suppress("UNCHECKED_CAST")
+        val components = (bom["components"] as? MutableList<Any?>) ?: mutableListOf<Any?>().also { bom["components"] = it }
+        fun sha256(f: File): String = MessageDigest.getInstance("SHA-256").digest(f.readBytes()).joinToString("") { "%02x".format(it) }
+        fun lib(name: String, version: String, license: String, url: String) = mapOf(
+            "type" to "library", "bom-ref" to "native:$name", "name" to name, "version" to version,
+            "description" to "Native library bundled inside cz.adaptech.tesseract4android:tesseract4android:4.9.0",
+            "licenses" to listOf(mapOf("license" to mapOf("id" to license))),
+            "externalReferences" to listOf(mapOf("type" to "website", "url" to url)),
+        )
+        components += lib("tesseract", "5 (as built by Tesseract4Android 4.9.0)", "Apache-2.0", "https://github.com/tesseract-ocr/tesseract")
+        components += lib("leptonica", "as built by Tesseract4Android 4.9.0", "BSD-2-Clause", "http://www.leptonica.org/")
+        components += lib("libjpeg-turbo", "as built by Tesseract4Android 4.9.0", "IJG", "https://libjpeg-turbo.org/")
+        components += lib("libpng", "as built by Tesseract4Android 4.9.0", "Libpng", "http://www.libpng.org/pub/png/libpng.html")
+        fun data(path: String, name: String, license: String, url: String) = mapOf(
+            "type" to "data", "bom-ref" to "asset:$path", "name" to name,
+            "hashes" to listOf(mapOf("alg" to "SHA-256", "content" to sha256(File(assets, path)))),
+            "licenses" to listOf(mapOf("license" to mapOf("id" to license))),
+            "externalReferences" to listOf(mapOf("type" to "distribution", "url" to url)),
+        )
+        components += data("tessdata/ara.traineddata", "tessdata_fast ara.traineddata", "Apache-2.0", "https://github.com/tesseract-ocr/tessdata_fast")
+        components += data("tessdata/eng.traineddata", "tessdata_fast eng.traineddata", "Apache-2.0", "https://github.com/tesseract-ocr/tessdata_fast")
+        components += data("fonts/glyphless.ttf", "Tesseract pdf.ttf (GlyphLessFont)", "Apache-2.0", "https://github.com/tesseract-ocr/tesseract/tree/main/tessdata")
+        components += data("icc/sRGB-v2-micro.icc", "sRGB-v2-micro.icc", "CC0-1.0", "https://github.com/saucecontrol/Compact-ICC-Profiles")
+        output.parentFile.mkdirs()
+        output.writeText(groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(bom)) + "\n")
+    }
 }
