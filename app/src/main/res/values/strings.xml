@@ -228,6 +228,11 @@
         <item quantity="many">%d مستندًا</item>
         <item quantity="other">%d مستند</item>
     </plurals>
+    <string name="add_pages">إضافة صفحات</string>
+    <string name="take_pages">تصوير صفحات</string>
+    <string name="modified_at">عُدّل %1$s</string>
+    <string name="delete_document">حذف المستند</string>
+    <string name="more_options">خيارات أخرى</string>
     <plurals name="page_count">
         <item quantity="zero">لا صفحات</item>
         <item quantity="one">صفحة واحدة</item>

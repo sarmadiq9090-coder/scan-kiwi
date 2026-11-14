@@ -44,6 +44,7 @@ import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.BottomAppBar
 import androidx.compose.material3.Button
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -72,6 +73,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import com.fastkiwi.scan.ui.theme.Dimens
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -91,6 +96,7 @@ import com.fastkiwi.scan.export.ExportOptions
 import com.fastkiwi.scan.export.Quality
 import com.fastkiwi.scan.ocr.OcrLanguage
 
+/** Document page grid (design spec §3.4): «إضافة صفحات» and the primary «تصدير» at the bottom. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EditorScreen(vm: AppViewModel, docId: String, snackbar: SnackbarHostState) {
@@ -98,6 +104,10 @@ fun EditorScreen(vm: AppViewModel, docId: String, snackbar: SnackbarHostState) {
     val doc = docs.firstOrNull { it.doc.id == docId }?.doc ?: vm.doc(docId)
     var rename by remember { mutableStateOf(false) }
     var showExport by remember { mutableStateOf(false) }
+    var showAdd by remember { mutableStateOf(false) }
+    var menu by remember { mutableStateOf(false) }
+    var confirmDelete by remember { mutableStateOf(false) }
+    val ctx = LocalContext.current
 
     val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         vm.importUris(docId, uris) {}
@@ -107,45 +117,45 @@ fun EditorScreen(vm: AppViewModel, docId: String, snackbar: SnackbarHostState) {
         Text(stringResource(R.string.doc_missing), Modifier.padding(32.dp))
         return
     }
+    val subtitle = pluralStringResource(R.plurals.page_count, doc.pages.size, doc.pages.size) +
+        LocalFormat.metaSep(ctx.resources.configuration.locales[0]) +
+        stringResource(R.string.modified_at, LocalFormat.docDate(ctx, doc.modified))
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbar) },
         topBar = {
-            TopAppBar(
-                navigationIcon = {
-                    IconButton(onClick = { vm.back() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
-                },
-                title = {
-                    Text(
-                        doc.name, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.clickable(onClickLabel = stringResource(R.string.rename)) { rename = true },
-                    )
-                },
-                actions = {
-                    IconButton(onClick = { vm.undo(docId) }, enabled = (vm.undoCounts[docId] ?: 0) > 0) {
-                        Icon(Icons.AutoMirrored.Filled.Undo, stringResource(R.string.undo))
+            KiwiTopBar(
+                doc.name, NavIcon.BACK, { vm.back() }, subtitle = subtitle,
+                titleModifier = Modifier.clickable(onClickLabel = stringResource(R.string.rename)) { rename = true },
+            ) {
+                TooltipIconButton(KiwiIcons.undo(), stringResource(R.string.undo), { vm.undo(docId) }, enabled = (vm.undoCounts[docId] ?: 0) > 0)
+                Box {
+                    TooltipIconButton(KiwiIcons.more(), stringResource(R.string.more_options), { menu = true })
+                    DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                        DropdownMenuItem(text = { Text(stringResource(R.string.rename)) }, onClick = { menu = false; rename = true })
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.delete_document), color = MaterialTheme.colorScheme.error) },
+                            onClick = { menu = false; confirmDelete = true },
+                        )
                     }
-                    IconButton(onClick = { rename = true }) { Icon(Icons.Filled.Edit, stringResource(R.string.rename)) }
-                },
-            )
+                }
+            }
         },
         bottomBar = {
-            BottomAppBar(
-                actions = {
-                    IconButton(onClick = { vm.open(Screen.Camera(docId)) }) { Icon(Icons.Filled.AddAPhoto, stringResource(R.string.add_page_camera)) }
-                    IconButton(onClick = { importLauncher.launch(arrayOf("image/*", "application/pdf")) }) {
-                        Icon(Icons.Filled.FileOpen, stringResource(R.string.import_files))
-                    }
-                    IconButton(onClick = { vm.open(Screen.Camera(docId, idCard = true)) }) { Icon(Icons.Filled.Badge, stringResource(R.string.id_card_mode)) }
-                },
-                floatingActionButton = {
-                    Button(onClick = { showExport = true }, enabled = doc.pages.isNotEmpty()) {
-                        Icon(Icons.Filled.Share, null)
-                        Spacer(Modifier.width(8.dp))
-                        Text(stringResource(R.string.export))
-                    }
-                },
-            )
+            BottomActionBar {
+                ButtonPair(
+                    secondary = { m ->
+                        FilledTonalButton(onClick = { showAdd = true }, modifier = m) {
+                            Icon(KiwiIcons.add(), null, Modifier.size(20.dp)); Spacer(Modifier.width(Dimens.s)); Text(stringResource(R.string.add_pages))
+                        }
+                    },
+                    primary = { m ->
+                        Button(onClick = { showExport = true }, enabled = doc.pages.isNotEmpty(), modifier = m) {
+                            Icon(KiwiIcons.share(), null, Modifier.size(20.dp)); Spacer(Modifier.width(Dimens.s)); Text(stringResource(R.string.export))
+                        }
+                    },
+                )
+            }
         },
     ) { padding ->
         if (doc.pages.isEmpty()) {
@@ -154,11 +164,11 @@ fun EditorScreen(vm: AppViewModel, docId: String, snackbar: SnackbarHostState) {
             }
         } else {
             LazyVerticalGrid(
-                columns = GridCells.Adaptive(150.dp),
+                columns = GridCells.Adaptive(160.dp),
                 modifier = Modifier.padding(padding).fillMaxSize(),
-                contentPadding = PaddingValues(12.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                contentPadding = PaddingValues(Dimens.screen),
+                horizontalArrangement = Arrangement.spacedBy(Dimens.l),
+                verticalArrangement = Arrangement.spacedBy(Dimens.s),
             ) {
                 itemsIndexed(doc.pages, key = { _, p -> p.id }) { i, p ->
                     PageTile(vm, docId, i, doc.pages.size, p)
@@ -169,6 +179,41 @@ fun EditorScreen(vm: AppViewModel, docId: String, snackbar: SnackbarHostState) {
 
     if (rename) RenameDialog(doc.name, suggestion = vm.suggestName(docId), onDismiss = { rename = false }) { vm.rename(docId, it) }
     if (showExport) ExportSheet(vm, docId, onDismiss = { showExport = false })
+    if (showAdd) AddPagesSheet(
+        onDismiss = { showAdd = false },
+        onCamera = { showAdd = false; vm.open(Screen.Camera(docId)) },
+        onImport = { showAdd = false; importLauncher.launch(arrayOf("image/*", "application/pdf")) },
+        onIdCard = { showAdd = false; vm.open(Screen.Camera(docId, idCard = true)) },
+    )
+    if (confirmDelete) {
+        ConfirmDialog(
+            title = pluralStringResource(R.plurals.delete_docs_title, 1, 1),
+            body = stringResource(R.string.delete_docs_body),
+            confirm = stringResource(R.string.delete),
+            onDismiss = { confirmDelete = false },
+        ) {
+            vm.deleteDocs(setOf(docId))
+            vm.back()
+        }
+    }
+}
+
+/** «إضافة صفحات»: take photos (primary row), import images or PDF, ID card. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AddPagesSheet(onDismiss: () -> Unit, onCamera: () -> Unit, onImport: () -> Unit, onIdCard: () -> Unit) {
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = MaterialTheme.colorScheme.surfaceContainerLow) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = Dimens.sheet).padding(bottom = Dimens.xl)) {
+            Text(stringResource(R.string.add_pages), style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(bottom = Dimens.l))
+            SettingsGroup(3) { i, shape ->
+                when (i) {
+                    0 -> SettingsRow(KiwiIcons.camera(), stringResource(R.string.take_pages), null, shape, onCamera, trailing = null)
+                    1 -> SettingsRow(KiwiIcons.import(), stringResource(R.string.import_files), null, shape, onImport, trailing = null)
+                    else -> SettingsRow(KiwiIcons.idCard(), stringResource(R.string.id_card_mode), null, shape, onIdCard, trailing = null)
+                }
+            }
+        }
+    }
 }
 
 @Composable
@@ -181,11 +226,12 @@ private fun PageTile(vm: AppViewModel, docId: String, index: Int, count: Int, pa
     val aCrop = stringResource(R.string.crop)
     val aRotate = stringResource(R.string.rotate_right)
     val aDelete = stringResource(R.string.delete)
-    Card(Modifier.fillMaxWidth()) {
-        Box(
+    Column(Modifier.fillMaxWidth()) {
+        PageThumbnail(
+            vm.store.thumbFile(docId, page.id), page.revision,
             Modifier
                 .fillMaxWidth()
-                .aspectRatio(0.72f)
+                .aspectRatio(1f / 1.414f)
                 .clickable(onClickLabel = stringResource(R.string.edit_page)) { vm.open(Screen.Page(docId, index)) }
                 .semantics {
                     contentDescription = label
@@ -197,13 +243,18 @@ private fun PageTile(vm: AppViewModel, docId: String, index: Int, count: Int, pa
                         add(CustomAccessibilityAction(aDelete) { vm.deletePage(docId, index); true })
                     }
                 },
-        ) {
-            FileImage(vm.store.thumbFile(docId, page.id), page.revision, 360, null, Modifier.fillMaxSize().padding(6.dp).clip(RoundedCornerShape(4.dp)))
-        }
-        Row(Modifier.fillMaxWidth().padding(start = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text((index + 1).toString(), Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
+            radius = 12,
+        )
+        Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
+            Surface(color = MaterialTheme.colorScheme.surfaceContainerHigh, shape = CircleShape, modifier = Modifier.padding(start = Dimens.xs)) {
+                Text(
+                    LocalFormat.count(index + 1), style = MaterialTheme.typography.labelLarge,
+                    modifier = Modifier.padding(horizontal = Dimens.m, vertical = Dimens.xs),
+                )
+            }
+            Spacer(Modifier.weight(1f))
             Box {
-                IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, stringResource(R.string.page_actions, index + 1)) }
+                TooltipIconButton(KiwiIcons.more(), stringResource(R.string.page_actions, index + 1), { menu = true })
                 DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                     DropdownMenuItem(text = { Text(stringResource(R.string.move_earlier)) }, enabled = index > 0, onClick = { menu = false; vm.movePage(docId, index, index - 1) })
                     DropdownMenuItem(text = { Text(stringResource(R.string.move_later)) }, enabled = index < count - 1, onClick = { menu = false; vm.movePage(docId, index, index + 1) })
@@ -213,7 +264,10 @@ private fun PageTile(vm: AppViewModel, docId: String, index: Int, count: Int, pa
                     DropdownMenuItem(text = { Text(stringResource(R.string.crop)) }, onClick = { menu = false; vm.open(Screen.Crop(docId, page.id)) })
                     DropdownMenuItem(text = { Text(stringResource(R.string.signature)) }, onClick = { menu = false; vm.open(Screen.Sign(docId, page.id)) })
                     DropdownMenuItem(text = { Text(stringResource(R.string.retake)) }, onClick = { menu = false; vm.open(Screen.Camera(docId, retakePageId = page.id)) })
-                    DropdownMenuItem(text = { Text(stringResource(R.string.delete)) }, onClick = { menu = false; vm.deletePage(docId, index) })
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error) },
+                        onClick = { menu = false; vm.deletePage(docId, index) },
+                    )
                 }
             }
         }
