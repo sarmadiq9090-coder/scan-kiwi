@@ -6,31 +6,31 @@ import android.app.Activity
 import android.app.LocaleManager
 import android.os.Build
 import android.os.LocaleList
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.runtime.rememberCoroutineScope
-import kotlinx.coroutines.launch
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -41,128 +41,160 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.heading
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.fastkiwi.scan.BuildConfig
 import com.fastkiwi.scan.R
 import com.fastkiwi.scan.core.Filter
+import com.fastkiwi.scan.ui.theme.Dimens
+import com.fastkiwi.scan.ui.theme.ThemeMode
 
-@OptIn(ExperimentalMaterial3Api::class)
+/** Settings as grouped rows (design spec §3.7); choices open in dialogs, changes apply at once. */
 @Composable
 fun SettingsScreen(vm: AppViewModel) {
     val ctx = LocalContext.current
     val s = vm.settings
     var auto by remember { mutableStateOf(s.autoCapture) }
     var review by remember { mutableStateOf(s.reviewAfterCapture) }
-    val openFeedback = { vm.open(Screen.Feedback()) }
     var filter by remember { mutableStateOf(s.defaultFilter) }
     var lang by remember { mutableStateOf(currentLanguage(ctx)) }
-    var showLicenses by remember { mutableStateOf(false) }
-
+    var dialog by remember { mutableStateOf<String?>(null) }
     val snackbar = remember { SnackbarHostState() }
-    val scope = rememberCoroutineScope()
-    val noBrowser = stringResource(R.string.msg_no_browser)
-    var obtainiumMissing by remember { mutableStateOf(false) }
-    Scaffold(snackbarHost = { SnackbarHost(snackbar) }, topBar = {
-        TopAppBar(
-            navigationIcon = { IconButton(onClick = { vm.back() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) } },
-            title = { Text(stringResource(R.string.settings)) },
-        )
-    }) { padding ->
-        Column(Modifier.padding(padding).fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp)) {
-            Section(R.string.language)
-            Column(Modifier.selectableGroup()) {
-                listOf("" to R.string.language_system, "ar" to R.string.language_arabic, "en" to R.string.language_english).forEach { (tag, label) ->
-                    Radio(stringResource(label), lang == tag) {
-                        lang = tag
-                        applyLanguage(ctx as Activity, tag)
+
+    val langLabels = listOf("" to R.string.language_system, "ar" to R.string.language_arabic, "en" to R.string.language_english)
+    val themeLabels = listOf(ThemeMode.SYSTEM to R.string.theme_system, ThemeMode.LIGHT to R.string.theme_light, ThemeMode.DARK to R.string.theme_dark)
+
+    Scaffold(
+        snackbarHost = { SnackbarHost(snackbar) },
+        topBar = { KiwiTopBar(stringResource(R.string.settings), NavIcon.BACK, { vm.back() }) },
+    ) { padding ->
+        Column(
+            Modifier.padding(padding).fillMaxSize().verticalScroll(rememberScrollState())
+                .padding(horizontal = Dimens.screen).navigationBarsPadding(),
+        ) {
+            SectionHeader(stringResource(R.string.settings_group_scan))
+            SettingsGroup(3) { i, shape ->
+                when (i) {
+                    0 -> SettingsSwitchRow(KiwiIcons.autoCapture(), stringResource(R.string.auto_capture), stringResource(R.string.auto_capture_hint), auto, shape) {
+                        auto = it; s.autoCapture = it
+                    }
+                    1 -> SettingsSwitchRow(KiwiIcons.crop(), stringResource(R.string.review_after_capture), stringResource(R.string.review_after_capture_hint), review, shape) {
+                        review = it; s.reviewAfterCapture = it
+                    }
+                    else -> SettingsRow(KiwiIcons.filter(), stringResource(R.string.default_filter), stringResource(filterLabel(filter)), shape, { dialog = "filter" })
+                }
+            }
+
+            SectionHeader(stringResource(R.string.settings_group_display))
+            val dynamicSupported = Build.VERSION.SDK_INT >= 31
+            SettingsGroup(if (dynamicSupported) 3 else 2) { i, shape ->
+                when (i) {
+                    0 -> SettingsRow(
+                        KiwiIcons.language(), stringResource(R.string.language),
+                        stringResource(langLabels.first { it.first == lang }.second), shape, { dialog = "language" },
+                    )
+                    1 -> SettingsRow(
+                        KiwiIcons.theme(), stringResource(R.string.theme_title),
+                        stringResource(themeLabels.first { it.first == vm.themeMode.value }.second), shape, { dialog = "theme" },
+                    )
+                    else -> SettingsSwitchRow(
+                        KiwiIcons.palette(), stringResource(R.string.dynamic_color_title), stringResource(R.string.dynamic_color_hint),
+                        vm.dynamicColor.value, shape,
+                    ) { vm.setDynamicColor(it) }
+                }
+            }
+
+            SectionHeader(stringResource(R.string.privacy_title))
+            Surface(color = MaterialTheme.colorScheme.tertiaryContainer, shape = MaterialTheme.shapes.large, modifier = Modifier.fillMaxWidth()) {
+                Row(Modifier.padding(Dimens.l)) {
+                    Icon(KiwiIcons.privacy(), null, tint = MaterialTheme.colorScheme.onTertiaryContainer)
+                    Spacer(Modifier.width(Dimens.l))
+                    Column(verticalArrangement = Arrangement.spacedBy(Dimens.s)) {
+                        Text(stringResource(R.string.privacy_body), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onTertiaryContainer)
+                        Text(stringResource(R.string.network_statement), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onTertiaryContainer)
                     }
                 }
             }
-            HorizontalDivider(Modifier.padding(vertical = 8.dp))
-            SwitchRow(R.string.auto_capture, R.string.auto_capture_hint, auto) { auto = it; s.autoCapture = it }
-            SwitchRow(R.string.review_after_capture, R.string.review_after_capture_hint, review) { review = it; s.reviewAfterCapture = it }
-            HorizontalDivider(Modifier.padding(vertical = 8.dp))
-            Section(R.string.default_filter)
-            Column(Modifier.selectableGroup()) {
-                Filter.entries.forEach { f ->
-                    Radio(stringResource(filterLabel(f)), filter == f) { filter = f; s.defaultFilter = f }
+
+            SectionHeader(stringResource(R.string.settings_group_help))
+            SettingsGroup(3) { i, shape ->
+                when (i) {
+                    0 -> SettingsRow(KiwiIcons.feedback(), stringResource(R.string.feedback_title), stringResource(R.string.feedback_settings_hint), shape, {
+                        vm.open(Screen.Feedback())
+                    })
+                    1 -> SettingsRow(KiwiIcons.update(), stringResource(R.string.updates_title), stringResource(R.string.updates_version, BuildConfig.VERSION_NAME), shape, {
+                        vm.open(Screen.Updates)
+                    })
+                    else -> SettingsRow(KiwiIcons.info(), stringResource(R.string.about_row), null, shape, { dialog = "about" })
                 }
             }
-            HorizontalDivider(Modifier.padding(vertical = 8.dp))
-            Section(R.string.privacy_title)
-            Text(stringResource(R.string.privacy_body), style = MaterialTheme.typography.bodyMedium)
-            Text(stringResource(R.string.network_statement), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 8.dp))
-            HorizontalDivider(Modifier.padding(vertical = 8.dp))
-            Section(R.string.feedback_title)
-            Text(stringResource(R.string.feedback_settings_hint), style = MaterialTheme.typography.bodyMedium)
-            androidx.compose.material3.OutlinedButton(
-                onClick = openFeedback,
-                modifier = Modifier.padding(top = 8.dp).heightIn(min = 48.dp),
-            ) { Text(stringResource(R.string.feedback_title)) }
-            HorizontalDivider(Modifier.padding(vertical = 8.dp))
-            // Room for the update channel the council is deciding on. No network code here.
-            UpdatesSection(onNoBrowser = { scope.launch { snackbar.showSnackbar(noBrowser) } }, onObtainiumMissing = { obtainiumMissing = true })
-            HorizontalDivider(Modifier.padding(vertical = 8.dp))
-            Section(R.string.about_title)
-            Text(stringResource(R.string.about_body, BuildConfig.VERSION_NAME), style = MaterialTheme.typography.bodyMedium)
-            Text(stringResource(R.string.network_statement), style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp))
-            Text(stringResource(R.string.licenses_body), style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 8.dp))
-            Row {
-                androidx.compose.material3.TextButton(onClick = { showLicenses = true }, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.show_licenses)) }
-                androidx.compose.material3.TextButton(onClick = openFeedback, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.feedback_short)) }
-            }
+            Spacer(Modifier.height(Dimens.xl))
         }
     }
-    if (obtainiumMissing) {
-        androidx.compose.material3.AlertDialog(
-            onDismissRequest = { obtainiumMissing = false },
-            title = { Text(stringResource(R.string.obtainium_missing_title)) },
-            text = { Text(stringResource(R.string.obtainium_missing_body)) },
-            confirmButton = {
-                androidx.compose.material3.TextButton(onClick = {
-                    obtainiumMissing = false
-                    if (!openUri(ctx, UpdateLinks.OBTAINIUM_DOWNLOAD)) scope.launch { snackbar.showSnackbar(noBrowser) }
-                }, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.obtainium_download)) }
-            },
-            dismissButton = {
-                androidx.compose.material3.TextButton(onClick = { obtainiumMissing = false }, modifier = Modifier.heightIn(min = 48.dp)) {
-                    Text(stringResource(R.string.cancel))
+
+    when (dialog) {
+        "filter" -> ChoiceDialog(
+            stringResource(R.string.default_filter), Filter.entries.map { stringResource(filterLabel(it)) }, Filter.entries.indexOf(filter),
+            onDismiss = { dialog = null },
+        ) { filter = Filter.entries[it]; s.defaultFilter = filter; dialog = null }
+        "language" -> ChoiceDialog(
+            stringResource(R.string.language), langLabels.map { stringResource(it.second) }, langLabels.indexOfFirst { it.first == lang },
+            onDismiss = { dialog = null },
+        ) {
+            dialog = null
+            lang = langLabels[it].first
+            applyLanguage(ctx as Activity, lang)
+        }
+        "theme" -> ChoiceDialog(
+            stringResource(R.string.theme_title), themeLabels.map { stringResource(it.second) }, themeLabels.indexOfFirst { it.first == vm.themeMode.value },
+            onDismiss = { dialog = null },
+        ) { vm.setThemeMode(themeLabels[it].first); dialog = null }
+        "about" -> AboutDialog { dialog = null }
+    }
+}
+
+/** Single-choice list in a dialog (56 dp rows). */
+@Composable
+fun ChoiceDialog(title: String, options: List<String>, selected: Int, onDismiss: () -> Unit, onSelect: (Int) -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            Column(Modifier.selectableGroup()) {
+                options.forEachIndexed { i, label ->
+                    Row(
+                        Modifier.fillMaxWidth().heightIn(min = 56.dp)
+                            .selectable(selected = i == selected, onClick = { onSelect(i) }, role = Role.RadioButton),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        RadioButton(selected = i == selected, onClick = null)
+                        Text(label, Modifier.padding(start = Dimens.l), style = MaterialTheme.typography.bodyLarge)
+                    }
                 }
-            },
-        )
-    }
-    if (showLicenses) {
-        val text = remember { runCatching { ctx.assets.open("THIRD_PARTY_NOTICES.txt").bufferedReader().readText() }.getOrDefault("") }
-        androidx.compose.material3.AlertDialog(
-            onDismissRequest = { showLicenses = false },
-            confirmButton = { androidx.compose.material3.TextButton(onClick = { showLicenses = false }) { Text(stringResource(R.string.close)) } },
-            title = { Text(stringResource(R.string.show_licenses)) },
-            text = {
-                Text(
-                    text, style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.verticalScroll(rememberScrollState()),
-                )
-            },
-        )
-    }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.close)) } },
+    )
 }
 
+/** About: version, network statement and the bundled licence notices. */
 @Composable
-private fun Section(res: Int) {
-    Text(stringResource(res), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 16.dp, bottom = 8.dp).semantics { heading() })
-}
-
-@Composable
-private fun Radio(label: String, selected: Boolean, onClick: () -> Unit) {
-    Row(
-        Modifier.fillMaxWidth().selectable(selected = selected, onClick = onClick, role = Role.RadioButton).padding(vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        RadioButton(selected = selected, onClick = null)
-        Text(label, Modifier.padding(start = 16.dp), style = MaterialTheme.typography.bodyLarge)
-    }
+private fun AboutDialog(onDismiss: () -> Unit) {
+    val ctx = LocalContext.current
+    val notices = remember { runCatching { ctx.assets.open("THIRD_PARTY_NOTICES.txt").bufferedReader().readText() }.getOrDefault("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.about_title)) },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(Dimens.m)) {
+                Text(stringResource(R.string.about_body, BuildConfig.VERSION_NAME), style = MaterialTheme.typography.bodyMedium)
+                Text(stringResource(R.string.network_statement), style = MaterialTheme.typography.bodyMedium)
+                Text(stringResource(R.string.licenses_body), style = MaterialTheme.typography.bodySmall)
+                Text(stringResource(R.string.show_licenses), style = MaterialTheme.typography.titleSmall)
+                Text(notices, style = MaterialTheme.typography.bodySmall)
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.close)) } },
+    )
 }
 
 private fun currentLanguage(ctx: android.content.Context): String =
@@ -170,7 +202,7 @@ private fun currentLanguage(ctx: android.content.Context): String =
         ctx.getSystemService(LocaleManager::class.java).applicationLocales.toLanguageTags().substringBefore('-').substringBefore(',')
     } else {
         Settings.languageTag(ctx)
-    }
+    }.let { if (it == "ar" || it == "en") it else "" }
 
 /** Per-app language: system setting on Android 13+, our own override below that. */
 fun applyLanguage(activity: Activity, tag: String) {

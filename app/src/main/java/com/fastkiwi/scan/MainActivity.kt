@@ -159,6 +159,7 @@ private fun App(vm: AppViewModel) {
             is Screen.Sign -> com.fastkiwi.scan.ui.SignatureScreen(vm, s.docId, s.pageId)
             is Screen.Feedback -> com.fastkiwi.scan.ui.FeedbackScreen(vm, s)
             Screen.Settings -> SettingsScreen(vm)
+            Screen.Updates -> com.fastkiwi.scan.ui.UpdatesScreen(vm)
         }
     }
 }

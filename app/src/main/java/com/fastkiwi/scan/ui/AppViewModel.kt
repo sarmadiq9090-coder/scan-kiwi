@@ -53,6 +53,7 @@ sealed interface Screen {
     /** «أبلغنا عن مشكلة أو اقتراح»; [errorCode]/[errorClass] are set when opened from an error message. */
     data class Feedback(val errorCode: String? = null, val errorClass: String? = null) : Screen
     data object Settings : Screen
+    data object Updates : Screen
 }
 
 data class DocEntry(val doc: ScanDocument, val text: String)

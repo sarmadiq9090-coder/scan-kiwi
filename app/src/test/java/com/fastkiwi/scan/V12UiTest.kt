@@ -133,7 +133,7 @@ class UpdatesSettingsTest {
     val rule = createAndroidComposeRule<MainActivity>()
 
     private fun openSettings() {
-        rule.runOnUiThread { rule.activity.vm.open(Screen.Settings) }
+        rule.runOnUiThread { rule.activity.vm.open(Screen.Settings); rule.activity.vm.open(Screen.Updates) }
         rule.waitForIdle()
     }
 

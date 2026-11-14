@@ -208,6 +208,16 @@
     <string name="dynamic_color_hint">Dynamic colours (Android 12 and later)</string>
     <string name="date_today">Today %1$s</string>
     <string name="date_yesterday">Yesterday</string>
+    <string name="settings_group_scan">Scanning</string>
+    <string name="settings_group_display">Display and language</string>
+    <string name="settings_group_help">Help</string>
+    <string name="about_row">About and licences</string>
+    <string name="version_full">Version %1$s (%2$s)</string>
+    <string name="updates_offline_tag">Works offline</string>
+    <string name="updates_group">Update</string>
+    <string name="updates_manual_title">Updating by hand</string>
+    <string name="updates_manual_step1">Download the latest APK from the GitHub releases page.</string>
+    <string name="updates_manual_step2">Install it over the current version; your documents stay. Android only accepts an update signed with the same key.</string>
     <plurals name="page_count">
         <item quantity="one">%d page</item>
         <item quantity="other">%d pages</item>

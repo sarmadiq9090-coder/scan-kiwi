@@ -6,31 +6,47 @@ import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.OpenInNew
-import androidx.compose.material.icons.filled.SystemUpdate
-import androidx.compose.material3.Icon
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.heading
-import androidx.compose.ui.semantics.role
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.fastkiwi.scan.BuildConfig
 import com.fastkiwi.scan.R
+import com.fastkiwi.scan.ui.theme.Dimens
+import kotlinx.coroutines.launch
 
 /**
  * Update links (council decision D-077). The app has no network code and no
@@ -53,36 +69,83 @@ fun openUri(ctx: Context, uri: String): Boolean = try {
     false
 }
 
-/** Settings ▸ «التحديثات» / "Updates". */
+/** Settings ▸ «التحديثات» (design spec §3.9). */
 @Composable
-fun UpdatesSection(onNoBrowser: () -> Unit, onObtainiumMissing: () -> Unit) {
+fun UpdatesScreen(vm: AppViewModel) {
     val ctx = LocalContext.current
-    Text(
-        stringResource(R.string.updates_title), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(top = 16.dp, bottom = 8.dp).semantics { heading() },
-    )
-    Text(stringResource(R.string.updates_version, BuildConfig.VERSION_NAME), style = MaterialTheme.typography.bodyLarge)
-    LinkRow(Icons.Filled.SystemUpdate, R.string.updates_obtainium, R.string.updates_obtainium_sub) {
-        if (!openUri(ctx, UpdateLinks.OBTAINIUM_ADD)) onObtainiumMissing()
-    }
-    LinkRow(Icons.AutoMirrored.Filled.OpenInNew, R.string.updates_check, R.string.updates_check_sub) {
-        if (!openUri(ctx, UpdateLinks.RELEASES)) onNoBrowser()
-    }
-    Text(stringResource(R.string.updates_body), style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp))
-}
+    val snackbar = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    val noBrowser = stringResource(R.string.msg_no_browser)
+    var obtainiumMissing by remember { mutableStateOf(false) }
 
-@Composable
-private fun LinkRow(icon: ImageVector, title: Int, subtitle: Int, onClick: () -> Unit) {
-    Surface(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).semantics { role = Role.Button },
-    ) {
-        Row(Modifier.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(icon, null, tint = MaterialTheme.colorScheme.primary)
-            Column(Modifier.padding(start = 16.dp)) {
-                Text(stringResource(title), style = MaterialTheme.typography.bodyLarge)
-                Text(stringResource(subtitle), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Scaffold(
+        snackbarHost = { SnackbarHost(snackbar) },
+        topBar = { KiwiTopBar(stringResource(R.string.updates_title), NavIcon.BACK, { vm.back() }) },
+    ) { padding ->
+        Column(
+            Modifier.padding(padding).fillMaxSize().verticalScroll(rememberScrollState())
+                .padding(horizontal = Dimens.screen).navigationBarsPadding(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            // Hero: app mark, name, version, offline tag.
+            Box(
+                Modifier.padding(top = Dimens.l).size(72.dp).clip(RoundedCornerShape(20.dp)).background(MaterialTheme.colorScheme.primary),
+                contentAlignment = Alignment.Center,
+            ) { Image(painterResource(R.drawable.ic_launcher_foreground), null, Modifier.size(72.dp)) }
+            Spacer(Modifier.height(Dimens.m))
+            Text(stringResource(R.string.app_name), style = MaterialTheme.typography.headlineSmall)
+            Text(
+                stringResource(R.string.version_full, BuildConfig.VERSION_NAME, LocalFormat.count(BuildConfig.VERSION_CODE)),
+                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(Dimens.s))
+            Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = MaterialTheme.shapes.small) {
+                Text(stringResource(R.string.updates_offline_tag), style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(horizontal = Dimens.m, vertical = Dimens.xs))
+            }
+
+            Column(Modifier.fillMaxWidth()) {
+                SectionHeader(stringResource(R.string.updates_group))
+                SettingsGroup(2) { i, shape ->
+                    if (i == 0) {
+                        SettingsRow(KiwiIcons.update(), stringResource(R.string.updates_obtainium), stringResource(R.string.updates_obtainium_sub), shape, {
+                            if (!openUri(ctx, UpdateLinks.OBTAINIUM_ADD)) obtainiumMissing = true
+                        }, trailing = KiwiIcons.openInNew())
+                    } else {
+                        SettingsRow(KiwiIcons.openInNew(), stringResource(R.string.updates_check), stringResource(R.string.updates_check_sub), shape, {
+                            if (!openUri(ctx, UpdateLinks.RELEASES)) scope.launch { snackbar.showSnackbar(noBrowser) }
+                        }, trailing = KiwiIcons.openInNew())
+                    }
+                }
+                Spacer(Modifier.height(Dimens.xl))
+                Surface(color = MaterialTheme.colorScheme.surfaceContainer, shape = MaterialTheme.shapes.large, modifier = Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(Dimens.l), verticalArrangement = Arrangement.spacedBy(Dimens.s)) {
+                        Text(stringResource(R.string.updates_manual_title), style = MaterialTheme.typography.titleSmall)
+                        Text("${LocalFormat.count(1)}. " + stringResource(R.string.updates_manual_step1), style = MaterialTheme.typography.bodyMedium)
+                        Text("${LocalFormat.count(2)}. " + stringResource(R.string.updates_manual_step2), style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+                Spacer(Modifier.height(Dimens.l))
+                // D-077 wording, word for word.
+                Text(stringResource(R.string.network_statement), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.height(Dimens.xl))
             }
         }
+    }
+
+    if (obtainiumMissing) {
+        AlertDialog(
+            onDismissRequest = { obtainiumMissing = false },
+            title = { Text(stringResource(R.string.obtainium_missing_title)) },
+            text = { Text(stringResource(R.string.obtainium_missing_body)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    obtainiumMissing = false
+                    if (!openUri(ctx, UpdateLinks.OBTAINIUM_DOWNLOAD)) scope.launch { snackbar.showSnackbar(noBrowser) }
+                }, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.obtainium_download)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { obtainiumMissing = false }, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.cancel)) }
+            },
+        )
     }
 }
