@@ -74,6 +74,27 @@ class Settings(ctx: Context) {
         get() = enumOr(p.getString("low_memory_mode", null), com.fastkiwi.scan.perf.MemoryBudget.Mode.AUTO)
         set(v) = p.edit().putString("low_memory_mode", v.name).apply()
 
+    // 2.0-update (owner's order 2026-11-15)
+    /** «التحقق التلقائي من التحديثات»: on by default; when the app is opened, at most once every 7 days. */
+    var autoUpdateCheck: Boolean
+        get() = p.getBoolean("auto_update_check", true)
+        set(v) = p.edit().putBoolean("auto_update_check", v).apply()
+
+    /** «التنزيل عبر Wi-Fi فقط»: on by default. */
+    var updateWifiOnly: Boolean
+        get() = p.getBoolean("update_wifi_only", true)
+        set(v) = p.edit().putBoolean("update_wifi_only", v).apply()
+
+    /** When the last automatic check ran (ms since the epoch; 0 = never). */
+    var lastUpdateCheck: Long
+        get() = p.getLong("last_update_check", 0L)
+        set(v) = p.edit().putLong("last_update_check", v).apply()
+
+    /** The one-time notice about the update connection was shown. */
+    var updateNoticeShown: Boolean
+        get() = p.getBoolean("update_notice_shown", false)
+        set(v) = p.edit().putBoolean("update_notice_shown", v).apply()
+
     companion object {
         inline fun <reified T : Enum<T>> enumOr(name: String?, default: T): T =
             name?.let { n -> enumValues<T>().firstOrNull { it.name == n } } ?: default

@@ -101,6 +101,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     val ocrDiagnostics = com.fastkiwi.scan.ocr.OcrDiagnostics(app)
     // 2.0-perf: low-memory mode (phone + Settings override) decided before anything decodes or reads.
     init { com.fastkiwi.scan.perf.MemoryBudget.configure(app, settings.lowMemoryMode) }
+
+    // 2.0-update (owner's order 2026-11-15): GitHub-only update check; see update/UpdateController.
+    val updates = com.fastkiwi.scan.update.UpdateController(app, settings, viewModelScope, onAvailable = { r ->
+        viewModelScope.launch { _messages.send(UiMessage(R.string.update_available_msg, r.version.toString())) }
+    })
     private val ocrService = com.fastkiwi.scan.ocr.OcrService(
         com.fastkiwi.scan.ocr.DefaultOcrEngineFactory(
             app,

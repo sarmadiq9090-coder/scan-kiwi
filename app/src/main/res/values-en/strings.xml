@@ -124,7 +124,7 @@
     <string name="language_english">English</string>
     <string name="default_filter">Default look for new pages</string>
     <string name="privacy_title">Privacy</string>
-    <string name="privacy_body">The app does not even have the internet permission, so it cannot upload anything. No accounts, no ads, no tracking, no watermark. Documents are kept in the app\'s private storage and excluded from cloud backup. A file only leaves when you choose Share or Save.</string>
+    <string name="privacy_body">The app uploads no document, photo or text anywhere: it uses the internet only to check for and download its own updates from GitHub, and you can turn that off. No accounts, no ads, no tracking, no watermark. Documents are kept in the app\'s private storage and excluded from cloud backup. A file only leaves when you choose Share or Save.</string>
     <string name="about_title">About</string>
     <string name="show_licenses">Licences</string>
     <string name="about_body">Scan Kiwi %1$s, part of the FastKiwi app suite. Free and open source (Apache-2.0).</string>
@@ -177,7 +177,7 @@
     <string name="feedback_attached_preview">Only this will be attached:</string>
     <string name="feedback_send_email">Send by e-mail</string>
     <string name="feedback_send_github">Or on GitHub</string>
-    <string name="feedback_review_note">Your mail app or browser opens with the text ready; check it, then send it yourself. The app never goes online.</string>
+    <string name="feedback_review_note">Your mail app or browser opens with the text ready; check it, then send it yourself. The app sends nothing itself.</string>
     <string name="feedback_no_mail_app">No e-mail app on this phone. Try "On GitHub".</string>
     <string name="feedback_no_browser">No browser on this phone. Try "By e-mail".</string>
     <string name="updates_title">Updates</string>
@@ -189,11 +189,11 @@
     <string name="export_reading_text">Reading text… page %1$d of %2$d</string>
     <string name="export_starting">Preparing the file…</string>
     <string name="msg_export_cancelled">Export cancelled</string>
-    <string name="network_statement">Scan Kiwi has no internet permission and never connects to the internet. It does not update itself. To get updates automatically, you can use Obtainium, a free open-source app by an independent developer (not FastKiwi): it checks our GitHub releases and installs new versions, and Android may ask you to confirm. When Obtainium or your browser checks GitHub, GitHub sees your IP address, as with any website. You can also update by hand from the releases page.</string>
+    <string name="network_statement">Scan Kiwi connects to the internet only to check for and download updates from GitHub. It sends no file, photo or data about you. You can turn this off in Settings.</string>
     <string name="updates_version">Version %1$s</string>
     <string name="updates_obtainium">Auto-update with Obtainium</string>
     <string name="updates_obtainium_sub">A free, independent app that follows our GitHub releases</string>
-    <string name="updates_check">Check for updates</string>
+    <string name="updates_check">Releases page</string>
     <string name="updates_check_sub">Opens the GitHub releases page in your browser</string>
     <string name="obtainium_missing_title">Obtainium is not installed</string>
     <string name="obtainium_missing_body">Obtainium is a free open-source app by an independent developer (not FastKiwi). Install it first, then tap "Auto-update with Obtainium" again.</string>
@@ -212,7 +212,7 @@
     <string name="settings_group_help">Help</string>
     <string name="about_row">About and licences</string>
     <string name="version_full">Version %1$s (%2$s)</string>
-    <string name="updates_offline_tag">Works offline</string>
+    <string name="updates_offline_tag">Internet for updates only</string>
     <string name="updates_group">Update</string>
     <string name="updates_manual_title">Updating by hand</string>
     <string name="updates_manual_step1">Download the latest APK from the GitHub releases page.</string>

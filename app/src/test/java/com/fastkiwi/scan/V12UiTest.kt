@@ -126,7 +126,7 @@ class ShareResponsivenessTest {
     }
 }
 
-/** Settings ▸ Updates (council D-077): links only, no network code. */
+/** Settings ▸ Updates: the 2.0 in-app check (GitHub only) and the other ways (Obtainium, releases page). */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [36], qualifiers = "ar-w400dp-h860dp-xxhdpi")
@@ -147,7 +147,7 @@ class UpdatesSettingsTest {
         val obtainium: Intent = shadowOf(rule.activity).nextStartedActivity ?: app.nextStartedActivity
         assertEquals(Intent.ACTION_VIEW, obtainium.action)
         assertEquals(UpdateLinks.OBTAINIUM_ADD, obtainium.dataString)
-        rule.onNodeWithText("ابحث عن تحديث").performScrollTo().performClick()
+        rule.onNodeWithText("صفحة الإصدارات").performScrollTo().performClick()
         val releases: Intent = shadowOf(rule.activity).nextStartedActivity ?: app.nextStartedActivity
         assertEquals(UpdateLinks.RELEASES, releases.dataString)
     }

@@ -100,7 +100,8 @@ commands stand in for them.
 
 * The camera viewfinder is black and the camera's status line may say the camera cannot
   be used; photos still arrive through `camera_sees` and the shutter.
-* There is no internet and no browser: a link the app opens is reported as an event only.
+* There is no internet and no browser: a link the app opens is reported as an event only, and the
+  app's own update check («تحقق من التحديثات») always finds no connection.
 * Text recognition (OCR) may report that it is not available on this simulated phone.
 * Animations finish quickly; time only passes while a command runs or with `wait`.
 

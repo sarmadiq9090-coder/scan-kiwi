@@ -66,6 +66,8 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         if (savedInstanceState == null) handleIncoming(intent)
+        // 2.0-update: the automatic check, when the app is opened only, at most once every 7 days.
+        if (savedInstanceState == null) vm.updates.onAppOpened()
         // "Remove animations" (animator duration scale 0) also turns off decorative motion.
         val reducedMotion = runCatching {
             android.provider.Settings.Global.getFloat(contentResolver, android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
@@ -171,6 +173,8 @@ private fun App(vm: AppViewModel) {
         }
         // 2.0-pdf: password prompt when an imported PDF is protected (PDF-14).
         com.fastkiwi.scan.ui.ImportPasswordPrompt(vm)
+        // 2.0-update: the one-time notice about the update connection.
+        com.fastkiwi.scan.ui.UpdateNoticeDialog(vm)
     }
 }
 

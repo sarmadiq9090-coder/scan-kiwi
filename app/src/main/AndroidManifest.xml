@@ -2,12 +2,16 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- The ONLY permission. No storage permission: import/export use the system pickers (SAF). -->
+    <!-- No storage permission: import/export use the system pickers (SAF). -->
     <uses-permission android:name="android.permission.CAMERA" />
 
-    <!-- Defensive: make sure no library can add network access. The app works fully offline. -->
-    <uses-permission android:name="android.permission.INTERNET" tools:node="remove" />
-    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" tools:node="remove" />
+    <!-- 2.0-update (owner's order 2026-11-15): the network is used ONLY to check GitHub for this app's
+         own updates and download them (update/UpdateClient.kt; GitHub hosts only, HTTPS only). Documents,
+         photos and text never leave the phone. ACCESS_NETWORK_STATE tells Wi-Fi from mobile data for
+         «التنزيل عبر Wi-Fi فقط». Installing goes through Android's own confirmation. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <!-- Devices without a camera can still import and merge files. -->
     <uses-feature android:name="android.hardware.camera" android:required="false" />
@@ -23,6 +27,8 @@
         android:supportsRtl="true"
         android:largeHeap="true"
         android:localeConfig="@xml/locales_config"
+        android:networkSecurityConfig="@xml/network_security_config"
+        android:usesCleartextTraffic="false"
         android:theme="@style/Theme.ScanKiwi"
         tools:targetApi="36">
 
@@ -55,6 +61,15 @@
             android:name=".pdf.PdfService"
             android:process=":pdf"
             android:exported="false" />
+
+        <!-- 2.0-update: PackageInstaller status (Android's own install confirmation). Not exported. -->
+        <receiver
+            android:name=".update.UpdateInstallReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.fastkiwi.scan.update.INSTALL_STATUS" />
+            </intent-filter>
+        </receiver>
 
         <!-- Exports are shared from the cache through content:// URIs only. -->
         <provider

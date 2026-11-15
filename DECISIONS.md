@@ -18,7 +18,7 @@ Each decision below would normally go to the owner. It was settled by a short in
 | D11 | **Target / min SDK** | target 35/36/37; min 21/24/26 | **targetSdk 36** (the Google Play requirement since 31 Aug 2026), **compileSdk 36, minSdk 24** as requested. |
 | D12 | **Toolchain versions** | Newest AGP 9.x / Kotlin 2.4 / Gradle 9.x; latest stable 8.x line | **AGP 8.13.2, Gradle 8.14.3, Kotlin 2.2.21, Compose BOM 2025.12.01, CameraX 1.5.3** — proven, stable combination that supports API 36; avoids AGP 9 DSL migration risk. |
 | D13 | **ABIs and packaging** | arm-only; universal with x86; per-ABI splits | **One APK with arm64-v8a, armeabi-v7a, x86_64** (phones + emulators/Chromebooks), native libs stored compressed (`useLegacyPackaging`) to keep the file small enough for chat. |
-| D14 | **Network** | Keep INTERNET for nothing; remove | **No INTERNET permission**, and `tools:node="remove"` guards against any library adding it. |
+| D14 | **Network** | Keep INTERNET for nothing; remove | **No INTERNET permission**, and `tools:node="remove"` guards against any library adding it. **Superseded in 2.0 by D30** (the update check only). |
 | D15 | **Backups** | Allow Android auto-backup; disable | **Disabled** (`allowBackup=false`, data-extraction rules exclude everything): documents never go to a cloud backup without the user's explicit export. |
 | D16 | **Reordering pages** | Drag-and-drop grid; menu actions | **Menu actions** (move earlier/later/first/last) on each page: reliable, and fully usable with TalkBack and switch access. Drag-and-drop is a later improvement. |
 | D17 | **Signature stamp** | Build now; defer | **Deferred** to a later version: it needs a good placement/resize UI to be worth shipping. |
@@ -131,8 +131,23 @@ boundaries). Device info is off by default and shown verbatim before sending; it
 model, language and, from an error, only an error code and exception class. Never documents, images, OCR text,
 file names, the signature or logs. Errors offer «أبلغ عن هذه المشكلة» on the message.
 
-### D29 — Updates (council D-077)
-No network code, no new permissions. Settings ▸ «التحديثات»: version line, «حدّثه تلقائياً عبر Obtainium»
+### D30 — In-app update check from GitHub (owner's order, 2026-11-15; replaces the "no network" part of D-077)
+Owner: «دع فاست كيوي سكان يحصل على تحديث من كيت هاب حتى لو اتصل بالانترنيت ونوضح الاتصال فقط للتحديث», then «التحقق من
+التحديث مره في الاسبوع». Permissions INTERNET, ACCESS_NETWORK_STATE (Wi-Fi vs mobile data for «التنزيل عبر Wi-Fi فقط»)
+and REQUEST_INSTALL_PACKAGES; no analytics, no tracking, no other connection. One source:
+`https://api.github.com/repos/sarmadiq9090-coder/scan-kiwi/releases/latest` and that release's assets; HTTPS only, GitHub
+hosts only (api.github.com, github.com, objects.githubusercontent.com, release-assets.githubusercontent.com; every redirect
+checked; `network_security_config.xml` with system trust only), generic User-Agent `ScanKiwi/<version>`, no device id.
+Mandatory before installing: newer by SemVer, sha256 equal to the release's SHA256SUMS, archive signed with the installed
+app's certificate (PackageManager on the archive path), same package; any failure deletes the file and shows a message.
+PackageInstaller with Android's usual confirmation. Automatic check at most once every 7 days, only when the app is opened,
+no background service; «تحقق من التحديثات» any time (Updates screen, About). Settings «التحقق التلقائي من التحديثات» and
+«التنزيل عبر Wi-Fi فقط», both on by default. One-time notice (owner's wording) before the first automatic check, the same
+text in About, the privacy section and the README. Plain `HttpURLConnection`, no network library. CI allows exactly these
+permissions and fails on network code outside `update/UpdateClient.kt`. Obtainium and the releases page stay as other ways.
+
+### D29 — Updates (council D-077; its "no network" part replaced in 2.0 by D30)
+1.2: no network code, no new permissions. Settings ▸ «التحديثات»: version line, «حدّثه تلقائياً عبر Obtainium»
 (`obtainium://add/...`, dialog with «نزّل Obtainium» when not installed), «ابحث عن تحديث» (releases page).
 Required wording used verbatim in the README, the privacy text and About. CI fails if the APK requests any
 permission except CAMERA (the app-internal `DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` from androidx.core is
