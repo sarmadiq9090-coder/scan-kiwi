@@ -40,7 +40,9 @@ class KiwiPdfEngine(private val store: DocumentStore) : PdfEngine<ScanDocument> 
 
     override suspend fun assemble(sources: List<ScanDocument>, plan: List<PageRef>, name: String): ScanDocument {
         require(plan.isNotEmpty()) { "empty plan" }
-        val target = store.create(name)
+        // The document appears (doc.json) only once all its pages are in place.
+        val now = System.currentTimeMillis()
+        val target = ScanDocument(DocumentStore.newId(), name, now, now, emptyList())
         val pages = ArrayList<ScanPage>(plan.size)
         try {
             var last: Pair<Int, Int>? = null
