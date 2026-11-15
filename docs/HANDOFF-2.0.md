@@ -7,6 +7,43 @@ all gates passed, signed APK. **Local commits only: no push, no PR, no publishin
 
 Work split and shared rules (ownership, env, commit identity, feature records): `C:\BahthTest\scan-kiwi-design\2.0-SPLIT.md`.
 
+## 0. Phase 2 status (2026-11-15): cleanup + bug hunt DONE, next = torture (gate 6.3)
+
+Head of `release/2.0.0`: see `git log -1` (bug-hunt commits 0014ea4, 4861f9e, 33ba415, 7f01686, b2085d1 + this doc).
+- **Leader decisions applied:** ACCESS_NETWORK_STATE accepted (README ar/en, D30, update.md list CAMERA, INTERNET,
+  ACCESS_NETWORK_STATE, REQUEST_INSTALL_PACKAGES); repo `sarmadiq9090-coder/scan-kiwi` everywhere (already true); the
+  notice, About and privacy text say «ماسح كيوي».
+- **Licences:** `LICENSES/APAFML.txt`, `LICENSES/Unicode-DFS-2015.txt` (SPDX license-list-data v3.27.0). `reuse lint`: compliant, 427/427.
+- **`docs/FEATURES-2.0.md`** written (item 5 below is done).
+- **Lint:** `lintDebug` and `lintRelease`: **No issues found** (was 5 errors, 105 warnings, 5 hints). Non-applicable
+  checks are ignored with reasons in `app/lint.xml` (dependency versions, ChromeOS x86_64, app-bundle locales, ExifInterface).
+- **Full suite once on 7f01686:** 287 tests, 286 pass, 1 fail (`BlackBoxSmokeTest` expected the old English pill
+  «Done, 1 pages», corrected on purpose); fixed in b2085d1, the class re-runs 2/2. `perfStressTest` 1/1. Do not re-run
+  the full suite on b2085d1 unless code changes.
+- **Bug hunt (gate 6.2) — S1: 0. S2: 1 found, 1 fixed. S3: 12 fixed, 6 open.**
+  - S2 fixed: a connection that died while the release JSON or SHA256SUMS body was read threw a plain IOException
+    out of the updater and crashed the app at the automatic check on app open (test
+    `UpdaterTest.aConnectionThatDiesMidResponseIsANetworkErrorNeverACrash`, failed first, passes now).
+  - S3 fixed: Wi-Fi only now holds for the whole download; a clock that ran ahead no longer turns the weekly check
+    off; leftover update files cleaned at app open; archive must carry a higher versionCode (no same-version loop);
+    failed install session abandoned; only `ScanKiwi-<tag version>.apk` is taken; APK read errors say "network", not
+    "storage"; English «Done, 1 pages»; Arabic plural for «و٢ تنبيه آخر»; OCR diagnostics in the app's digits; system
+    back while correcting text leaves the correction, not the screen; a very thin page no longer makes a 0-pixel OCR
+    input (crash-to-message); README said "camera is the only permission".
+  - S3 open (for QC / 2.1): (1) an install failure reported by PackageInstaller shows no message, and «install again»
+    then says storage error (file already deleted); (2) the install confirmation may not open if the user left the app
+    during the download (Android's background-activity rule; «install again» works); (3) target size typed as "1,000"
+    is read as 1.0 KB (true size reported, never a false success); (4) a damaged `folders.json` loses folder names
+    (documents stay, at top level); (5) corrections made on an OCR result that a later export replaced are hidden and
+    a new correction overwrites them; (6) typed but unsaved text is lost on process death (the app restarts at Home, as in 1.x).
+  - Checked, no defect: TLS/host allow-list (redirects re-checked, NSC system trust, no cleartext), sha256 and
+    signer bypasses (verifier exceptions = mismatch, no SUMS line = no download), downgrade (SemVer + versionCode +
+    Android's own refusal), path traversal (asset name regex has no separators), no network code outside
+    `update/UpdateClient.kt`, document/folder/index writes atomic, rotation (configChanges) and saved-state types.
+
+**Next:** gate 6.3 torture (`tools/blackbox/torture.sh`, once, then failed cases only; includes
+`TortureChaosTest.diskFullMidWriteKeepsDocumentsIntact`), then 6.4 blind tester, 6.5 QC, then release (§4 items 6–9).
+
 ## 1. Branches (repo `E:\fast kiwi pro neq\kiwi-scan`)
 
 **Phase 1 (features) is finished (2026-11-15).** Every feature branch is merged into `release/2.0.0`; nothing is wip.
@@ -59,7 +96,7 @@ OCR bench work folder (venv, models, sets incl. `dev2`, results): `E:\fast kiwi 
 
 1. **APAFML accepted** (permissive, SPDX, Fedora/Debian). Done: ROADMAP §0, THIRD_PARTY, SBOM (commit c7d32b4), notices.
    Still to flag to the council: Unicode-DFS-2015 (`BidiMirroring.txt` in PdfBox), same reasoning.
-   **Open for gate 6.1:** `reuse lint` reports "Missing licenses: APAFML, Unicode-DFS-2015" (no `LICENSES/APAFML.txt`,
+   **Done (0014ea4), reuse lint compliant.** Was: `reuse lint` reported "Missing licenses: APAFML, Unicode-DFS-2015" (no `LICENSES/APAFML.txt`,
    `LICENSES/Unicode-DFS-2015.txt`); add the two SPDX texts (`reuse download APAFML Unicode-DFS-2015`, a download).
 2. **Mixed pages — DONE, passed (no exception needed):** ONE bounded fix (per-line script detection → route Latin lines to Tesseract or the better model,
    tuned on the DEV set only, never the held-out). If held-out mixed ≤ +5 pp → done. Else write the exception with
@@ -70,7 +107,7 @@ OCR bench work folder (venv, models, sets incl. `dev2`, results): `E:\fast kiwi 
 5. **Update from GitHub (owner's direct order 2026-11-15, amended to weekly) — DONE** in `feat/2.0-update` (D30 in
    `DECISIONS.md`). Replaces D-077's "no network": permissions now CAMERA, INTERNET, ACCESS_NETWORK_STATE,
    REQUEST_INSTALL_PACKAGES (CI checks the exact list and that `update/UpdateClient.kt` is the only network code).
-   **Leader decisions open:** (a) ACCESS_NETWORK_STATE was added although the spec named only INTERNET and
+   **Leader decisions (resolved 2026-11-15, applied in 0014ea4: (a) accepted, (b) `sarmadiq9090-coder/scan-kiwi`, (c) «ماسح كيوي»):** (a) ACCESS_NETWORK_STATE was added although the spec named only INTERNET and
    REQUEST_INSTALL_PACKAGES: «التنزيل عبر Wi-Fi فقط» cannot work without it; (b) the source is
    `sarmadiq9090-coder/scan-kiwi` (the real remote and the existing links), not `kiwi-scan` as written in the order;
    (c) the notice says «سكان كيوي» (owner's words, verbatim) while the app's Arabic name is «ماسح كيوي».
@@ -82,16 +119,17 @@ OCR bench work folder (venv, models, sets incl. `dev2`, results): `E:\fast kiwi 
 
 Items 1–4 of the old list (cam2, perf, OCR decisions 2 and 3, gates seams) are done (phase 1). Next phase starts here:
 
-5. Write `docs/FEATURES-2.0.md` (Arabic first): every feature from the six `docs/features-2.0/*.md` with status,
+5. **DONE (phase 2).** Write `docs/FEATURES-2.0.md` (Arabic first): every feature from the six `docs/features-2.0/*.md` with status,
    acceptance criterion, measured number, test; not-done items with reasons; a 2.1 list (nested folders,
    curved-page dewarping excluded by A4; mixed pages are fixed, no 2.1 entry). Owner phone checks still open:
    Accurate ≤ 8 s/page and ≤ 300 MB native heap, cold start ≤ 1 s, OCR −20 %, blur thresholds, Android 7/8 device,
    and the update path on a phone (certificate read, PackageInstaller confirmation, Wi-Fi detection, a real release).
 6. Gates on the complete build (all must pass):
-   1. full tests (phase 1 ran them once on the merged release, see §1; re-run only after new commits), lint
+   1. **Partly done (phase 2, §0): full tests, lintDebug/lintRelease, reuse lint pass.** Still open: CI-equivalent commands on a clean clone, release build + size gate.
+      Original text: full tests (phase 1 ran them once on the merged release, see §1; re-run only after new commits), lint
       (`lintDebug`, not run since the perf/cam2 merges), `reuse lint` (fix the two missing licence texts, §3.1),
       CI-equivalent commands on a clean clone, release build + size gate (the APK grew by perf/cam2 code only);
-   2. independent bug hunter (Opus): fix every S1/S2;
+   2. **DONE (phase 2, §0):** independent bug hunter (Opus): fix every S1/S2;
    3. torture suite (`tools/blackbox/torture.sh`, run once, then only failed cases; includes the new
       `diskFullMidWriteKeepsDocumentsIntact`, never run so far): fix everything found;
    4. code-blind user tester (sonnet; sees only `tools/blackbox/README-for-testers.md`, screenshots and the a11y tree):
