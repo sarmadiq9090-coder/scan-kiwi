@@ -97,6 +97,17 @@ fun PageScreen(vm: AppViewModel, docId: String, startIndex: Int, snackbar: Snack
                             leadingIcon = { Icon(KiwiIcons.rotateLeft(), null) },
                             onClick = { menu = false; vm.editPage(docId, page.id) { it.copy(rotation = (it.rotation + 270) % 360) } },
                         )
+                        // BLACKBOX-2.0 #2, #5: the text screen and glare fusion, by name, from the page itself.
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.docs_text)) },
+                            leadingIcon = { Icon(DocsIcons.copy(), null) },
+                            onClick = { menu = false; vm.open(Screen.Text(docId, page.id)) },
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.glare_remove)) },
+                            leadingIcon = { Icon(KiwiIcons.retake(), null) },
+                            onClick = { menu = false; vm.removeGlare(docId, page.id) },
+                        )
                         // 2.0-cam2: automatic alignment on demand (PRD §4.2).
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.straighten)) },

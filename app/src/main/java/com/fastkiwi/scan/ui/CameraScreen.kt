@@ -458,6 +458,15 @@ private fun CameraContent(vm: AppViewModel, initial: Screen.Camera, onClose: () 
                     )
                 }
 
+                // BLACKBOX-2.0 #4: book mode says what to do (the status pill only says it while searching).
+                if (target.book && bookPending == null) {
+                    Text(
+                        stringResource(R.string.book_guide), color = Color.White, style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center,
+                        modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 72.dp, start = Dimens.l, end = Dimens.l)
+                            .background(Color.Black.copy(alpha = 0.72f), RoundedCornerShape(16.dp)).padding(horizontal = Dimens.l, vertical = Dimens.s),
+                    )
+                }
+
                 // Status pill: white on 72% black, polite live region, «تعديل» after a capture.
                 val statusText = when {
                     glareSecond != null && status != R.string.status_capturing -> stringResource(R.string.glare_second_hint)

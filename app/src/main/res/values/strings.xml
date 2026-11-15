@@ -11,7 +11,7 @@
     <string name="no_results">لا توجد نتائج</string>
     <string name="empty_title">لا مستندات بعد</string>
     <string name="empty_body">امسح ورقة أو استورد صورة أو PDF.</string>
-    <string name="privacy_short">كل شيء يبقى على هاتفك</string>
+    <string name="privacy_short">ملفاتك تبقى على هاتفك؛ الاتصال فقط للتحقق من التحديثات</string>
     <string name="merge">دمج المحدد</string>
     <string name="delete">حذف</string>
     <string name="rename">إعادة تسمية</string>
@@ -218,6 +218,7 @@
     <string name="done">تم</string>
     <string name="crop_hint_short">اسحب الزوايا إلى حواف الورقة</string>
     <string name="format_jpg_images">صور JPG</string>
+    <string name="format_txt">نص TXT</string>
     <string name="size_dims">%1$s × %2$s %3$s</string>
     <string name="unit_cm">سم</string>
     <string name="unit_in">بوصة</string>

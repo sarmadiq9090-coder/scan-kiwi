@@ -35,6 +35,7 @@ class DefaultOcrEngineFactory(
 ) : OcrEngineFactory {
 
     override fun create(mode: OcrMode, languages: List<OcrLang>): OcrSelection {
+        OcrSeam.engine?.let { return OcrSelection(it, mode, mode) } // 2.0-gates: test seam (null in the app)
         if (mode == OcrMode.FAST) return OcrSelection(fast(), mode, OcrMode.FAST)
         if (OcrLang.ARABIC !in languages) return fastFor(mode, FallbackReason.ENGLISH_ONLY)
         if (device().lowRam) return fastFor(mode, FallbackReason.LOW_RAM_DEVICE)

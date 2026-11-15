@@ -75,7 +75,7 @@ class UpdateUiTest {
         assertFalse(vm.settings.autoUpdateCheck)
         // The check button with no connection: a clear message, no crash, nothing downloaded.
         rule.onNodeWithText("تحقق من التحديثات").performScrollTo().performClick()
-        rule.waitUntil(10_000) { rule.onAllNodesWithText("لا يوجد اتصال بالإنترنت.").fetchSemanticsNodes().isNotEmpty() }
+        rule.waitUntil(10_000) { rule.onAllNodesWithText("لا يوجد اتصال بالإنترنت.", substring = true).fetchSemanticsNodes().isNotEmpty() }
         assertEquals(UpdateState.Failed(UpdateError.OFFLINE), vm.updates.state.value)
         // Not shown again at the next start.
         assertFalse(UpdateController(rule.activity, vm.settings, kotlinx.coroutines.MainScope()).noticePending.value)

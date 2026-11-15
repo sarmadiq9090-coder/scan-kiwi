@@ -29,6 +29,8 @@
     <string name="glare_fuse_failed">تعذّرت مطابقة اللقطتين، فأُضيفت الثانية صفحةً جديدة</string>
     <!-- Book mode (A4): split a two-page spread at the spine. -->
     <string name="mode_book">كتاب</string>
+    <string name="book_guide">ضع الكتاب مفتوحاً تحت الهاتف وصوّر الصفحتين معاً. مع الالتقاط التلقائي تُلتقط الصورة وحدها عند الثبات، ثم نقسمها عند الكعب.</string>
+    <string name="glare_remove">إزالة الوهج</string>
     <string name="book_hint">صوّر صفحتين متقابلتين، وسنقسمهما عند الكعب</string>
     <string name="book_title">تقسيم الصفحتين</string>
     <string name="book_spine">خط الكعب</string>

@@ -136,8 +136,10 @@ fun BottomActionBar(content: @Composable ColumnScope.() -> Unit) {
 fun ButtonPair(
     secondary: @Composable (Modifier) -> Unit,
     primary: @Composable (Modifier) -> Unit,
+    /** false: side by side at every text size (labels wrap instead), for a footer that must stay small. */
+    stackOnLargeText: Boolean = true,
 ) {
-    val stack = LocalDensity.current.fontScale >= 1.5f
+    val stack = stackOnLargeText && LocalDensity.current.fontScale >= 1.5f
     if (stack) {
         Column(verticalArrangement = Arrangement.spacedBy(Dimens.s)) {
             primary(Modifier.fillMaxWidth().heightIn(min = Dimens.button))

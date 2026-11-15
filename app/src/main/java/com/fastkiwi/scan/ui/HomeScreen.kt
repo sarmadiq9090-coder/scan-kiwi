@@ -194,7 +194,9 @@ fun HomeScreen(vm: AppViewModel, snackbar: SnackbarHostState, folderId: String? 
                 ExtendedFloatingActionButton(
                     onClick = { vm.open(Screen.Camera(null)) },
                     expanded = fabExpanded,
-                    icon = { Icon(KiwiIcons.scan(), null) },
+                    // The FAB's text is cleared from semantics by Material 3, so the icon carries the name
+                    // (BLACKBOX-2.0 #7: TalkBack found an unnamed button).
+                    icon = { Icon(KiwiIcons.scan(), stringResource(R.string.scan)) },
                     text = { Text(stringResource(R.string.scan)) },
                     containerColor = MaterialTheme.colorScheme.primary,
                     contentColor = MaterialTheme.colorScheme.onPrimary,
@@ -480,6 +482,8 @@ private fun FolderNameDialog(title: String, current: String, confirm: String, on
     var value by remember { mutableStateOf(current) }
     AlertDialog(
         onDismissRequest = onDismiss,
+        properties = TextFieldDialogProperties,
+        modifier = TextFieldDialogModifier,
         title = { Text(title) },
         text = {
             OutlinedTextField(value = value, onValueChange = { value = it }, singleLine = true, label = { Text(stringResource(R.string.docs_folder_name)) })

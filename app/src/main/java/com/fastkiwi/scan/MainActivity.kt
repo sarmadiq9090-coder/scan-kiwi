@@ -68,6 +68,8 @@ class MainActivity : ComponentActivity() {
         if (savedInstanceState == null) handleIncoming(intent)
         // 2.0-update: the automatic check, when the app is opened only, at most once every 7 days.
         if (savedInstanceState == null) vm.updates.onAppOpened()
+        // BLACKBOX-2.0 #15: automatic document names follow the UI language (also after a language change).
+        vm.localizeDefaultNames(resources)
         // "Remove animations" (animator duration scale 0) also turns off decorative motion.
         val reducedMotion = runCatching {
             android.provider.Settings.Global.getFloat(contentResolver, android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f

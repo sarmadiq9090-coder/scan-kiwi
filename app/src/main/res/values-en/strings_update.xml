@@ -18,7 +18,7 @@
     <string name="update_downloading">Downloading… %1$s</string>
     <string name="update_ready">Ready to install: confirm on Android\'s screen</string>
     <string name="update_install_again">Install</string>
-    <string name="update_err_offline">No internet connection.</string>
+    <string name="update_err_offline">No internet connection. Connect to Wi-Fi or mobile data, then try again.</string>
     <string name="update_err_network">Could not reach GitHub. Try again later.</string>
     <string name="update_err_no_release">No release has been published yet.</string>
     <string name="update_err_bad_release">The published release is incomplete (no APK or SHA256SUMS), so nothing was downloaded.</string>

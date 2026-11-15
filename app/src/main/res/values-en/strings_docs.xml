@@ -45,9 +45,9 @@
     <string name="docs_search_page_n">Page %1$s</string>
     <string name="docs_search_no_results">No results for “%1$s”</string>
     <string name="docs_search_tip">Searches document names and the text read from pages. Arabic diacritics and alef, ya and ta marbuta variants do not matter, and Arabic-Indic digits match Western digits.</string>
-    <string name="docs_search_unread_note">Pages whose text has not been read yet are not searched. Text is read when you export with text recognition, or from the Text screen.</string>
+    <string name="docs_search_unread_note">Pages whose text has not been read yet are not searched. Text is read when you export with text recognition, or from «View and correct text».</string>
     <!-- Text (view, copy, correct) -->
-    <string name="docs_text">Text</string>
+    <string name="docs_text">View and correct text</string>
     <string name="docs_text_title">Text of page %1$s</string>
     <string name="docs_text_copy">Copy text</string>
     <string name="docs_text_copied">Text copied</string>

@@ -193,6 +193,10 @@ fun EditorScreen(vm: AppViewModel, docId: String, snackbar: SnackbarHostState) {
                             DropdownMenuItem(text = { Text(stringResource(R.string.pdf_select_pages)) }, enabled = doc.pages.isNotEmpty(), onClick = { menu = false; selection = emptySet() })
                             DropdownMenuItem(text = { Text(stringResource(R.string.pdf_split)) }, enabled = doc.pages.size > 1, onClick = { menu = false; showSplit = true })
                             DropdownMenuItem(text = { Text(stringResource(R.string.pdf_add_blank_end)) }, onClick = { menu = false; vm.insertBlankPage(docId, doc.pages.size) })
+                            // BLACKBOX-2.0 #2: view / copy / correct the text from the document too (opens its first page).
+                            DropdownMenuItem(text = { Text(stringResource(R.string.docs_text)) }, enabled = doc.pages.isNotEmpty(), onClick = {
+                                menu = false; doc.pages.firstOrNull()?.let { vm.open(Screen.Text(docId, it.id)) }
+                            })
                             DropdownMenuItem(text = { Text(stringResource(R.string.pdf_copy_text)) }, enabled = doc.pages.isNotEmpty(), onClick = {
                                 menu = false
                                 scope.launch {
@@ -478,6 +482,8 @@ private fun SplitDialog(pageCount: Int, onDismiss: () -> Unit, onSplit: (List<Li
     val err: Int? = if (everyN || ranges.isBlank()) null else try { PagePlans.parseGroups(ranges, pageCount); null } catch (e: RangeException) { PdfToolsViewModel.rangeError(e) }
     AlertDialog(
         onDismissRequest = onDismiss,
+        properties = TextFieldDialogProperties,
+        modifier = TextFieldDialogModifier,
         title = { Text(stringResource(R.string.pdf_split)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(Dimens.m)) {
@@ -516,7 +522,10 @@ private fun SplitDialog(pageCount: Int, onDismiss: () -> Unit, onSplit: (List<Li
 fun ExportSheet(vm: AppViewModel, docId: String, onDismiss: () -> Unit) {
     val s = vm.settings
     val ctx = LocalContext.current
-    var asJpeg by remember { mutableStateOf(false) }
+    // 0 = PDF, 1 = JPG images, 2 = text only (TXT; BLACKBOX-2.0 #6: TXT was only reachable from the Text screen).
+    var format by remember { mutableStateOf(0) }
+    val asJpeg = format == 1
+    val asTxt = format == 2
     var pageSize by remember { mutableStateOf(s.pageSize) }
     var quality by remember { mutableStateOf(s.quality) }
     var ocr by remember { mutableStateOf(s.ocr) }
@@ -538,7 +547,7 @@ fun ExportSheet(vm: AppViewModel, docId: String, onDismiss: () -> Unit) {
     var watermark by remember { mutableStateOf(Watermark("", 0.25f, true)) }
     val busy by vm.busy
 
-    val targetBytes: Long? = if (!targetMode || asJpeg) null else com.fastkiwi.scan.pdf.TargetSize.parseBytes(targetText, targetMb)
+    val targetBytes: Long? = if (!targetMode || format != 0) null else com.fastkiwi.scan.pdf.TargetSize.parseBytes(targetText, targetMb)
     val numbering = if (numbersOn) numbers.copy(start = PagePlans.normalizeDigits(startText).trim().toIntOrNull()?.coerceIn(0, 99_999) ?: 1) else null
     val mark = if (watermarkOn && watermark.text.isNotBlank()) watermark else null
 
@@ -553,8 +562,63 @@ fun ExportSheet(vm: AppViewModel, docId: String, onDismiss: () -> Unit) {
     val saveLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/pdf")) { uri ->
         if (uri != null) vm.saveTo(docId, options(), uri)
     }
+    val txtLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri ->
+        if (uri != null) vm.saveTxtTo(docId, uri)
+    }
     val folderLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri != null) vm.saveJpegsTo(docId, options(), uri)
+    }
+
+    // BLACKBOX-2.0 #9: at 200 % text the stacked Share / Save buttons took a third of the screen. From 150 %
+    // the footer stays fixed (QC-1: reachable without scrolling) but compact: side by side, no icons,
+    // labels wrap, less bottom space.
+    val largeText = androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.5f
+    val footer: @Composable () -> Unit = {
+            Column(Modifier.fillMaxWidth().padding(horizontal = Dimens.sheet).padding(top = Dimens.s, bottom = if (largeText) Dimens.m else Dimens.xl)) {
+                // Footer: progress with a real Cancel while exporting, otherwise Save / Share.
+                val ex = vm.exportState.value
+                if (ex != null) {
+                    Column(Modifier.semantics { liveRegion = androidx.compose.ui.semantics.LiveRegionMode.Polite }) {
+                        if (ex.total > 0 && !ex.fitting) {
+                            LinearProgressIndicator(progress = { ex.page.toFloat() / ex.total }, modifier = Modifier.fillMaxWidth())
+                            val page = (ex.page + 1).coerceAtMost(ex.total)
+                            Text(
+                                stringResource(if (ex.readingText) R.string.export_reading_text else R.string.export_preparing, page, ex.total),
+                                style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = Dimens.s),
+                            )
+                        } else {
+                            LinearProgressIndicator(Modifier.fillMaxWidth())
+                            Text(stringResource(if (ex.fitting) R.string.pdf_export_fitting else R.string.export_starting), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = Dimens.s))
+                        }
+                        TextButton(onClick = { vm.cancelExport() }, modifier = Modifier.align(Alignment.End).heightIn(min = 48.dp)) {
+                            Text(stringResource(R.string.cancel))
+                        }
+                    }
+                } else {
+                    val canGo = busy == 0 && (asTxt || ((!protect || asJpeg || password.isNotEmpty()) && (!targetMode || asJpeg || targetBytes != null)))
+                    ButtonPair(
+                        stackOnLargeText = false,
+                        secondary = { m ->
+                            OutlinedButton(onClick = {
+                                when {
+                                    asTxt -> txtLauncher.launch(vm.suggestedTxtName(docId))
+                                    asJpeg -> folderLauncher.launch(null)
+                                    else -> saveLauncher.launch(vm.suggestedFileName(docId))
+                                }
+                            }, enabled = canGo, modifier = m) {
+                                if (!largeText) { Icon(KiwiIcons.download(), null, Modifier.size(20.dp)); Spacer(Modifier.width(Dimens.s)) }
+                                Text(stringResource(R.string.save_to_device), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                            }
+                        },
+                        primary = { m ->
+                            Button(onClick = { if (asTxt) vm.shareTxt(docId) else vm.share(docId, options(), asJpeg) }, enabled = canGo, modifier = m) {
+                                if (!largeText) { Icon(KiwiIcons.share(), null, Modifier.size(20.dp)); Spacer(Modifier.width(Dimens.s)) }
+                                Text(stringResource(R.string.share), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                            }
+                        },
+                    )
+                }
+            }
     }
 
     ModalBottomSheet(
@@ -578,7 +642,7 @@ fun ExportSheet(vm: AppViewModel, docId: String, onDismiss: () -> Unit) {
                 val sizeText = if (targetBytes != null) stringResource(R.string.pdf_target_estimate, formatSize(targetBytes))
                 else estimate?.let { stringResource(R.string.estimated_size, formatSize(it)) } ?: stringResource(R.string.estimating_size)
                 Text(
-                    pagesText + LocalFormat.metaSep(androidx.compose.ui.platform.LocalConfiguration.current.locales[0]) + sizeText,
+                    if (asTxt) pagesText else pagesText + LocalFormat.metaSep(androidx.compose.ui.platform.LocalConfiguration.current.locales[0]) + sizeText,
                     style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.semantics { liveRegion = androidx.compose.ui.semantics.LiveRegionMode.Polite },
                 )
@@ -604,9 +668,15 @@ fun ExportSheet(vm: AppViewModel, docId: String, onDismiss: () -> Unit) {
                 }
 
                 Label(R.string.format)
-                ChoiceSegmentedRow(listOf("PDF", stringResource(R.string.format_jpg_images)), if (asJpeg) 1 else 0, { asJpeg = it == 1 })
+                ChoiceSegmentedRow(listOf("PDF", stringResource(R.string.format_jpg_images), stringResource(R.string.format_txt)), format, { format = it })
+                if (asTxt) {
+                    Text(
+                        stringResource(R.string.docs_txt_hint), style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = Dimens.xs),
+                    )
+                }
 
-                if (!asJpeg) {
+                if (format == 0) {
                     Spacer(Modifier.height(Dimens.l))
                     ExposedDropdownMenuBox(expanded = sizeMenu, onExpandedChange = { sizeMenu = it }) {
                         OutlinedTextField(
@@ -625,6 +695,7 @@ fun ExportSheet(vm: AppViewModel, docId: String, onDismiss: () -> Unit) {
                     }
                 }
 
+                if (!asTxt) {
                 Label(R.string.quality)
                 val qualityLabels = listOf(stringResource(R.string.quality_small), stringResource(R.string.quality_balanced), stringResource(R.string.quality_high))
                 ChoiceSegmentedRow(
@@ -651,8 +722,9 @@ fun ExportSheet(vm: AppViewModel, docId: String, onDismiss: () -> Unit) {
                         ChoiceSegmentedRow(listOf(stringResource(R.string.pdf_unit_kb), stringResource(R.string.pdf_unit_mb)), if (targetMb) 1 else 0, { targetMb = it == 1 }, Modifier.width(150.dp))
                     }
                 }
+                }
 
-                if (!asJpeg) {
+                if (format == 0) {
                     Spacer(Modifier.height(Dimens.l))
                     val groupColor = MaterialTheme.colorScheme.surfaceContainerHigh
                     SettingsGroup(3) { i, shape ->
@@ -758,44 +830,7 @@ fun ExportSheet(vm: AppViewModel, docId: String, onDismiss: () -> Unit) {
                     }
                 }
             }
-            Column(Modifier.fillMaxWidth().padding(horizontal = Dimens.sheet).padding(top = Dimens.s, bottom = Dimens.xl)) {
-                // Footer: progress with a real Cancel while exporting, otherwise Save / Share.
-                val ex = vm.exportState.value
-                if (ex != null) {
-                    Column(Modifier.semantics { liveRegion = androidx.compose.ui.semantics.LiveRegionMode.Polite }) {
-                        if (ex.total > 0 && !ex.fitting) {
-                            LinearProgressIndicator(progress = { ex.page.toFloat() / ex.total }, modifier = Modifier.fillMaxWidth())
-                            val page = (ex.page + 1).coerceAtMost(ex.total)
-                            Text(
-                                stringResource(if (ex.readingText) R.string.export_reading_text else R.string.export_preparing, page, ex.total),
-                                style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = Dimens.s),
-                            )
-                        } else {
-                            LinearProgressIndicator(Modifier.fillMaxWidth())
-                            Text(stringResource(if (ex.fitting) R.string.pdf_export_fitting else R.string.export_starting), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = Dimens.s))
-                        }
-                        TextButton(onClick = { vm.cancelExport() }, modifier = Modifier.align(Alignment.End).heightIn(min = 48.dp)) {
-                            Text(stringResource(R.string.cancel))
-                        }
-                    }
-                } else {
-                    val canGo = busy == 0 && (!protect || asJpeg || password.isNotEmpty()) && (!targetMode || asJpeg || targetBytes != null)
-                    ButtonPair(
-                        secondary = { m ->
-                            OutlinedButton(onClick = {
-                                if (asJpeg) folderLauncher.launch(null) else saveLauncher.launch(vm.suggestedFileName(docId))
-                            }, enabled = canGo, modifier = m) {
-                                Icon(KiwiIcons.download(), null, Modifier.size(20.dp)); Spacer(Modifier.width(Dimens.s)); Text(stringResource(R.string.save_to_device))
-                            }
-                        },
-                        primary = { m ->
-                            Button(onClick = { vm.share(docId, options(), asJpeg) }, enabled = canGo, modifier = m) {
-                                Icon(KiwiIcons.share(), null, Modifier.size(20.dp)); Spacer(Modifier.width(Dimens.s)); Text(stringResource(R.string.share))
-                            }
-                        },
-                    )
-                }
-            }
+            footer()
         }
     }
 }

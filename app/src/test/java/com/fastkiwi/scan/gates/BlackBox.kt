@@ -137,7 +137,7 @@ class BlackBox(private val rule: ComposeTestRule, val dir: File) {
         RuntimeEnvironment.setFontScale(1f)
         Locale.setDefault(Locale.forLanguageTag(language))
         resetViewModelFactory()
-        com.fastkiwi.scan.ui.CaptureSeam.camera = fakeCamera // 2.0-gates: the camera seam
+        installSeams()
         scenario = ActivityScenario.launch(MainActivity::class.java)
         dropStaleViewModel()
         settle()
@@ -163,6 +163,17 @@ class BlackBox(private val rule: ComposeTestRule, val dir: File) {
         check(activity()?.vm?.getApplication<android.app.Application>() === app) { "stale view model from an earlier test" }
     }
 
+    /**
+     * The simulated camera and text recognition (2.0-gates seams). Set again by `launch`: close() clears
+     * them, and a `launch` after the app was closed left the real CameraX path in place, which cannot run
+     * here («الكاميرا غير متاحة», a shutter that did nothing: BLACKBOX-2.0 #3).
+     */
+    private fun installSeams() {
+        com.fastkiwi.scan.ui.CaptureSeam.camera = fakeCamera
+        SimulatedOcr.prepare()
+        com.fastkiwi.scan.ocr.OcrSeam.engine = SimulatedOcr
+    }
+
     fun close() {
         // After a recreate, Robolectric hands the retained view models to the next test's
         // activity (a static left behind); clearing the store ends them here.
@@ -170,6 +181,7 @@ class BlackBox(private val rule: ComposeTestRule, val dir: File) {
         runCatching { scenario?.close() }
         scenario = null
         com.fastkiwi.scan.ui.CaptureSeam.camera = null
+        com.fastkiwi.scan.ocr.OcrSeam.engine = null
         synchronized(this) { frame = null; frameKey = null }
     }
 
@@ -252,7 +264,7 @@ class BlackBox(private val rule: ComposeTestRule, val dir: File) {
             "quit" -> { quit = true; true to "session ends" }
             "launch" -> {
                 if (activity() != null) true to "the app is already open"
-                else { close(); resetViewModelFactory(); scenario = ActivityScenario.launch(MainActivity::class.java); settle(); true to "app opened from the launcher" }
+                else { close(); resetViewModelFactory(); installSeams(); scenario = ActivityScenario.launch(MainActivity::class.java); settle(); true to "app opened from the launcher" }
             }
             "pages" -> true to SyntheticPages.catalogue.joinToString("\n", "Pages the camera can see (camera_sees <id>):\n") { "  ${it.id} - ${it.description}" }
             "files" -> true to filesList()

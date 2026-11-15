@@ -446,6 +446,8 @@ private fun ToolDialog(t: PdfTool, e: PdfToolsViewModel.Entry?, onDismiss: () ->
     val (_, title, hint) = toolLabels(t)
     AlertDialog(
         onDismissRequest = onDismiss,
+        properties = TextFieldDialogProperties,
+        modifier = TextFieldDialogModifier,
         title = { Text(title) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(Dimens.m)) {
@@ -503,6 +505,8 @@ fun PasswordDialog(name: String, wrong: Boolean, onDismiss: () -> Unit, onOpen: 
     var pw by remember { mutableStateOf("") }
     AlertDialog(
         onDismissRequest = onDismiss,
+        properties = TextFieldDialogProperties,
+        modifier = TextFieldDialogModifier,
         title = { Text(stringResource(R.string.pdf_password_title)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(Dimens.m)) {

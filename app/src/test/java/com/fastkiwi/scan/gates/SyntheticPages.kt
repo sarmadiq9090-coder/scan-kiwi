@@ -152,8 +152,70 @@ object SyntheticPages {
             c.line("Name: Sami Example", 340 * s, 240 * s, ink(36 * s), false, w)
             c.line("784-1990-1234567-1", 340 * s, 320 * s, ink(38 * s, true), false, w)
         },
+        // BLACKBOX-2.0 #3: a two-page spread for book mode (the tester had none to split).
+        Spec("book-spread", "An open book, two facing Arabic pages: «الفصل الأول» on the right, «الفصل الثاني» on the left, the spine in the middle", aspect = 0.72f) { c, w, h ->
+            val s = w / 1600f
+            // The gutter: a soft shadow down the middle, no text near it.
+            c.drawRect(w * 0.46f, 0f, w * 0.54f, h.toFloat(), Paint().apply {
+                shader = LinearGradient(w * 0.46f, 0f, w * 0.54f, 0f, intArrayOf(Color.rgb(250, 249, 245), Color.rgb(150, 146, 138), Color.rgb(250, 249, 245)), null, Shader.TileMode.CLAMP)
+            })
+            // One page per half; x is measured from the half's outer edge (right page: from the right).
+            fun half(rightPage: Boolean, title: String, body: List<String>) {
+                val margin = 70 * s
+                val pageW = w / 2f
+                fun at(text: String, y: Float, p: Paint) {
+                    p.textAlign = Paint.Align.RIGHT
+                    val rightEdge = if (rightPage) w - margin else pageW - margin * 1.6f
+                    c.drawText(text, rightEdge, y, p)
+                }
+                at(title, 170 * s, ink(52 * s, true))
+                body.forEachIndexed { i, t -> at(t, (270 + i * 66) * s, ink(32 * s)) }
+            }
+            half(true, "الفصل الأول", arabicBody.take(7))
+            half(false, "الفصل الثاني", arabicBody.drop(2).map { it.split(' ').take(5).joinToString(" ") })
+        },
         Spec("desk", "No paper at all: only the empty desk") { _, _, _ -> },
     )
+
+    /** A line of text as drawn on the page; [box] and the word boxes are fractions of the page (0..1). */
+    class Run(val text: String, val rtl: Boolean, val box: android.graphics.RectF, val words: List<Pair<String, android.graphics.RectF>>)
+
+    /** Records every line [renderPage] draws, with its words' boxes (for the simulated OCR, gates/SimulatedOcr). */
+    private class Recorder(bmp: Bitmap) : Canvas(bmp) {
+        val runs = ArrayList<Run>()
+
+        override fun drawText(text: String, x: Float, y: Float, paint: Paint) {
+            super.drawText(text, x, y, paint)
+            val words = text.split(' ').filter { it.isNotBlank() }
+            if (words.isEmpty() || text.all { it == '_' || it == ' ' }) return
+            val total = paint.measureText(text)
+            val space = paint.measureText(" ")
+            val left = when (paint.textAlign) { Paint.Align.RIGHT -> x - total; Paint.Align.CENTER -> x - total / 2; else -> x }
+            val rtl = paint.textAlign == Paint.Align.RIGHT && text.any { it.code in 0x0600..0x06FF }
+            val top = y - paint.textSize * 0.8f
+            val bottom = y + paint.textSize * 0.25f
+            val w = width.toFloat()
+            val h = height.toFloat()
+            var cursor = if (rtl) left + total else left
+            val boxes = words.map { word ->
+                val ww = paint.measureText(word)
+                val r = if (rtl) android.graphics.RectF(cursor - ww, top, cursor, bottom).also { cursor -= ww + space }
+                else android.graphics.RectF(cursor, top, cursor + ww, bottom).also { cursor += ww + space }
+                word to android.graphics.RectF(r.left / w, r.top / h, r.right / w, r.bottom / h)
+            }
+            runs.add(Run(text, rtl, android.graphics.RectF(left / w, top / h, (left + total) / w, bottom / h), boxes))
+        }
+    }
+
+    /** The page as [renderPage] draws it, and the text lines on it in drawing order. */
+    fun renderWithText(id: String, width: Int = 1240): Pair<Bitmap, List<Run>> {
+        val spec = spec(id) ?: error("unknown page $id")
+        val bmp = Bitmap.createBitmap(width, (width * spec.aspect).toInt(), Bitmap.Config.ARGB_8888)
+        val c = Recorder(bmp)
+        c.drawColor(Color.rgb(250, 249, 245))
+        spec.draw(c, bmp.width, bmp.height)
+        return bmp to c.runs
+    }
 
     fun spec(id: String): Spec? = catalogue.firstOrNull { it.id.equals(id, ignoreCase = true) }
 

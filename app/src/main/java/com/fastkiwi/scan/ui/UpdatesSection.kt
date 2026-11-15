@@ -25,6 +25,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -136,6 +138,16 @@ fun UpdatesScreen(vm: AppViewModel) {
                         })
                     }
                 }
+                // BLACKBOX-2.0 #13: a failed check is said aloud (TalkBack reads a polite live region) with what to do;
+                // the row above keeps its usual subtitle so the message is not shown twice.
+                if (st is UpdateState.Failed && st.error != UpdateError.INSTALL) {
+                    Text(
+                        stringResource(updateErrorText(st.error)), style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = Dimens.l, vertical = Dimens.s)
+                            .semantics { liveRegion = androidx.compose.ui.semantics.LiveRegionMode.Polite },
+                    )
+                }
                 Spacer(Modifier.height(Dimens.m))
                 var auto by remember { mutableStateOf(vm.settings.autoUpdateCheck) }
                 var wifi by remember { mutableStateOf(vm.settings.updateWifiOnly) }
@@ -212,7 +224,7 @@ private fun updateStatus(st: UpdateState): String = when (st) {
         if (st.total > 0) java.text.NumberFormat.getPercentInstance().format(st.done.toDouble() / st.total) else "",
     )
     is UpdateState.Ready -> stringResource(R.string.update_ready)
-    is UpdateState.Failed -> stringResource(updateErrorText(st.error))
+    is UpdateState.Failed -> stringResource(R.string.updates_version, BuildConfig.VERSION_NAME) // the error is the live line under the row
 }
 
 fun updateErrorText(e: UpdateError): Int = when (e) {

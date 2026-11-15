@@ -85,7 +85,7 @@ commands stand in for them.
 
 | Command | What it does |
 |---|---|
-| `pages` | Lists the sheets of paper you can point the camera at (letters in Arabic and English, a bilingual invoice with a table, a form with a reference number to find, a receipt, an ID card, an empty desk). |
+| `pages` | Lists the sheets of paper you can point the camera at (letters in Arabic and English, a bilingual invoice with a table, a form with a reference number to find, a receipt, an ID card, an open book showing two facing pages, an empty desk). |
 | `camera_sees <page-id>` | Puts that sheet in front of the camera, as a photo of paper lying on a desk. The next press of the shutter takes it; with automatic capture on, holding it there takes it by itself once. `camera_sees nothing` shows only the desk. |
 | `gallery_has <file> [<page-id>\|garbage\|empty\|truncated\|huge]` | Puts a file in the phone's gallery / Files app: a photo of that page (default: the memo), or a damaged file. The extension decides the format (`.jpg`, `.png`, `.webp`, `.heic`). HEIC files are simulated (they hold JPEG data). |
 | `pdf_file <name.pdf> <pages> [protected\|broken]` | Puts a PDF with that many pages in the Files app; `protected` has the password `1234`, `broken` is damaged. |
@@ -98,11 +98,20 @@ commands stand in for them.
 
 ## Known differences from a real phone
 
-* The camera viewfinder is black and the camera's status line may say the camera cannot
-  be used; photos still arrive through `camera_sees` and the shutter.
+* The camera viewfinder is black; what the camera sees is set with `camera_sees`, and the
+  shutter, automatic capture and the camera's status line work as on a phone. This stays so
+  after `launch`, `locale`, `darkmode` and `fontscale`. If the camera ever says it cannot be
+  used, report it.
 * There is no internet and no browser: a link the app opens is reported as an event only, and the
   app's own update check («تحقق من التحديثات») always finds no connection.
-* Text recognition (OCR) may report that it is not available on this simulated phone.
+* Text recognition (OCR) is simulated: it reads the sheets listed by `pages` (each half of the
+  open book too) exactly, wherever the app reads text (after a page is added, when exporting,
+  in search). A page that is not one of these sheets, such as the empty desk or a blank page,
+  has no text. So you can test everything the app does with recognised text, but not how well
+  it recognises real paper.
+* The app reads a new page's text in the background: give it a moment (`wait 3000`) before you
+  look for that text.
+* Text fields in dialogs and sheets take `type` as on a phone; the keyboard itself is not shown.
 * Animations finish quickly; time only passes while a command runs or with `wait`.
 
 ## What to report

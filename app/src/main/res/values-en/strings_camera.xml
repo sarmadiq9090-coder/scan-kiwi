@@ -22,6 +22,8 @@
     <string name="glare_fused">Glare reduced by combining both shots</string>
     <string name="glare_fuse_failed">The two shots did not match, so the second was added as a new page</string>
     <string name="mode_book">Book</string>
+    <string name="book_guide">Lay the book open under the phone and photograph both pages together. With automatic capture the photo is taken by itself once steady; then we split it at the spine.</string>
+    <string name="glare_remove">Remove glare</string>
     <string name="book_hint">Photograph two facing pages; we split them at the spine</string>
     <string name="book_title">Split the pages</string>
     <string name="book_spine">Spine line</string>

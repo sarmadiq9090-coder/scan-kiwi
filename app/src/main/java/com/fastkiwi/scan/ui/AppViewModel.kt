@@ -324,7 +324,39 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun defaultName(): String {
         val stamp = SimpleDateFormat("yyyy-MM-dd HH.mm", Locale.ROOT).format(Date())
-        return getApplication<Application>().getString(R.string.default_doc_name, stamp)
+        return uiResources().getString(R.string.default_doc_name, stamp)
+    }
+
+    /**
+     * Resources in the app's own language. Below Android 13 the in-app language is applied to the
+     * activity only (MainActivity.attachBaseContext), so the Application's resources would still
+     * speak the phone's language.
+     */
+    private fun uiResources(): android.content.res.Resources {
+        val app = getApplication<Application>()
+        val tag = Settings.languageTag(app)
+        if (tag.isEmpty()) return app.resources
+        val cfg = android.content.res.Configuration(app.resources.configuration).apply { setLocale(Locale.forLanguageTag(tag)) }
+        return app.createConfigurationContext(cfg).resources
+    }
+
+    /**
+     * BLACKBOX-2.0 #15: an automatic name («مسح 2026-11-15 11.53» / "Scan 2026-11-15 11.53") follows the
+     * UI language; called with the activity's resources whenever it is created (also after a language change).
+     * A name the user typed never matches [DEFAULT_NAME] exactly and is left alone.
+     */
+    fun localizeDefaultNames(res: android.content.res.Resources) {
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                docLock.withLock {
+                    for (d in store.list()) {
+                        val stamp = DEFAULT_NAME.matchEntire(d.name)?.groupValues?.get(1) ?: continue
+                        val want = res.getString(R.string.default_doc_name, stamp)
+                        if (want != d.name) saveAndPublish(d.copy(name = want), touch = false)
+                    }
+                }
+            }
+        }
     }
 
     /**
@@ -513,6 +545,17 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun armGlareSecondShot() { glareSecond.value = glareOffer.value; glareOffer.value = null }
 
     fun dropGlareOffer() { glareOffer.value = null; glareSecond.value = null }
+
+    /**
+     * «إزالة الوهج» / "Remove glare" in the page editor (BLACKBOX-2.0 #5): the camera opens for a second
+     * photo of this page from another angle, and the two shots are fused (the same path as the offer
+     * the camera makes after a shot with glare).
+     */
+    fun removeGlare(docId: String, pageId: String) {
+        glareOffer.value = null
+        glareSecond.value = docId to pageId
+        open(Screen.Camera(docId))
+    }
 
     /** Adds the two halves of the pending spread in reading order; remembers the order for the document. */
     fun confirmBookSplit(spine: com.fastkiwi.scan.core.Spine, order: com.fastkiwi.scan.core.ReadingOrder) {
@@ -1354,8 +1397,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         return store.save(d.copy(folderId = folder), touch = false)
     }
 
-    private companion object {
-        const val MAX_HITS = 200
+    companion object {
+        private const val MAX_HITS = 200
+
+        /** `default_doc_name` of values/ (Arabic) or values-en/; group 1 is the time stamp. */
+        internal val DEFAULT_NAME = Regex("""^(?:مسح|Scan) (\d{4}-\d{2}-\d{2} \d{2}\.\d{2})$""")
     }
     // ===================================================================== end 2.0-docs
 

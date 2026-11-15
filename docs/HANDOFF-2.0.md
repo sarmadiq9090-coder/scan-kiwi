@@ -7,6 +7,40 @@ all gates passed, signed APK. **Local commits only: no push, no PR, no publishin
 
 Work split and shared rules (ownership, env, commit identity, feature records): `C:\BahthTest\scan-kiwi-design\2.0-SPLIT.md`.
 
+## 0b. Black-box findings fixed (2026-11-15): every U1 and U2 of `docs/BLACKBOX-2.0.md`, next = re-run those tasks
+
+Each fix has a test (new: `gates/BlackBoxTasksTest` (6 tasks through the bb.sh interpreter), `gates/SimulatedOcrTest`,
+`ui/TextFieldDialogIdleTest`; changed: `update/UpdateUiTest`).
+- **U1 #1 folders (app bug).** Not a cursor or an animation: any text field in a Compose dialog with the platform's
+  default width never settled on a phone wider than 320 dp. Android measures a wrap-content dialog window at 320 dp, then at
+  the full width (the dialog's minimum width does not fit in 320 dp); the text field re-measured at a new width asked for another
+  layout on every pass (busy even with the clock stopped). Fix: `TextFieldDialogProperties` (`usePlatformDefaultWidth = false`)
+  + `TextFieldDialogModifier` (24 dp margins) on all five text-field dialogs (new folder/rename folder, rename, split, PDF tool, PDF password).
+- **U1 #3 camera after a language/theme change (driver bug).** The recreate itself was fine; the tester had closed the app and used
+  `launch`, and `BlackBox.close()` cleared the camera seam, so the real CameraX path ran («Camera unavailable», a dead shutter).
+  `launch` now re-installs the seams (`installSeams()`).
+- **U1 #2 OCR in the tester's environment (driver) + text screen discoverability (app).** New seam `ocr/OcrSeam` (null in the app,
+  read by `DefaultOcrEngineFactory`); the driver installs `gates/SimulatedOcr`, which recognises the invented sheets (an ink-layout
+  thumbnail, lighting- and filter-proof) and returns their words with boxes. Text screen: «عرض النص وتصحيحه» / "View and correct text"
+  in the page editor's menu, the document's menu and each page's menu (was «النص»).
+- **U2:** Scan FAB named «مسح»/"Scan" (M3 clears the FAB text from semantics; the icon now carries it) · «إزالة الوهج»/"Remove glare" in
+  the page editor's menu (`AppViewModel.removeGlare`: camera opens armed for the second shot, fused into that page) · TXT as a third
+  format in the export sheet («نص TXT»/"Text (TXT)", Save and Share) · export sheet from 150 % text: the footer stays fixed (QC-1
+  `QcExportFooterLargeTextTest`) but compact: Share and Save side by side without icons, labels wrap (`ButtonPair(stackOnLargeText = false)`);
+  at 200 % it is about 14 % of the screen instead of a third · book mode: a persistent guide («ضع الكتاب مفتوحاً…»); auto-capture already worked in book mode
+  (its failure was #3) and is tested with the new `book-spread` sample.
+- **U3 done:** offline check failure is a polite live line under the row with a hint («…اتصل بشبكة Wi-Fi أو ببيانات الجوال ثم حاول مرة أخرى»);
+  Home/camera privacy line «ملفاتك تبقى على هاتفك؛ الاتصال فقط للتحقق من التحديثات»; automatic document names follow the UI language
+  (`localizeDefaultNames` on every activity create; new names use the in-app language below Android 13 too).
+- **Seen, not fixed (S3, for 2.1):** page detection leaves out a dark header band at the paper's top edge (synthetic invoice and ID card),
+  so text in that band is not in the page (searching «فاتورة» on the invoice finds nothing; body words are found).
+- **Tester guide:** `tools/blackbox/README-for-testers.md` says OCR is simulated, to `wait` for background reading, and that the camera
+  works after `launch`/`locale`/`darkmode`; `pages` lists the new two-page `book-spread`.
+- **Full suite once, on the fix commit:** RESULT_PLACEHOLDER
+- **Re-run with the black-box tester (gate 6.4):** task 9 folders (Home and «نقل إلى مجلد»), tasks 7–8 search / view / copy / correct text,
+  task 10 book mode (camera and gallery, Book tab), task 11 glare by name, task 6 TXT export, task 1 TalkBack name of «مسح», and the
+  200 % export sheet; quick checks of task 12 (offline message, privacy line) and the English default name.
+
 ## 0a. Phase 3 status (2026-11-15): torture gate 6.3 DONE, next = black-box tester (gate 6.4)
 
 Head of `release/2.0.0`: `git log -1` (torture commits 91a0dac, 2857379 + the doc/test commit after them).

@@ -49,9 +49,9 @@
     <string name="docs_search_page_n">صفحة %1$s</string>
     <string name="docs_search_no_results">لا نتائج لـ «%1$s»</string>
     <string name="docs_search_tip">يُبحث في أسماء المستندات وفي النص المقروء من الصفحات. لا يلزم كتابة الحركات، ولا التمييز بين أ وإ وا أو ى وي أو ة وه، والأرقام العربية والهندية سواء.</string>
-    <string name="docs_search_unread_note">الصفحات التي لم يُقرأ نصها بعد لا تظهر في البحث. يُقرأ النص عند التصدير مع «التعرف على النص» أو من شاشة «النص».</string>
+    <string name="docs_search_unread_note">الصفحات التي لم يُقرأ نصها بعد لا تظهر في البحث. يُقرأ النص عند التصدير مع «التعرف على النص» أو من «عرض النص وتصحيحه».</string>
     <!-- Text (view, copy, correct) -->
-    <string name="docs_text">النص</string>
+    <string name="docs_text">عرض النص وتصحيحه</string>
     <string name="docs_text_title">نص الصفحة %1$s</string>
     <string name="docs_text_copy">نسخ النص</string>
     <string name="docs_text_copied">نُسخ النص</string>

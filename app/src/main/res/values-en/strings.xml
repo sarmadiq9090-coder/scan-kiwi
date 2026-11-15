@@ -10,7 +10,7 @@
     <string name="no_results">No results</string>
     <string name="empty_title">No documents yet</string>
     <string name="empty_body">Tap Scan to capture a page, or import images and PDFs to merge them.</string>
-    <string name="privacy_short">Everything stays on your phone</string>
+    <string name="privacy_short">Your files stay on your phone; the internet is used only to check for updates</string>
     <string name="merge">Merge selected</string>
     <string name="delete">Delete</string>
     <string name="rename">Rename</string>
@@ -213,6 +213,7 @@
     <string name="done">Done</string>
     <string name="crop_hint_short">Drag the corners to the page edges</string>
     <string name="format_jpg_images">JPG images</string>
+    <string name="format_txt">Text (TXT)</string>
     <string name="size_dims">%1$s × %2$s %3$s</string>
     <string name="unit_cm">cm</string>
     <string name="unit_in">in</string>
