@@ -329,6 +329,7 @@ private fun CameraContent(vm: AppViewModel, initial: Screen.Camera, onClose: () 
             // Same page still in view after a shot: say so instead of capturing it again.
             AutoCapture.State.CAPTURED -> if (recentlyAdded) status else R.string.status_next_page
             AutoCapture.State.FIRE -> R.string.status_capturing
+            AutoCapture.State.BLURRY, AutoCapture.State.MOVING -> R.string.status_hold
         }
         if (live.state == AutoCapture.State.FIRE && auto) {
             haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.Confirm)

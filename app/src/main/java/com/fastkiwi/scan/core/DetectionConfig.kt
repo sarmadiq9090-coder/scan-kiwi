@@ -47,6 +47,12 @@ data class DetectionConfig(
     val lineMinVotes: Float = 0.12f,
     val maxLines: Int = 14,
     val maxLineQuads: Int = 400,
+    /** How far (fraction of the frame) a cut page's line corner may lie outside the picture. */
+    val cutOutside: Float = 0.35f,
+    /** Cut pages: stricter side contrast, and the inside must be smoother than the surface. */
+    val cutSideContrast: Float = 0.7f,
+    val cutSmoothRatio: Float = 0.6f,
+    val cutStepOverGrain: Float = 2.5f,
     /** Accept outlines cut by the frame border, flagged [Detection.cut] (CAM-04). */
     val detectCut: Boolean = true,
     // ---------------------------------------------------------------- confidence
@@ -64,18 +70,18 @@ data class DetectionConfig(
     val maxMotionPer100ms: Float = 0.03f,
     // ---------------------------------------------------------------- quality (CAM-03/04, PRD §4.3)
     /** Contrast-normalised Laplacian variance below which the live frame is blurry (320 px). */
-    val liveBlurThreshold: Float = 0.010f,
+    val liveBlurThreshold: Float = 0.0003f,
     /** Same measure on the 960 px capture (the report). */
-    val stillBlurThreshold: Float = 0.010f,
+    val stillBlurThreshold: Float = 0.00015f,
     /** Below this page contrast (p95 - p5) the page is blank: sharpness cannot be judged. */
-    val minTextContrast: Int = 40,
+    val minTextContrast: Int = 20,
     /** A corner within this fraction of the frame border means the page is cut (CAM-04). */
     val borderMargin: Float = 0.02f,
     /** A page smaller than this share of the frame is incomplete or too far (CAM-04). */
     val minCompleteArea: Float = 0.20f,
     /** Share of clipped highlights inside the page above which glare is reported (A4). */
     val glareShare: Float = 0.015f,
-    val clipLevel: Int = 250,
+    val clipLevel: Int = 253,
     /** Mean page luminance below which the light is dim; noise sigma above which it is too. */
     val dimMean: Int = 95,
     val noisySigma: Float = 7f,

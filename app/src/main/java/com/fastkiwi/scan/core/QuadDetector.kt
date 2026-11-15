@@ -90,6 +90,7 @@ class QuadDetector(private val workSize: Int = 320, private val cfg: DetectionCo
 
         val minArea = cfg.minArea * w * h
         var best: Detection? = null
+        var cutBest: Detection? = null
         // Several passes with rising thresholds: weak texture (wood, cloth) that
         // merges with the page outline at a low threshold drops out at a higher one.
         for ((pass, factor) in cfg.passFactors.withIndex()) {
@@ -103,6 +104,7 @@ class QuadDetector(private val workSize: Int = 320, private val cfg: DetectionCo
             for (hull in hulls) {
                 val rough = bestQuadInHull(hull) ?: continue
                 candidates += refine(rough, edges, w, h)
+                if (cfg.detectCut && cutBest == null) cutBest = cutPage(hull, rough, support, small, w, h)
             }
             // 2.0 (CAM-05): quads from four strong straight lines, immune to other edges
             // (shadows, text blocks, clutter) touching the page outline.
@@ -124,7 +126,9 @@ class QuadDetector(private val workSize: Int = 320, private val cfg: DetectionCo
                 trace?.invoke("  support min=$minSide mean=$mean border=${border.toList()}")
                 if (minSide < cfg.minSideSupport || mean < cfg.minMeanSupport) continue
                 if (cfg.minSideContrast > 0f && sideContrast(quad, small, border).also { trace?.invoke("  contrast=$it") } < cfg.minSideContrast) continue
-                val cut = nBorder > 0
+                val outside = quad.points.any { it.x < -0.5f || it.y < -0.5f || it.x > w - 0.5f || it.y > h - 0.5f }
+                val cut = nBorder > 0 || outside
+                if (cut && !paperLike(quad, small, border, w, h)) continue
                 // A cut outline only matters when nothing whole was found.
                 val score = (area / (w * h)) * mean * mean * (if (cut) 0.5f else 1f)
                 val d = Detection(quad, score, minSide, mean, cut)
@@ -133,12 +137,132 @@ class QuadDetector(private val workSize: Int = 320, private val cfg: DetectionCo
             }
             if (best != null && !best.cut && best.score > 0.25f) break
         }
-        return best?.let { it.copy(quad = it.quad.scale(s, s)) }
+        // A whole page wins; otherwise a page running off the frame is reported as cut (CAM-04).
+        val result = if (best != null && !best.cut) best else cutBest ?: best
+        return result?.let { it.copy(quad = it.quad.scale(s, s)) }
+    }
+
+    /**
+     * CAM-04: a large edge hull that runs along the frame border is a page cut by the picture
+     * edge when its other sides lie on edges and the page differs from the surface there with
+     * one sign. Returns a cut detection whose quad approximates the visible part.
+     */
+    private fun cutPage(hull: List<Pt>, rough: Quad, support: ByteArray, img: GrayImage, w: Int, h: Int): Detection? {
+        val area = polygonArea(hull)
+        if (area < cfg.minArea * w * h || area > cfg.maxArea * w * h) return null
+        val tol = 3f
+        fun nearX(v: Float) = v <= tol || v >= w - 1 - tol
+        fun nearY(v: Float) = v <= tol || v >= h - 1 - tol
+        fun onBorder(a: Pt, b: Pt): Boolean =
+            (a.x <= tol && b.x <= tol) || (a.x >= w - 1 - tol && b.x >= w - 1 - tol) ||
+                (a.y <= tol && b.y <= tol) || (a.y >= h - 1 - tol && b.y >= h - 1 - tol) ||
+                ((nearX(a.x) || nearY(a.y)) && (nearX(b.x) || nearY(b.y)) && a.dist(b) < 4 * tol)
+        var borderLen = 0f
+        var freeLen = 0f
+        var hit = 0
+        var total = 0
+        var signSum = 0L
+        val diffs = ArrayList<Int>()
+        val cx = hull.sumOf { it.x.toDouble() }.toFloat() / hull.size
+        val cy = hull.sumOf { it.y.toDouble() }.toFloat() / hull.size
+        for (i in hull.indices) {
+            val a = hull[i]; val b = hull[(i + 1) % hull.size]
+            val len = a.dist(b)
+            if (len < 1e-3f) continue
+            if (onBorder(a, b)) { borderLen += len; continue }
+            freeLen += len
+            val steps = max(2, (len / 3f).toInt())
+            var nxv = -(b.y - a.y) / len; var nyv = (b.x - a.x) / len
+            if ((cx - (a.x + b.x) / 2) * nxv + (cy - (a.y + b.y) / 2) * nyv < 0) { nxv = -nxv; nyv = -nyv }
+            for (k in 1 until steps) {
+                val t = k / steps.toFloat()
+                val x = a.x + (b.x - a.x) * t; val y = a.y + (b.y - a.y) * t
+                val xi = x.roundToInt(); val yi = y.roundToInt()
+                if (xi < 0 || yi < 0 || xi >= w || yi >= h) continue
+                total++
+                var on = false
+                for (dy in -1..1) for (dx in -1..1) {
+                    val xx = xi + dx; val yy = yi + dy
+                    if (xx in 0 until w && yy in 0 until h && support[yy * w + xx].toInt() != 0) on = true
+                }
+                if (on) hit++
+                val ins = sample(img, x + 3 * nxv, y + 3 * nyv)
+                val out = sample(img, x - 3 * nxv, y - 3 * nyv)
+                if (ins >= 0 && out >= 0) { diffs += ins - out; signSum += ins - out }
+            }
+        }
+        val perimeter = borderLen + freeLen
+        trace?.invoke("  cut? border=${borderLen / perimeter} hit=$hit/$total")
+        if (borderLen < 0.12f * perimeter || borderLen > 0.6f * perimeter || total < 20) return null
+        val sup = hit.toFloat() / total
+        if (sup < 0.7f) return null
+        val sign = if (signSum >= 0) 1 else -1
+        val contrast = diffs.count { it * sign >= cfg.sideContrastLevel }.toFloat() / diffs.size.coerceAtLeast(1)
+        trace?.invoke("  cut? support=$sup contrast=$contrast")
+        if (contrast < cfg.cutSideContrast || sign < 0) return null
+        if (!paperLike(rough, img, borderSides(rough, w, h), w, h)) return null
+        return Detection(rough, (area / (w * h)) * sup * sup * 0.5f, sup, sup, cut = true)
+    }
+
+    /**
+     * Extra evidence for a cut page, which has fewer visible sides to check: the inside is
+     * brighter than the surface with the same sign all round, smoother than the surface
+     * (paper after the text-removing closing), and the frame border is not on two opposite sides.
+     */
+    private fun paperLike(q: Quad, img: GrayImage, border: BooleanArray, w: Int, h: Int): Boolean {
+        if ((border[0] && border[2]) || (border[1] && border[3])) return false
+        val p = q.points
+        val hm = Homography.squareToQuad(q) ?: return false
+        var inSum = 0f
+        var inN = 0
+        var inLevel = 0L
+        for (j in 0 until 10) for (i in 0 until 10) {
+            val pt = hm.map(0.15f + 0.07f * i, 0.15f + 0.07f * j)
+            val x = pt.x.roundToInt(); val y = pt.y.roundToInt()
+            if (x < 1 || y < 1 || x >= w - 1 || y >= h - 1) continue
+            inSum += roughness(img, x, y); inLevel += img[x, y]; inN++
+        }
+        if (inN < 10) return false
+        var outSum = 0f
+        var outN = 0
+        var outLevel = 0L
+        val cx = p.sumOf { it.x.toDouble() }.toFloat() / 4f
+        val cy = p.sumOf { it.y.toDouble() }.toFloat() / 4f
+        for (s in 0 until 4) {
+            if (border[s]) continue
+            val a = p[s]; val b = p[(s + 1) % 4]
+            val len = a.dist(b).coerceAtLeast(1e-3f)
+            var nx = -(b.y - a.y) / len; var ny = (b.x - a.x) / len
+            if ((cx - (a.x + b.x) / 2) * nx + (cy - (a.y + b.y) / 2) * ny < 0) { nx = -nx; ny = -ny }
+            for (k in 1..12) {
+                val t = k / 13f
+                val x = (a.x + (b.x - a.x) * t - 6 * nx).roundToInt()
+                val y = (a.y + (b.y - a.y) * t - 6 * ny).roundToInt()
+                if (x < 1 || y < 1 || x >= w - 1 || y >= h - 1) continue
+                outSum += roughness(img, x, y); outLevel += img[x, y]; outN++
+            }
+        }
+        if (outN < 6) return false
+        val inR = inSum / inN
+        val outR = outSum / outN
+        val step = (inLevel / inN - outLevel / outN).toFloat()
+        trace?.invoke("  paperLike inR=$inR outR=$outR step=$step")
+        // Smoother than the surface, or (white on white) a step far above the paper's own grain.
+        return step > cfg.sideContrastLevel && (inR <= cfg.cutSmoothRatio * outR || step >= cfg.cutStepOverGrain * inR)
+    }
+
+    private fun roughness(img: GrayImage, x: Int, y: Int): Float =
+        (abs(img[x + 1, y] - img[x, y]) + abs(img[x, y + 1] - img[x, y])).toFloat()
+
+    private fun polygonArea(p: List<Pt>): Float {
+        var s = 0f
+        for (i in p.indices) { val a = p[i]; val b = p[(i + 1) % p.size]; s += a.x * b.y - b.x * a.y }
+        return abs(s) / 2f
     }
 
     // ---------------------------------------------------------------- 2.0 line candidates (CAM-05)
 
-    private class Line(val theta: Float, val rho: Float, val votes: Int) {
+    private class Line(val theta: Float, val rho: Float, val votes: Int, val border: Boolean = false) {
         val c = kotlin.math.cos(theta)
         val s = kotlin.math.sin(theta)
     }
@@ -187,7 +311,14 @@ class QuadDetector(private val workSize: Int = 320, private val cfg: DetectionCo
             }
             if (isMax) peaks += Line((t * Math.PI / nTheta).toFloat(), (r - diag).toFloat(), v)
         }
-        val lines = peaks.sortedByDescending { it.votes }.take(cfg.maxLines)
+        val lines = peaks.sortedByDescending { it.votes }.take(cfg.maxLines).toMutableList()
+        // CAM-04: the frame border stands in for a page side that is outside the picture.
+        if (cfg.detectCut) {
+            lines += Line(0f, 0f, 0, true); lines += Line(0f, w - 1f, 0, true)
+            lines += Line((Math.PI / 2).toFloat(), 0f, 0, true); lines += Line((Math.PI / 2).toFloat(), h - 1f, 0, true)
+        }
+        val ox = if (cfg.detectCut) cfg.cutOutside * w else 2f
+        val oy = if (cfg.detectCut) cfg.cutOutside * h else 2f
         // Opposite sides: nearly parallel lines that do not cross inside the frame.
         val pairs = ArrayList<IntArray>()
         val maxPar = kotlin.math.sin(Math.toRadians(30.0)).toFloat()
@@ -218,8 +349,9 @@ class QuadDetector(private val workSize: Int = 320, private val cfg: DetectionCo
             val c3 = intersect(a2, b2) ?: continue
             val c4 = intersect(b2, a1) ?: continue
             val pts = listOf(c1, c2, c3, c4)
-            if (pts.any { it.x < -2f || it.y < -2f || it.x > w + 1f || it.y > h + 1f }) continue
-            out += Quad.order(pts.map { Pt(it.x.coerceIn(0f, w - 1f), it.y.coerceIn(0f, h - 1f)) })
+            if (pts.any { it.x < -ox || it.y < -oy || it.x > w - 1 + ox || it.y > h - 1 + oy }) continue
+            fun near(p: Pt) = p.x >= -2f && p.y >= -2f && p.x <= w + 1f && p.y <= h + 1f
+            out += Quad.order(pts.map { if (near(it)) Pt(it.x.coerceIn(0f, w - 1f), it.y.coerceIn(0f, h - 1f)) else it })
             if (out.size >= cfg.maxLineQuads) return out
         }
         return out
@@ -318,6 +450,7 @@ class QuadDetector(private val workSize: Int = 320, private val cfg: DetectionCo
         val cy = p.sumOf { it.y.toDouble() }.toFloat() / 4f
         val n = 24
         val diffs = Array(4) { IntArray(n) }
+        val valid = Array(4) { BooleanArray(n) }
         var total = 0L
         for (s in 0 until 4) {
             if (border[s]) continue
@@ -332,8 +465,10 @@ class QuadDetector(private val workSize: Int = 320, private val cfg: DetectionCo
                 val x = a.x + dx * t; val y = a.y + dy * t
                 val inside = sample(img, x + 3 * nx, y + 3 * ny)
                 val outside = sample(img, x - 3 * nx, y - 3 * ny)
-                val d = if (inside < 0 || outside < 0) 0 else inside - outside
+                val ok = inside >= 0 && outside >= 0
+                val d = if (ok) inside - outside else 0
                 diffs[s][i] = d
+                valid[s][i] = ok
                 total += d
             }
         }
@@ -341,8 +476,10 @@ class QuadDetector(private val workSize: Int = 320, private val cfg: DetectionCo
         var worst = 1f
         for (s in 0 until 4) {
             if (border[s]) continue
-            val ok = diffs[s].count { it * sign >= cfg.sideContrastLevel }
-            worst = min(worst, ok.toFloat() / n)
+            val nValid = if (cfg.detectCut) valid[s].count { it } else n
+            if (nValid < 6) continue
+            val ok = diffs[s].indices.count { (valid[s][it] || !cfg.detectCut) && diffs[s][it] * sign >= cfg.sideContrastLevel }
+            worst = min(worst, ok.toFloat() / nValid)
         }
         return worst
     }
@@ -401,7 +538,9 @@ class QuadDetector(private val workSize: Int = 320, private val cfg: DetectionCo
             if (abs(det) < 0.2f) continue // nearly parallel
             val t = ((l2[0] - l1[0]) * l2[3] - (l2[1] - l1[1]) * l2[2]) / det
             val ip = Pt(l1[0] + t * l1[2], l1[1] + t * l1[3])
-            if (ip.dist(p[c]) < 0.05f * diag) out[c] = Pt(ip.x.coerceIn(0f, w - 1f), ip.y.coerceIn(0f, h - 1f))
+            val wasInside = p[c].x in 0f..(w - 1f) && p[c].y in 0f..(h - 1f)
+            // A corner outside the frame (a cut page's line quad) stays outside.
+            if (ip.dist(p[c]) < 0.05f * diag) out[c] = if (wasInside) Pt(ip.x.coerceIn(0f, w - 1f), ip.y.coerceIn(0f, h - 1f)) else ip
         }
         return Quad(out[0], out[1], out[2], out[3])
     }
@@ -650,7 +789,11 @@ class QuadDetector(private val workSize: Int = 320, private val cfg: DetectionCo
                 val t = i / (n - 1f)
                 val x = (a.x + (b.x - a.x) * t).roundToInt()
                 val y = (a.y + (b.y - a.y) * t).roundToInt()
-                if (x < 0 || y < 0 || x >= w || y >= h) { total++; continue }
+                if (x < 0 || y < 0 || x >= w || y >= h) {
+                    // 2.0: a page running off the frame cannot be checked there (CAM-04).
+                    if (!cfg.detectCut) total++
+                    continue
+                }
                 total++
                 var found = false
                 loop@ for (dy in -1..1) for (dx in -1..1) {
@@ -660,7 +803,7 @@ class QuadDetector(private val workSize: Int = 320, private val cfg: DetectionCo
                 }
                 if (found) hit++
             }
-            res[s] = if (total == 0) 0f else hit.toFloat() / total
+            res[s] = if (total == 0) (if (cfg.detectCut) 1f else 0f) else if (cfg.detectCut && total < 8) 1f else hit.toFloat() / total
         }
         return res
     }

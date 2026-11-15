@@ -86,16 +86,42 @@ object SceneGenerator {
         h: Int = 320,
         areaRange: ClosedFloatingPointRange<Float> = 0.30f..0.55f,
         margin: Float = 0.06f,
-        allowCut: Boolean = false,
-        cutShift: Pt = Pt(0f, 0f),
+        /** Push the page over a frame edge: 0 left, 1 top, 2 right, 3 bottom, 4..7 a corner (-1 = no). */
+        cutSide: Int = -1,
+        /** Share of the page's extent pushed outside the frame. */
+        cutFrac: Float = 0f,
+        /** Sensor noise sigma; null = the light level's own noise (0 to add noise later, e.g. after a blur). */
+        noise: Float? = null,
     ): Scene {
         val rnd = java.util.Random(seed.toLong())
-        val quad = placePage(rnd, tiltDeg.toFloat(), w, h, areaRange, margin, cutShift)
+        var quad = placePage(rnd, tiltDeg.toFloat(), w, h, areaRange, margin)
+        if (cutSide >= 0) quad = cut(quad, w, h, cutSide, cutFrac)
         val paper = paperFn(rnd)
         val bgf = backgroundFn(bg, rnd, w, h)
         val lf = lightFn(light, rnd, w, h)
         val label = "page-$bg-$light-tilt$tiltDeg-s$seed"
-        return render(label, w, h, quad, rnd, bgf, paper, lf, noiseOf(light), if (allowCut) 0f else 1f)
+        return render(label, w, h, quad, rnd, bgf, paper, lf, noise ?: noiseOf(light), 0f)
+    }
+
+    /** Shifts a placed page so [frac] of its extent lies outside the given side(s) of the frame. */
+    fun cut(q: Quad, w: Int, h: Int, side: Int, frac: Float): Quad {
+        val minX = q.points.minOf { it.x }; val maxX = q.points.maxOf { it.x }
+        val minY = q.points.minOf { it.y }; val maxY = q.points.maxOf { it.y }
+        val dxL = -minX - frac * (maxX - minX)
+        val dxR = (w - maxX) + frac * (maxX - minX)
+        val dyT = -minY - frac * (maxY - minY)
+        val dyB = (h - maxY) + frac * (maxY - minY)
+        val (dx, dy) = when (side) {
+            0 -> dxL to 0f
+            1 -> 0f to dyT
+            2 -> dxR to 0f
+            3 -> 0f to dyB
+            4 -> dxL to dyT
+            5 -> dxR to dyT
+            6 -> dxR to dyB
+            else -> dxL to dyB
+        }
+        return q.map { Pt(it.x + dx, it.y + dy) }
     }
 
     // ------------------------------------------------------------------ geometry
@@ -108,7 +134,6 @@ object SceneGenerator {
         h: Int,
         areaRange: ClosedFloatingPointRange<Float>,
         margin: Float,
-        cutShift: Pt = Pt(0f, 0f),
     ): Quad {
         val roll = Math.toRadians((rnd.nextDouble() * 24 - 12)).toFloat()
         val tilt = Math.toRadians(tiltDeg.toDouble()).toFloat()
@@ -137,8 +162,8 @@ object SceneGenerator {
         val mx = margin * w; val my = margin * h
         val freeX = max(0f, (w - 2 * mx) - (maxX - minX))
         val freeY = max(0f, (h - 2 * my) - (maxY - minY))
-        val ox = mx + rnd.nextFloat() * freeX - minX + cutShift.x * w
-        val oy = my + rnd.nextFloat() * freeY - minY + cutShift.y * h
+        val ox = mx + rnd.nextFloat() * freeX - minX
+        val oy = my + rnd.nextFloat() * freeY - minY
         return Quad.order(scaled.map { Pt(it.x + ox, it.y + oy) })
     }
 
@@ -336,6 +361,38 @@ object SceneGenerator {
     }
 
     // ------------------------------------------------------------------ helpers for other sets
+
+    /** Adds Gaussian sensor noise (same value on R, G and B, like luminance noise). */
+    fun addNoise(px: IntArray, sigma: Float, seed: Long): IntArray {
+        if (sigma <= 0f) return px.copyOf()
+        val rnd = java.util.Random(seed)
+        return IntArray(px.size) {
+            val c = px[it]
+            val n = (rnd.nextGaussian() * sigma).toFloat()
+            rgb((((c shr 16) and 0xFF) + n).roundToInt(), (((c shr 8) and 0xFF) + n).roundToInt(), ((c and 0xFF) + n).roundToInt())
+        }
+    }
+
+    /** Separable Gaussian blur of a grey plane (sigma in pixels). */
+    fun blurGray(src: ByteArray, w: Int, h: Int, sigma: Float): ByteArray {
+        if (sigma <= 0.05f) return src.copyOf()
+        val r = max(1, (sigma * 3).roundToInt())
+        val k = FloatArray(2 * r + 1) { exp(-((it - r) * (it - r)) / (2 * sigma * sigma)) }
+        val s = k.sum(); for (i in k.indices) k[i] /= s
+        val tmp = FloatArray(w * h)
+        for (y in 0 until h) for (x in 0 until w) {
+            var acc = 0f
+            for (i in -r..r) acc += k[i + r] * (src[y * w + (x + i).coerceIn(0, w - 1)].toInt() and 0xFF)
+            tmp[y * w + x] = acc
+        }
+        val out = ByteArray(w * h)
+        for (y in 0 until h) for (x in 0 until w) {
+            var acc = 0f
+            for (i in -r..r) acc += k[i + r] * tmp[(y + i).coerceIn(0, h - 1) * w + x]
+            out[y * w + x] = acc.roundToInt().coerceIn(0, 255).toByte()
+        }
+        return out
+    }
 
     /** Separable Gaussian blur of packed ARGB (sigma in pixels; 0 = unchanged). */
     fun blur(px: IntArray, w: Int, h: Int, sigma: Float): IntArray {
