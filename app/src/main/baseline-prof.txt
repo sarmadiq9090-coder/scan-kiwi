@@ -1,0 +1,94 @@
+# Scan Kiwi Baseline Profile (2.0-perf, ROADMAP 1.7.0 item 3). AGP compiles this file into the
+# release APK (assets/dexopt/baseline.prof); androidx.profileinstaller (already in the APK through
+# Compose) installs it on sideloaded installs, so ART compiles these methods ahead of time.
+# The Compose, Activity and Lifecycle libraries ship their own profiles; this file covers the app.
+# Keep it current: BaselineProfileTest fails when a 2.0 screen has no rule or a rule names a class
+# that no longer exists. Flags: H hot, S startup, P post-startup, then the L... class descriptor. Hand-written (no macrobenchmark
+# device here); regenerate with a Baseline Profile generator on a phone when one is available.
+
+# ---- Cold start: activity, view model, stores, theme, Home (first frame)
+HSPLcom/fastkiwi/scan/MainActivity;->**(**)**
+HSPLcom/fastkiwi/scan/MainActivityKt**;->**(**)**
+HSPLcom/fastkiwi/scan/ui/AppViewModel**;->**(**)**
+HSPLcom/fastkiwi/scan/ui/Settings**;->**(**)**
+HSPLcom/fastkiwi/scan/ui/Screen**;->**(**)**
+HSPLcom/fastkiwi/scan/ui/EditHistory**;->**(**)**
+HSPLcom/fastkiwi/scan/data/DocumentStore**;->**(**)**
+HSPLcom/fastkiwi/scan/data/FolderStore**;->**(**)**
+HSPLcom/fastkiwi/scan/data/PageQuality**;->**(**)**
+HSPLcom/fastkiwi/scan/data/ScanDocument**;->**(**)**
+HSPLcom/fastkiwi/scan/data/ScanPage**;->**(**)**
+HSPLcom/fastkiwi/scan/data/AtomicWriteKt**;->**(**)**
+HSPLcom/fastkiwi/scan/data/PageText**;->**(**)**
+HSPLcom/fastkiwi/scan/search/SearchIndex**;->**(**)**
+HSPLcom/fastkiwi/scan/search/ArabicNormalizer**;->**(**)**
+HSPLcom/fastkiwi/scan/perf/MemoryBudget**;->**(**)**
+HSPLcom/fastkiwi/scan/perf/DebugStrictMode**;->**(**)**
+HSPLcom/fastkiwi/scan/imaging/BitmapIO**;->**(**)**
+HSPLcom/fastkiwi/scan/export/Exporter**;->**(**)**
+HSPLcom/fastkiwi/scan/ocr/OcrService**;->**(**)**
+HSPLcom/fastkiwi/scan/ocr/BackgroundOcr**;->**(**)**
+HSPLcom/fastkiwi/scan/ocr/OcrDiagnostics**;->**(**)**
+HSPLcom/fastkiwi/scan/ocr/DefaultOcrEngineFactory**;->**(**)**
+HSPLcom/fastkiwi/scan/ui/theme/**;->**(**)**
+HSPLcom/fastkiwi/scan/ui/HomeScreenKt**;->**(**)**
+HSPLcom/fastkiwi/scan/ui/KiwiComponentsKt**;->**(**)**
+HSPLcom/fastkiwi/scan/ui/KiwiIcons**;->**(**)**
+HSPLcom/fastkiwi/scan/ui/DocsIcons**;->**(**)**
+HSPLcom/fastkiwi/scan/ui/ComponentsKt**;->**(**)**
+HSPLcom/fastkiwi/scan/ui/ImageCache**;->**(**)**
+HSPLcom/fastkiwi/scan/ui/LocalFormat**;->**(**)**
+Lcom/fastkiwi/scan/MainActivity;
+Lcom/fastkiwi/scan/ui/AppViewModel;
+Lcom/fastkiwi/scan/ui/HomeScreenKt;
+Lcom/fastkiwi/scan/data/DocumentStore;
+Lcom/fastkiwi/scan/search/SearchIndex;
+
+# ---- 2.0 screens (post-startup): camera, quality, book split, editor, page, crop, PDF tools,
+#      search, text, settings, signature, feedback, updates
+HSPLcom/fastkiwi/scan/ui/CameraScreenKt**;->**(**)**
+HSPLcom/fastkiwi/scan/ui/QualityUiKt**;->**(**)**
+HSPLcom/fastkiwi/scan/ui/BookSplitScreenKt**;->**(**)**
+HSPLcom/fastkiwi/scan/ui/EditorScreenKt**;->**(**)**
+HSPLcom/fastkiwi/scan/ui/PageScreenKt**;->**(**)**
+HSPLcom/fastkiwi/scan/ui/CropScreenKt**;->**(**)**
+HSPLcom/fastkiwi/scan/ui/PdfToolsScreenKt**;->**(**)**
+HSPLcom/fastkiwi/scan/ui/SearchScreenKt**;->**(**)**
+HSPLcom/fastkiwi/scan/ui/TextScreenKt**;->**(**)**
+HSPLcom/fastkiwi/scan/ui/SettingsScreenKt**;->**(**)**
+HSPLcom/fastkiwi/scan/ui/SignatureScreenKt**;->**(**)**
+HSPLcom/fastkiwi/scan/ui/FeedbackScreenKt**;->**(**)**
+HSPLcom/fastkiwi/scan/ui/UpdatesSectionKt**;->**(**)**
+
+# ---- Capture and edit path: detection, auto capture, quality, rendering, filters
+HSPLcom/fastkiwi/scan/core/QuadDetector**;->**(**)**
+HSPLcom/fastkiwi/scan/core/AutoCapture**;->**(**)**
+HSPLcom/fastkiwi/scan/core/QualityMetrics**;->**(**)**
+HSPLcom/fastkiwi/scan/core/ImageFilters**;->**(**)**
+HSPLcom/fastkiwi/scan/core/Homography**;->**(**)**
+HSPLcom/fastkiwi/scan/core/Quad**;->**(**)**
+HSPLcom/fastkiwi/scan/core/CropGeometry**;->**(**)**
+HSPLcom/fastkiwi/scan/core/BookSplit**;->**(**)**
+HSPLcom/fastkiwi/scan/core/GlareFusion**;->**(**)**
+HSPLcom/fastkiwi/scan/core/Pt**;->**(**)**
+HSPLcom/fastkiwi/scan/imaging/PageRenderer**;->**(**)**
+HSPLcom/fastkiwi/scan/imaging/CaptureExtrasKt**;->**(**)**
+HSPLcom/fastkiwi/scan/imaging/CaptureQuality**;->**(**)**
+HSPLcom/fastkiwi/scan/perf/PixelStrips**;->**(**)**
+
+# ---- Export and PDF
+HSPLcom/fastkiwi/scan/core/PdfWriter**;->**(**)**
+HSPLcom/fastkiwi/scan/core/PdfCrypt**;->**(**)**
+HSPLcom/fastkiwi/scan/pdf/SafeOutput**;->**(**)**
+HSPLcom/fastkiwi/scan/pdf/PdfValidator**;->**(**)**
+HSPLcom/fastkiwi/scan/pdf/PageDecor**;->**(**)**
+HSPLcom/fastkiwi/scan/pdf/TargetSize**;->**(**)**
+HSPLcom/fastkiwi/scan/pdf/ExportPreview**;->**(**)**
+HSPLcom/fastkiwi/scan/export/TextExporter**;->**(**)**
+
+# ---- OCR (Kotlin side; the native engines are not dex)
+HSPLcom/fastkiwi/scan/ocr/OcrInputsKt**;->**(**)**
+HSPLcom/fastkiwi/scan/ocr/TesseractOcrEngine**;->**(**)**
+HSPLcom/fastkiwi/scan/ocr/TesseractSession**;->**(**)**
+HSPLcom/fastkiwi/scan/ocr/Illumination**;->**(**)**
+HSPLcom/fastkiwi/scan/ocr/fused/**;->**(**)**

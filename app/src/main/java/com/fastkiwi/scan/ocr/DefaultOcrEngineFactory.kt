@@ -10,7 +10,7 @@ import com.fastkiwi.scan.ocr.fused.MnnNative
 /** A low-RAM device: the system says so, or it has under 3 GB (roadmap 1.7 definition). */
 data class DeviceProfile(val lowRam: Boolean) {
     companion object {
-        const val LOW_RAM_BYTES = 3L * 1024 * 1024 * 1024
+        const val LOW_RAM_BYTES = com.fastkiwi.scan.perf.MemoryBudget.LOW_RAM_TOTAL_BYTES // 2.0-perf: one place
 
         fun of(ctx: Context): DeviceProfile {
             val am = ctx.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager ?: return DeviceProfile(false)

@@ -36,6 +36,65 @@ object BitmapIO {
         MAX_SOURCE_SIDE = if (small) 2400 else 3200
     }
 
+    // 2.0-perf: the source size follows the one budget (MemoryBudget: low-memory mode or a small heap).
+    fun configureForBudget() {
+        MAX_SOURCE_SIDE = com.fastkiwi.scan.perf.MemoryBudget.sourceSide()
+    }
+
+    /**
+     * 2.0-perf: one mutable bitmap that consecutive decodes of the same size reuse (`inBitmap`), so an
+     * export of n pages allocates its page bitmap once instead of n times (on Android 7 page pixels live
+     * on the Java heap, where each new 30 MB bitmap forces a GC). Not thread-safe: one per export.
+     */
+    class Pool : AutoCloseable {
+        private var spare: Bitmap? = null
+
+        internal fun take(minBytes: Int): Bitmap? {
+            val b = spare ?: return null
+            return if (!b.isRecycled && b.isMutable && b.allocationByteCount >= minBytes) { spare = null; b } else null
+        }
+
+        /** Hands [bmp] back for the next decode (keeps the larger one), or recycles it. */
+        fun give(bmp: Bitmap) {
+            if (bmp.isRecycled) return
+            val cur = spare
+            if (!bmp.isMutable || bmp.config != Bitmap.Config.ARGB_8888) { bmp.recycle(); return }
+            if (cur == null) { spare = bmp; return }
+            if (cur === bmp) return
+            if (bmp.allocationByteCount > cur.allocationByteCount) { cur.recycle(); spare = bmp } else bmp.recycle()
+        }
+
+        override fun close() { spare?.recycle(); spare = null }
+    }
+
+    /**
+     * 2.0-perf: as [decodeFile], decoding into [pool]'s spare bitmap when it is large enough. The
+     * result is mutable; give it back to [pool] (not recycle) when done. A sampled decode still larger
+     * than [maxSide] is scaled down as before (that scaled bitmap is new, the decoded one goes back).
+     */
+    fun decodeFile(file: File, maxSide: Int, pool: Pool): Bitmap? {
+        val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(file.absolutePath, opts)
+        if (opts.outWidth <= 0) return null
+        val s = sampleSize(opts.outWidth, opts.outHeight, maxSide)
+        val need = ((opts.outWidth + s - 1) / s) * ((opts.outHeight + s - 1) / s) * 4
+        fun options(reuse: Bitmap?) = BitmapFactory.Options().apply {
+            inSampleSize = s
+            inPreferredConfig = Bitmap.Config.ARGB_8888
+            inMutable = true
+            inBitmap = reuse
+        }
+        val reuse = pool.take(need)
+        val bmp = (if (reuse != null) runCatching { BitmapFactory.decodeFile(file.absolutePath, options(reuse)) }.getOrNull() else null)
+            ?: run { reuse?.let { pool.give(it) }; BitmapFactory.decodeFile(file.absolutePath, options(null)) }
+            ?: return null
+        if (max(bmp.width, bmp.height) <= maxSide) return bmp
+        val k = maxSide.toFloat() / max(bmp.width, bmp.height)
+        val out = Bitmap.createScaledBitmap(bmp, max(1, (bmp.width * k).toInt()), max(1, (bmp.height * k).toInt()), true)
+        pool.give(bmp)
+        return out
+    }
+
     fun decodeFile(file: File, maxSide: Int = MAX_SOURCE_SIDE): Bitmap? {
         val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeFile(file.absolutePath, opts)
@@ -88,7 +147,7 @@ object BitmapIO {
     }
 
     /** Largest bitmap a decode may allocate before scaling: 13 MP (a 12.5 MP sensor still decodes whole). */
-    const val MAX_DECODE_PIXELS = 13_000_000L
+    const val MAX_DECODE_PIXELS = com.fastkiwi.scan.perf.MemoryBudget.MAX_DECODE_PIXELS // 2.0-perf: one place
 
     fun fit(bmp: Bitmap, maxSide: Int): Bitmap {
         val m = max(bmp.width, bmp.height)

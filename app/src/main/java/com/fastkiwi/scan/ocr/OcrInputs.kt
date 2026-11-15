@@ -3,7 +3,7 @@
 package com.fastkiwi.scan.ocr
 
 import android.graphics.Bitmap
-import com.fastkiwi.scan.core.ImageFilters
+import com.fastkiwi.scan.perf.PixelStrips
 import kotlin.math.max
 
 /**
@@ -14,10 +14,10 @@ fun OcrInput.Companion.fromBitmap(page: Bitmap, maxSide: Int = OcrOptions.DEFAUL
     val k = maxSide.toFloat() / max(page.width, page.height)
     val bmp = if (k < 1f) Bitmap.createScaledBitmap(page, (page.width * k).toInt(), (page.height * k).toInt(), true) else page
     try {
-        val px = IntArray(bmp.width * bmp.height)
-        bmp.getPixels(px, 0, bmp.width, 0, 0, bmp.width, bmp.height)
-        val luma = ImageFilters.toGray(px, bmp.width, bmp.height)
-        return OcrInput(luma.data, bmp.width, bmp.height, page.width, page.height)
+        // 2.0-perf: the gray plane is read in strips of rows, without a full ARGB IntArray copy
+        // (4 bytes per pixel); the bytes equal ImageFilters.toGray on a full getPixels copy.
+        val luma = PixelStrips.gray(bmp)
+        return OcrInput(luma, bmp.width, bmp.height, page.width, page.height)
     } finally {
         if (bmp !== page) bmp.recycle()
     }

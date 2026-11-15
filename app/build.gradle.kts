@@ -122,7 +122,14 @@ android {
     testOptions {
         unitTests.isReturnDefaultValues = true
         unitTests.isIncludeAndroidResources = true
-        unitTests.all { it.maxHeapSize = "3g" }
+        unitTests.all {
+            it.maxHeapSize = "3g"
+            // 2.0-perf: the heap tests read native memory as process memory minus the JVM heap; a heap
+            // that never shrinks after GC keeps G1's delayed uncommit out of that number.
+            it.jvmArgs("-XX:MaxHeapFreeRatio=100")
+            // 2.0-perf: the 500-page stress test runs only in perfStressTest (512 MB heap cap).
+            it.filter.excludeTestsMatching("com.fastkiwi.scan.perf.StressHeapCapTest")
+        }
     }
 
     lint {
@@ -133,6 +140,32 @@ android {
 
 kotlin {
     compilerOptions { jvmTarget.set(JvmTarget.JVM_17) }
+}
+
+// 2.0-perf (ROADMAP 1.7.0): "no OutOfMemoryError in a 500-page synthetic stress test on the JVM with a
+// 512 MB heap cap". The stress class runs in its own test JVM capped at 512 MB, after every debug
+// unit-test run; the main unit-test JVM (3 GB) excludes it.
+val perfStressTest = tasks.register<Test>("perfStressTest") {
+    description = "500-page export stress test with a 512 MB heap cap (2.0-perf)."
+    group = "verification"
+    val unit = tasks.named<Test>("testDebugUnitTest").get()
+    testClassesDirs = unit.testClassesDirs
+    classpath = unit.classpath
+    systemProperties(unit.systemProperties)
+    jvmArgs(unit.jvmArgs ?: emptyList<String>())
+    jvmArgumentProviders.addAll(unit.jvmArgumentProviders)
+    environment(unit.environment)
+    workingDir = unit.workingDir
+    maxHeapSize = "512m"
+    filter.includeTestsMatching("com.fastkiwi.scan.perf.StressHeapCapTest")
+    reports.html.outputLocation.set(layout.buildDirectory.dir("reports/tests/perfStressTest"))
+    reports.junitXml.outputLocation.set(layout.buildDirectory.dir("test-results/perfStressTest"))
+}
+// A run filtered with --tests (one class while working) skips it; run :app:perfStressTest directly then.
+val filteredRun = gradle.startParameter.taskRequests.any { r -> r.args.any { it.startsWith("--tests") } }
+perfStressTest.configure { onlyIf { !filteredRun || gradle.startParameter.taskNames.any { it.endsWith("perfStressTest") } } }
+afterEvaluate {
+    tasks.named("testDebugUnitTest") { finalizedBy(perfStressTest) }
 }
 
 dependencies {
