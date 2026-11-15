@@ -87,7 +87,7 @@ export PATH="/e/fast kiwi pro neq/kiwi-scan/.tools/jdk-21.0.13+9/bin:/e/fast kiw
 - REUSE: `.tools/reuse-venv/Scripts/reuse.exe lint`.
 - Verify signature/permissions: `apksigner verify --print-certs -v`, `aapt2 dump permissions` (build-tools under `.tools/android-sdk/build-tools/*`). Cert SHA-256 must be `26e5ed00…2dcce6`.
 - Provenance: rewrite `dist/*.intoto.jsonl` (subject sha256, `gitCommit` = final HEAD, finishedOn); `sha256sum -c SHA256SUMS.txt`.
-- New Maven artifacts: checksum checker `python verify_new_entries.py OLD.xml NEW.xml GRADLE_USER_HOME` (copy in the lead's scratchpad; re-create if lost: compares each new verification-metadata sha256 with the repository's published .sha256/.sha1).
+- New Maven artifacts: checksum checker `python C:BahthTestscan-kiwi-design	oolserify_new_entries.py OLD.xml NEW.xml GRADLE_USER_HOME` (compares each new verification-metadata sha256 with the repository's published .sha256/.sha1).
 - UI tests rewrite `screenshots/*.png` (date text): `git checkout -- screenshots` before committing.
 
 ## 6. Cost rules after the reset (manager)
