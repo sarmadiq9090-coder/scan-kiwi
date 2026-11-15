@@ -259,6 +259,20 @@ tasks.register("releaseSbom") {
             "licenses" to listOf(mapOf("license" to mapOf("id" to "Apache-2.0"))),
             "externalReferences" to listOf(mapOf("type" to "distribution", "url" to "https://github.com/google/material-design-icons")),
         )
+        // 2.0: data files bundled inside the PdfBox-Android AAR (its POM only says Apache-2.0).
+        // APAFML accepted by the lead (2.0, permissive, SPDX-listed; Fedora and Debian accept it).
+        for ((name, lic) in listOf(
+            "Adobe Core 14 AFM font metrics (inside pdfbox-android)" to "APAFML",
+            "Adobe Glyph List and ITC Zapf Dingbats glyph list (inside pdfbox-android)" to "BSD-3-Clause",
+            "Unicode BidiMirroring.txt (inside pdfbox-android)" to "Unicode-DFS-2015",
+            "Liberation Sans Regular 2.1.5 (inside pdfbox-android)" to "OFL-1.1",
+        )) {
+            components += mapOf(
+                "type" to "data", "bom-ref" to "pdfbox-android-data:" + name.substringBefore(" ("), "name" to name,
+                "licenses" to listOf(mapOf("license" to mapOf("id" to lic))),
+                "externalReferences" to listOf(mapOf("type" to "distribution", "url" to "https://github.com/TomRoush/PdfBox-Android")),
+            )
+        }
         // Fix licence metadata the POMs get wrong or leave out.
         @Suppress("UNCHECKED_CAST")
         for (c in components.filterIsInstance<MutableMap<String, Any?>>()) {
