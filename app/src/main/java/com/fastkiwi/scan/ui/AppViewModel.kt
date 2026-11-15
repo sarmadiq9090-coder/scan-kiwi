@@ -27,6 +27,7 @@ import com.fastkiwi.scan.imaging.BitmapIO
 import com.fastkiwi.scan.imaging.IdCardComposer
 import com.fastkiwi.scan.imaging.PageRenderer
 import com.fastkiwi.scan.imaging.PdfImporter
+import com.fastkiwi.scan.ocr.toOcrLangs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -79,7 +80,18 @@ sealed interface ExportResult {
 class AppViewModel(app: Application) : AndroidViewModel(app) {
     val store = DocumentStore(app.filesDir)
     val settings = Settings(app)
-    private val exporter = Exporter(app, store)
+    // 2.0-ocr: one OCR service (Accurate/Fast engines) shared by exports and the background reader.
+    val ocrDiagnostics = com.fastkiwi.scan.ocr.OcrDiagnostics(app)
+    private val ocrService = com.fastkiwi.scan.ocr.OcrService(
+        com.fastkiwi.scan.ocr.DefaultOcrEngineFactory(app), viewModelScope,
+        onPage = ocrDiagnostics::record, heapProbe = { android.os.Debug.getNativeHeapAllocatedSize() },
+    )
+    private val exporter = Exporter(app, store, ocrService) { settings.ocrMode }
+    private val ocrReader = com.fastkiwi.scan.ocr.BackgroundOcr(store, ocrService, viewModelScope, options = {
+        if (!settings.ocrAfterCapture) null
+        else com.fastkiwi.scan.ocr.OcrOptions(settings.ocrLanguage.toOcrLangs(), settings.ocrMode) to settings.ocrLanguage
+    }) { refresh() }
+    // 2.0-ocr end
 
     val backStack = mutableStateListOf<Screen>(Screen.Home)
     val screen: Screen get() = backStack.last()
@@ -267,6 +279,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val list = _docs.value.filter { it.doc.id != saved.id }.toMutableList()
         list.add(0, DocEntry(saved, store.documentText(saved)))
         _docs.value = list
+        ocrReader.enqueue(saved.id) // 2.0-ocr: read new or edited pages in the background
         return saved
     }
 
@@ -674,6 +687,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun suggestedFileName(docId: String): String = exporter.safeName(doc(docId)?.name ?: "scan") + ".pdf"
 
     override fun onCleared() {
+        ocrService.close() // 2.0-ocr: release native OCR memory
         cancelIdCard()
         super.onCleared()
     }

@@ -1,4 +1,28 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- 2.0 strings: OCR engines, Accurate/Fast, diagnostics. Arabic (default). Keep keys identical in values/ and values-en/. -->
 <resources>
+    <!-- Moved here from strings.xml (2.0-ocr): neutral note, no percentage in the UI (roadmap §0 rule 8). -->
+    <string name="ocr_quality_note">يُقرأ النص العربي والإنجليزي داخل الهاتف دون إنترنت، وقد تحتاج بعض الكلمات تصحيحًا. نتائج قياس الدقة وطريقته منشورة في ملف docs/ocr-benchmark.md في مستودع التطبيق.</string>
+    <string name="ocr_settings_group">قراءة النص (OCR)</string>
+    <string name="ocr_mode_title">طريقة القراءة</string>
+    <string name="ocr_mode_accurate">دقيق</string>
+    <string name="ocr_mode_fast">سريع</string>
+    <string name="ocr_mode_accurate_hint">أدق للعربية والجداول والأرقام، وأبطأ قليلًا</string>
+    <string name="ocr_mode_fast_hint">أسرع، بمحرك القراءة السابق (Tesseract)</string>
+    <string name="ocr_after_capture">قراءة النص بعد التصوير</string>
+    <string name="ocr_after_capture_hint">يقرأ النص في الخلفية، فلا ينتظر التصدير ويصبح البحث ممكنًا</string>
+    <string name="ocr_diag_row">تشخيص قراءة النص</string>
+    <string name="ocr_diag_none">لم تُقرأ أي صفحة بعد</string>
+    <string name="ocr_diag_summary">آخر صفحة: %1$s ث · ذروة الذاكرة: %2$s م.ب</string>
+    <string name="ocr_diag_title">تشخيص قراءة النص</string>
+    <string name="ocr_diag_last">زمن آخر صفحة: %1$s ثانية</string>
+    <string name="ocr_diag_recent">آخر الصفحات (ثانية): %1$s</string>
+    <string name="ocr_diag_heap">ذروة الذاكرة الأصلية أثناء القراءة: %1$s ميغابايت</string>
+    <string name="ocr_diag_engine">المحرك المستخدم: %1$s</string>
+    <string name="ocr_diag_note">تُقاس هذه الأرقام على هذا الهاتف فقط وتُحفظ داخله. لا يُرسل شيء ولا يُسجَّل أي نص.</string>
+    <string name="ocr_fallback_low_ram">سريع (ذاكرة الهاتف أقل من 3 غيغابايت)</string>
+    <string name="ocr_fallback_runtime">سريع (المحرك الدقيق غير متاح على هذا الهاتف)</string>
+    <string name="ocr_fallback_model">سريع (ملف نموذج القراءة الدقيقة مفقود)</string>
+    <string name="ocr_fallback_init">سريع (تعذّر تشغيل المحرك الدقيق)</string>
+    <string name="ocr_fallback_english">سريع (الإنجليزية وحدها)</string>
 </resources>
