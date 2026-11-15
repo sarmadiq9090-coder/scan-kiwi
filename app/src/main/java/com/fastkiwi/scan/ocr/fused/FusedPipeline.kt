@@ -55,7 +55,7 @@ class FusedPipeline(
                     val pad = (TESS_PAD * (bb[3] - bb[1])).toInt()
                     val x0 = max(0, bb[0].toInt() - pad); val y0 = max(0, bb[1].toInt() - pad)
                     val x1 = min(w, bb[2].toInt() + pad); val y1 = min(h, bb[3].toInt() + pad)
-                    if (x1 > x0 && y1 > y0) pick = fusion.choose(pick, tesseract.read(x0, y0, x1, y1).trim())
+                    if (x1 > x0 && y1 > y0) pick = fusion.choose(pick, TesseractLineOrder.logical(tesseract.read(x0, y0, x1, y1).trim())) // 2.0: logical order
                 }
                 pick = ArabicPostProcessor.apply(pick)
                 val bb = b.bounds(w, h)

@@ -99,6 +99,9 @@ class FusedPipelineGoldenTest {
 
     @Test fun mixedArabicEnglishPage() = check("048_small_lowq")
 
+    /** 2.0 mixed-page fix: Tesseract's mixed lines in logical order and routed by script, as in Python. */
+    @Test fun mixedPageRouting() = check("036_mixed")
+
     /** The bidi classes Kotlin derives for every dictionary character equal Python's (unicodedata). */
     @Test
     fun bidiClassesMatchPython() {

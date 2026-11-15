@@ -27,7 +27,7 @@ CPU thread and scores them. `work/` is git-ignored. In CI: the manual workflow `
 | `sets.json` | `dev`: 52 pages, seed 20261114, the 8 roadmap fonts and text pool A (tuning allowed). `heldout`: 156 pages, seed 20261201, 6 other fonts, sizes 10/13/14 pt (9 pt small print), its own text pool B (never tuned on) |
 | `kiwi_pipeline.py` | The app's Accurate pipeline in Python, the same steps as the Kotlin code in `com.fastkiwi.scan.ocr.fused` (the JVM test `FusedPipelineGoldenTest` proves the Kotlin side gives the same text from the same model outputs) |
 | `bench.py` | Runs one engine over a set. `tess_fast`/`tess_best` = Fast mode; `fused_fast_v6tiny`, `fused2_fast_v6tiny`, `ppv6tiny_v5` = the roadmap §3 engines (RapidOCR + ONNX Runtime); `kiwi_fused_onnx`, `kiwi_fused_mnn`, `kiwi_fused_mnn16` = the app's pipeline on ONNX Runtime, MNN fp32, MNN fp16 weights (the shipped files); `kiwi2_*` = with the Latin rule; `kiwi_pp_mnn` = without Tesseract |
-| `score.py` | CER, WER, numbers, reading order, lines found, by category; `--gate` checks the 1.5.0 gates, `--parity` the ±0.5 pp parity |
+| `score.py` | CER, WER, numbers, reading order, lines found, by category; `--gate` checks the 1.5.0 gates, `--parity` the ±0.5 pp parity (2.0 reference: `kiwi_fused_onnx`) |
 | `record_golden.py` | Records raw model outputs for the app's JVM golden test |
 | `models.json`, `requirements-lock.txt` | Pinned inputs (sha256) |
 | `fonts/` | 15 OFL-1.1 font files with their `OFL-<family>.txt` (REUSE annotations in `REUSE.toml`) |
