@@ -7,6 +7,33 @@ all gates passed, signed APK. **Local commits only: no push, no PR, no publishin
 
 Work split and shared rules (ownership, env, commit identity, feature records): `C:\BahthTest\scan-kiwi-design\2.0-SPLIT.md`.
 
+## 0c. Re-test fixes, QC, torture subset, release build (2026-11-15): 2.0.0 BUILT, next = owner phone checks, publish (owner/manager only)
+
+- **Black-box re-test (`docs/BLACKBOX-2.0.md`, «إعادة الاختبار») fixed**, tests first (`gates/BlackBoxRetestTest` 8, `synth/HeaderBandTest` 4,
+  `ui/LocalFormatTest`, `core/AutoCapture20Test.waitsAfterTheCameraOpens…`): gallery in Book mode → split screen; glare second photo from the
+  gallery → fused (back to the page); auto-capture waits 2.5 s after the camera opens or the mode changes (driver: opening counts as 1.5 s of
+  looking); «Camera unavailable» was the driver environment (CameraX bound under Robolectric beside the test camera; the error showed only while
+  the desk alone was in view) → nothing is bound with the seam; export sheet from 150 %: vertical radio lists, Share/Save equal, divider over the
+  fixed footer; Home top level empty → «لا مستندات هنا خارج المجلدات» (driver also read list rows under the snackbar); sizes rounded (2007 B = 2 KB),
+  info snackbar dismissed on the next screen; split pages take completeness from the spread's frame edges.
+- **Header band (developer report, content loss):** `core/HeaderBand` on stills (`BitmapIO.detectPage`): a dark band printed on the paper edge
+  stays in the page. Synthetic band set (45 scenes off white tables): 0 % → 93.3 % (top) / 91.1 % (bottom) within 3 %; the paper's shadow never
+  moves an outline (0/30); edge benchmark with the step 91.7 % within 3 %, 0 false pages (unchanged). On a white table such a page is not
+  detected at all (crop screen asks: no loss) — 2.1.
+- **QC (`docs/QC-2.0.0.md`):** Q1 1 (signature draw footer not in the thumb zone), Q2 3 (cut segment label, 200 % export sheet, unlabelled sheet
+  handle), all fixed; Q3 4 for 2.1. Shots: `KIWI_QC=1 … --tests '*QcShotsTest'` → `app/build/qc/`.
+- **Torture subset, run once (chaos 7 + monkey 3), then only failed cases:** first run 6 failed. App fixes: page editor pager crash after a page
+  went (IndexOutOfBounds, S2); a page edit whose save fails left a rotated image under a 0° page (S2, now restored); unlabelled sheet handle.
+  Tool fixes: driver typed into a read-only field; gate clock with the test camera; chaos restore vs a Windows-locked file. Final: chaos 7/7,
+  monkey 3/3 (2240 actions, 0 failures). Seen once, not reproduced: Robolectric `Magnifier` NPE and a Compose detach ISE (no app frames).
+- **Full suite once, on 3238e15:** 327 tests, 1 failure (a small picked spread warned «cut off»), fixed in e72320e and its class re-run (8/8).
+- **Release (built from e72320e):** `dist/ScanKiwi-2.0.0.apk` 19,118,617 B (size gate PASS, target 25 / cap 30), sha256
+  `c67c1cc329c4e9c8124686aeb3d1ddc0d892d5d01b199ea9966561b90c72da8a`, v2-signed, certificate `26e5ed00…2dcce6` (same as 1.2.0), versionCode 5,
+  arm64-v8a + armeabi-v7a, permissions CAMERA, INTERNET, ACCESS_NETWORK_STATE, REQUEST_INSTALL_PACKAGES; lintDebug 0 errors; REUSE compliant;
+  `ScanKiwi-2.0.0.cdx.json` (CycloneDX 1.6, 146 components), `ScanKiwi-2.0.0.intoto.jsonl`, `RELEASE-NOTES-2.0.0.md` (ar + en, internet for
+  updates only), `SHA256SUMS.txt` (LF, includes the APK; `sha256sum -c` OK). Notes also in `C:\BahthTest\scan-kiwi-design\release-2.0.0-notes.md`.
+  Not pushed, not published.
+
 ## 0b. Black-box findings fixed (2026-11-15): every U1 and U2 of `docs/BLACKBOX-2.0.md`, next = re-run those tasks
 
 Each fix has a test (new: `gates/BlackBoxTasksTest` (6 tasks through the bb.sh interpreter), `gates/SimulatedOcrTest`,

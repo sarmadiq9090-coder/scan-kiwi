@@ -61,4 +61,6 @@ descenders in the sampled shots; the page image now keeps the invoice's dark tit
 App code changed after the torture gate (camera gallery path, export sheet choices and footer, dialogs' button rows,
 snackbars, Home empty text, the header-band step). Run once, only the classes that cover it: `TortureChaosTest`
 (process death, disk full, blocked writes, permission revoked, memory pressure: chaos/IO) and `TortureMonkeyTest`
-(random taps over all screens, including the export sheet and dialogs). Result: see the hand-off §0c.
+(random taps over all screens, including the export sheet and dialogs). First run: 6 of 10 failed; after the fixes
+listed in the hand-off §0c (two app crashes/inconsistencies, the sheet handle, three test-tool issues) the failed cases
+pass: chaos 7/7, monkey 3/3 (2240 actions, 0 failures).
