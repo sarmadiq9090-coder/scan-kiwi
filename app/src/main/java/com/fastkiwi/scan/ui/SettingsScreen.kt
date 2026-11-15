@@ -181,7 +181,7 @@ fun SettingsScreen(vm: AppViewModel) {
             stringResource(R.string.theme_title), themeLabels.map { stringResource(it.second) }, themeLabels.indexOfFirst { it.first == vm.themeMode.value },
             onDismiss = { dialog = null },
         ) { vm.setThemeMode(themeLabels[it].first); dialog = null }
-        "about" -> AboutDialog { dialog = null }
+        "about" -> AboutDialog(onCheckUpdates = { dialog = null; vm.open(Screen.Updates); vm.updates.checkNow() }) { dialog = null }
         // 2.0-ocr
         "ocr_mode" -> ChoiceDialog(
             stringResource(R.string.ocr_mode_title),
@@ -282,7 +282,7 @@ fun ChoiceDialog(title: String, options: List<String>, selected: Int, onDismiss:
 
 /** About: version, network statement and the bundled licence notices. */
 @Composable
-private fun AboutDialog(onDismiss: () -> Unit) {
+private fun AboutDialog(onCheckUpdates: () -> Unit, onDismiss: () -> Unit) {
     val ctx = LocalContext.current
     val notices = remember { runCatching { ctx.assets.open("THIRD_PARTY_NOTICES.txt").bufferedReader().readText() }.getOrDefault("") }
     AlertDialog(
@@ -292,12 +292,15 @@ private fun AboutDialog(onDismiss: () -> Unit) {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(Dimens.m)) {
                 Text(stringResource(R.string.about_body, BuildConfig.VERSION_NAME), style = MaterialTheme.typography.bodyMedium)
                 Text(stringResource(R.string.network_statement), style = MaterialTheme.typography.bodyMedium)
+                Text(stringResource(R.string.update_details), style = MaterialTheme.typography.bodySmall)
                 Text(stringResource(R.string.licenses_body), style = MaterialTheme.typography.bodySmall)
                 Text(stringResource(R.string.show_licenses), style = MaterialTheme.typography.titleSmall)
                 Text(notices, style = MaterialTheme.typography.bodySmall)
             }
         },
         confirmButton = { TextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.close)) } },
+        // 2.0-update: «تحقق من التحديثات» in About.
+        dismissButton = { TextButton(onClick = onCheckUpdates, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.update_check_now)) } },
     )
 }
 

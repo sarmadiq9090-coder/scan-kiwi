@@ -46,12 +46,13 @@ import androidx.compose.ui.unit.dp
 import com.fastkiwi.scan.BuildConfig
 import com.fastkiwi.scan.R
 import com.fastkiwi.scan.ui.theme.Dimens
+import com.fastkiwi.scan.update.UpdateError
+import com.fastkiwi.scan.update.UpdateState
 import kotlinx.coroutines.launch
 
 /**
- * Update links (council decision D-077). The app has no network code and no
- * INTERNET permission: these only hand a link to another app (Obtainium or the
- * browser), which the user chooses to use.
+ * Update links. Since 2.0 the app checks GitHub itself (`update/`, owner's order 2026-11-15, replacing
+ * D-077's "no network"); these links stay as other ways: Obtainium or the browser, which the user chooses.
  */
 object UpdateLinks {
     const val RELEASES = "https://github.com/sarmadiq9090-coder/scan-kiwi/releases/latest"
@@ -104,7 +105,47 @@ fun UpdatesScreen(vm: AppViewModel) {
             }
 
             Column(Modifier.fillMaxWidth()) {
+                // 2.0-update: the app's own check (GitHub only), and its two settings.
                 SectionHeader(stringResource(R.string.updates_group))
+                val st = vm.updates.state.value
+                val busy = st is UpdateState.Checking || st is UpdateState.Downloading
+                val status = updateStatus(st)
+                val release = when (st) {
+                    is UpdateState.Available -> st.release
+                    is UpdateState.Failed -> st.release
+                    else -> null
+                }
+                val rows = if (release != null || st is UpdateState.Ready) 2 else 1
+                SettingsGroup(rows) { i, shape ->
+                    if (i == 0) {
+                        SettingsRow(KiwiIcons.update(), stringResource(R.string.update_check_now), status, shape, {
+                            if (!busy) vm.updates.checkNow()
+                        }, trailing = null)
+                    } else if (st is UpdateState.Ready) {
+                        SettingsRow(KiwiIcons.update(), stringResource(R.string.update_install_again), stringResource(R.string.update_ready), shape, {
+                            vm.updates.install(st.apk, st.release)
+                        }, trailing = null)
+                    } else if (release != null) {
+                        SettingsRow(KiwiIcons.update(), stringResource(R.string.update_download_install), stringResource(R.string.update_available, release.version.toString()), shape, {
+                            if (!busy) vm.updates.downloadAndInstall(release)
+                        }, trailing = null)
+                    }
+                }
+                Spacer(Modifier.height(Dimens.m))
+                var auto by remember { mutableStateOf(vm.settings.autoUpdateCheck) }
+                var wifi by remember { mutableStateOf(vm.settings.updateWifiOnly) }
+                SettingsGroup(2) { i, shape ->
+                    if (i == 0) {
+                        SettingsSwitchRow(KiwiIcons.update(), stringResource(R.string.update_auto), stringResource(R.string.update_auto_hint), auto, shape) {
+                            auto = it; vm.settings.autoUpdateCheck = it
+                        }
+                    } else {
+                        SettingsSwitchRow(KiwiIcons.update(), stringResource(R.string.update_wifi_only), stringResource(R.string.update_wifi_only_hint), wifi, shape) {
+                            wifi = it; vm.settings.updateWifiOnly = it
+                        }
+                    }
+                }
+                SectionHeader(stringResource(R.string.update_other_ways))
                 SettingsGroup(2) { i, shape ->
                     if (i == 0) {
                         SettingsRow(KiwiIcons.update(), stringResource(R.string.updates_obtainium), stringResource(R.string.updates_obtainium_sub), shape, {
@@ -127,8 +168,10 @@ fun UpdatesScreen(vm: AppViewModel) {
                 Spacer(Modifier.height(Dimens.l))
                 Text(stringResource(R.string.whats_new_line), style = MaterialTheme.typography.bodyMedium)
                 Spacer(Modifier.height(Dimens.m))
-                // D-077 wording, word for word.
+                // 2.0-update: the owner's wording, word for word, then the details.
                 Text(stringResource(R.string.network_statement), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.height(Dimens.s))
+                Text(stringResource(R.string.update_details), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.height(Dimens.xl))
             }
         }
@@ -150,4 +193,52 @@ fun UpdatesScreen(vm: AppViewModel) {
             },
         )
     }
+}
+
+/** 2.0-update: the status line under «تحقق من التحديثات». */
+@Composable
+private fun updateStatus(st: UpdateState): String = when (st) {
+    UpdateState.Idle -> stringResource(R.string.updates_version, BuildConfig.VERSION_NAME)
+    UpdateState.Checking -> stringResource(R.string.update_checking)
+    UpdateState.UpToDate -> stringResource(R.string.update_up_to_date)
+    is UpdateState.Available -> stringResource(R.string.update_available, st.release.version.toString())
+    is UpdateState.Downloading -> stringResource(
+        R.string.update_downloading,
+        if (st.total > 0) java.text.NumberFormat.getPercentInstance().format(st.done.toDouble() / st.total) else "",
+    )
+    is UpdateState.Ready -> stringResource(R.string.update_ready)
+    is UpdateState.Failed -> stringResource(updateErrorText(st.error))
+}
+
+fun updateErrorText(e: UpdateError): Int = when (e) {
+    UpdateError.OFFLINE -> R.string.update_err_offline
+    UpdateError.NETWORK -> R.string.update_err_network
+    UpdateError.NO_RELEASE -> R.string.update_err_no_release
+    UpdateError.BAD_RELEASE -> R.string.update_err_bad_release
+    UpdateError.WIFI_REQUIRED -> R.string.update_err_wifi
+    UpdateError.SHA_MISMATCH -> R.string.update_err_sha
+    UpdateError.SIGNATURE_MISMATCH -> R.string.update_err_signature
+    UpdateError.NOT_NEWER -> R.string.update_err_not_newer
+    UpdateError.STORAGE -> R.string.update_err_storage
+}
+
+/** 2.0-update: shown once (the owner's wording), before the first automatic check. */
+@Composable
+fun UpdateNoticeDialog(vm: AppViewModel) {
+    if (!vm.updates.noticePending.value) return
+    AlertDialog(
+        onDismissRequest = {},
+        title = { Text(stringResource(R.string.update_notice_title)) },
+        text = { Text(stringResource(R.string.network_statement), style = MaterialTheme.typography.bodyMedium) },
+        confirmButton = {
+            TextButton(onClick = { vm.updates.noticeSeen(); vm.updates.onAppOpened() }, modifier = Modifier.heightIn(min = 48.dp)) {
+                Text(stringResource(R.string.update_notice_ok))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = { vm.updates.noticeSeen(); vm.open(Screen.Updates) }, modifier = Modifier.heightIn(min = 48.dp)) {
+                Text(stringResource(R.string.update_notice_settings))
+            }
+        },
+    )
 }

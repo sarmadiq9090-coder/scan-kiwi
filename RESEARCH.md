@@ -86,7 +86,8 @@ or impossible on weak connections.
 
 1. **No watermark, no account, no ads, ever.** No ad SDK at all, so a CamScanner-style supply-chain incident is
    impossible by design.
-2. **Fully offline — no data can leave the phone.** The APK does not request the `INTERNET` permission (it is
+2. **Fully offline — no data can leave the phone.** (1.x; since 2.0 the app connects to GitHub only to check for and
+   download its own updates, D30; documents still never leave the phone.) The APK does not request the `INTERNET` permission (it is
    actively stripped from merged manifests). Cloud backup and device transfer of documents are disabled. Files
    leave only when the user taps Share or Save (Storage Access Framework).
 3. **Free features that others charge for:** searchable PDF (OCR), password-protected PDF (AES-256), PDF import and

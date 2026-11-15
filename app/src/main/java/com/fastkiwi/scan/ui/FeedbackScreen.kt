@@ -63,9 +63,9 @@ import kotlinx.coroutines.launch
 import java.util.Locale
 
 /**
- * «أبلغنا عن مشكلة أو اقتراح». Nothing is sent from the app (it has no network
- * access): the user's own mail app or browser opens with the text, and the
- * user reviews and sends it there.
+ * «أبلغنا عن مشكلة أو اقتراح». Nothing is sent from the app (its only connection
+ * is the GitHub update check): the user's own mail app or browser opens with the
+ * text, and the user reviews and sends it there.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

@@ -44,20 +44,20 @@ jobs:
       - name: Build unsigned release APK and run lint
         run: ./gradlew --no-daemon :app:assembleRelease :app:lintDebug
 
-      - name: Check permissions (CAMERA only)
+      - name: Check permissions (exact list)
         run: |
           APK=$(ls app/build/outputs/apk/release/*.apk | head -n 1)
           AAPT2=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -n 1)aapt2
           "$AAPT2" dump permissions "$APK" | tee permissions.txt
-          # Only system permission allowed: CAMERA. The app-internal signature permission
-          # added by androidx.core (DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION) is not a system permission.
-          others=$(grep '^uses-permission:' permissions.txt \
-            | grep -v "name='android.permission.CAMERA'" \
-            | grep -v "name='com.fastkiwi.scan.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION'" || true)
+          # Allowed system permissions: CAMERA, and since 2.0 (owner's order 2026-11-15) INTERNET,
+          # ACCESS_NETWORK_STATE and REQUEST_INSTALL_PACKAGES for the GitHub-only update check.
+          # The app-internal signature permission added by androidx.core
+          # (DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION) is not a system permission.
+          others=$(grep '^uses-permission:' permissions.txt             | grep -v "name='android.permission.CAMERA'"             | grep -v "name='android.permission.INTERNET'"             | grep -v "name='android.permission.ACCESS_NETWORK_STATE'"             | grep -v "name='android.permission.REQUEST_INSTALL_PACKAGES'"             | grep -v "name='com.fastkiwi.scan.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION'" || true)
           if [ -n "$others" ]; then echo "Unexpected permissions:"; echo "$others"; exit 1; fi
-          for p in INTERNET ACCESS_NETWORK_STATE REQUEST_INSTALL_PACKAGES; do
-            if grep -q "android.permission.$p'" permissions.txt; then echo "$p must not be requested"; exit 1; fi
-          done
+          # The update client is the only network code: no other URL connection in the sources.
+          hits=$(grep -rln 'openConnection\|HttpURLConnection\|java.net.Socket\|okhttp' app/src/main/java | grep -v 'update/UpdateClient.kt' || true)
+          if [ -n "$hits" ]; then echo "Network code outside update/UpdateClient.kt:"; echo "$hits"; exit 1; fi
 
       - name: Upload unsigned APK and reports
         if: always()

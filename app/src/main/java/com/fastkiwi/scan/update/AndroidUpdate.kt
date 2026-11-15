@@ -1,0 +1,103 @@
+// SPDX-FileCopyrightText: 2026 FastKiwi
+// SPDX-License-Identifier: Apache-2.0
+package com.fastkiwi.scan.update
+
+import android.app.PendingIntent
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageInfo
+import android.content.pm.PackageInstaller
+import android.content.pm.PackageManager
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
+import android.os.Build
+import java.io.File
+import java.security.MessageDigest
+
+/**
+ * 2.0-update: the downloaded archive must be this app, signed with the installed app's certificate(s),
+ * read through PackageManager on the archive path. Android would refuse a different key anyway; this
+ * check refuses it before the user is asked anything.
+ */
+class AndroidApkVerifier(private val ctx: Context) : ApkVerifier {
+    override fun sameSignerAndPackage(apk: File): Boolean {
+        val pm = ctx.packageManager
+        val archive = archiveInfo(pm, apk.path) ?: return false
+        if (archive.packageName != ctx.packageName) return false
+        val installed = installedInfo(pm) ?: return false
+        val a = certs(archive)
+        val b = certs(installed)
+        return a.isNotEmpty() && a == b
+    }
+
+    @Suppress("DEPRECATION")
+    private fun archiveInfo(pm: PackageManager, path: String): PackageInfo? =
+        if (Build.VERSION.SDK_INT >= 28) {
+            pm.getPackageArchiveInfo(path, PackageManager.GET_SIGNING_CERTIFICATES)?.takeIf { it.signingInfo != null }
+                ?: pm.getPackageArchiveInfo(path, PackageManager.GET_SIGNATURES)
+        } else pm.getPackageArchiveInfo(path, PackageManager.GET_SIGNATURES)
+
+    @Suppress("DEPRECATION")
+    private fun installedInfo(pm: PackageManager): PackageInfo? = runCatching {
+        pm.getPackageInfo(ctx.packageName, if (Build.VERSION.SDK_INT >= 28) PackageManager.GET_SIGNING_CERTIFICATES else PackageManager.GET_SIGNATURES)
+    }.getOrNull()
+
+    /** SHA-256 of each signing certificate (the current signers; key rotation is not used by this app). */
+    @Suppress("DEPRECATION")
+    private fun certs(p: PackageInfo): Set<String> {
+        val sigs = if (Build.VERSION.SDK_INT >= 28 && p.signingInfo != null) p.signingInfo!!.apkContentsSigners else p.signatures
+        return sigs.orEmpty().map { s -> MessageDigest.getInstance("SHA-256").digest(s.toByteArray()).joinToString("") { "%02x".format(it) } }.toSet()
+    }
+}
+
+/** The connection now: connected, and unmetered (Wi-Fi or Ethernet) or not. Needs ACCESS_NETWORK_STATE. */
+fun currentNetwork(ctx: Context): NetworkState = runCatching {
+    val cm = ctx.getSystemService(ConnectivityManager::class.java) ?: return NetworkState.OFFLINE
+    val caps = cm.getNetworkCapabilities(cm.activeNetwork ?: return NetworkState.OFFLINE) ?: return NetworkState.OFFLINE
+    val connected = caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+    val unmetered = caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED) ||
+        caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) || caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
+    NetworkState(connected, connected && unmetered && !cm.isActiveNetworkMetered)
+}.getOrDefault(NetworkState.OFFLINE)
+
+/**
+ * Installs a verified APK with PackageInstaller. Android shows its usual confirmation to the user
+ * ([UpdateInstallReceiver] opens it); nothing is installed without that tap.
+ */
+object UpdateInstaller {
+    const val ACTION = "com.fastkiwi.scan.update.INSTALL_STATUS"
+
+    fun install(ctx: Context, apk: File) {
+        val installer = ctx.packageManager.packageInstaller
+        val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL).apply {
+            setAppPackageName(ctx.packageName)
+            if (Build.VERSION.SDK_INT >= 31) setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_REQUIRED)
+        }
+        val id = installer.createSession(params)
+        installer.openSession(id).use { session ->
+            session.openWrite("base.apk", 0, apk.length()).use { out ->
+                apk.inputStream().use { it.copyTo(out) }
+                session.fsync(out)
+            }
+            val intent = Intent(ACTION).setPackage(ctx.packageName)
+            val flags = PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= 31) PendingIntent.FLAG_MUTABLE else 0)
+            session.commit(PendingIntent.getBroadcast(ctx, id, intent, flags).intentSender)
+        }
+    }
+}
+
+/** Receives the install status; on «needs the user» it opens Android's own confirmation screen. */
+class UpdateInstallReceiver : BroadcastReceiver() {
+    override fun onReceive(ctx: Context, intent: Intent) {
+        when (intent.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE)) {
+            PackageInstaller.STATUS_PENDING_USER_ACTION -> {
+                @Suppress("DEPRECATION")
+                val confirm = if (Build.VERSION.SDK_INT >= 33) intent.getParcelableExtra(Intent.EXTRA_INTENT, Intent::class.java) else intent.getParcelableExtra(Intent.EXTRA_INTENT)
+                confirm?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)?.let { runCatching { ctx.startActivity(it) } }
+            }
+            PackageInstaller.STATUS_SUCCESS -> File(ctx.cacheDir, "updates").listFiles()?.forEach { it.delete() }
+            else -> File(ctx.cacheDir, "updates").listFiles()?.forEach { it.delete() }
+        }
+    }
+}
