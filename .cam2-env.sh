@@ -1,5 +1,0 @@
-export JAVA_HOME="E:\fast kiwi pro neq\kiwi-scan\.tools\jdk-21.0.13+9"
-export ANDROID_HOME="E:\fast kiwi pro neq\kiwi-scan\.tools\android-sdk" ANDROID_SDK_ROOT="E:\fast kiwi pro neq\kiwi-scan\.tools\android-sdk"
-export ANDROID_USER_HOME="E:\fast kiwi pro neq\kiwi-scan\.tools\android-user"
-export GRADLE_USER_HOME="E:\fast kiwi pro neq\kiwi-scan\.tools\gh-cam"
-export PATH="/e/fast kiwi pro neq/kiwi-scan/.tools/jdk-21.0.13+9/bin:/e/fast kiwi pro neq/kiwi-scan/.tools/gradle-8.14.3/bin:$PATH"
