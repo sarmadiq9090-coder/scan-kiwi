@@ -38,6 +38,8 @@ class UpdaterTest {
     private var tag = "v2.1.0"
     private var sums: String = ""
     private var redirectApkTo: String? = null
+    /** Bug hunt 2.0: this path's response dies after a few body bytes (see [MiniHttpServer.STALL_AFTER]). */
+    private var stallPath: String? = null
     private lateinit var work: File
 
     private fun sha(b: ByteArray) = MessageDigest.getInstance("SHA-256").digest(b).joinToString("") { "%02x".format(it) }
@@ -49,7 +51,7 @@ class UpdaterTest {
         server = MiniHttpServer { path, headers ->
             requests.add(path)
             userAgents.add(headers["user-agent"])
-            when (path) {
+            val r = when (path) {
                 "/repos/x/releases/latest" -> Triple(200, emptyMap(), """
                     {"tag_name":"$tag","draft":false,"prerelease":false,"assets":[
                       {"name":"ScanKiwi-2.1.0.apk","size":${apkBytes.size},"browser_download_url":"$base/dl/ScanKiwi-2.1.0.apk"},
@@ -60,6 +62,7 @@ class UpdaterTest {
                 "/dl/ScanKiwi-2.1.0.apk" -> redirectApkTo?.let { Triple(302, mapOf("Location" to it), ByteArray(0)) } ?: Triple(200, emptyMap(), apkBytes)
                 else -> Triple(404, emptyMap(), "{}".toByteArray())
             }
+            if (path == stallPath) Triple(r.first, r.second + (MiniHttpServer.STALL_AFTER to "40"), r.third) else r
         }
         base = "http://127.0.0.1:${server.port}"
     }
@@ -70,7 +73,7 @@ class UpdaterTest {
         work.deleteRecursively()
     }
 
-    private fun client() = UpdateClient("ScanKiwi/2.0.0", "$base/repos/x/releases/latest", setOf("127.0.0.1"), requireHttps = false, timeoutMs = 5_000)
+    private fun client(timeoutMs: Int = 5_000) = UpdateClient("ScanKiwi/2.0.0", "$base/repos/x/releases/latest", setOf("127.0.0.1"), requireHttps = false, timeoutMs = timeoutMs)
 
     private fun updater(current: String = "2.0.0", net: NetworkState = NetworkState.WIFI, sameSigner: Boolean = true, signerCalls: MutableList<File>? = null) =
         Updater(client(), current, { f -> signerCalls?.add(f); sameSigner }, work) { net }
@@ -195,6 +198,56 @@ class UpdaterTest {
         assertTrue(userAgents.toString(), userAgents.all { it == "ScanKiwi/2.0.0" })
     }
 
+    /**
+     * Bug hunt 2.0 (S2): a connection that dies while the body is being read (timeout, reset, TLS error) threw a
+     * plain IOException out of [Updater.check] and of the SHA256SUMS read, which the controller's coroutine did
+     * not catch, so the automatic check at app open crashed the app. The APK body was reported as a storage error.
+     */
+    @Test
+    fun aConnectionThatDiesMidResponseIsANetworkErrorNeverACrash() {
+        val r = available(updater())
+        fun slow() = Updater(client(timeoutMs = 400), "2.0.0", { true }, work) { NetworkState.WIFI }
+        stallPath = "/repos/x/releases/latest"
+        assertEquals(CheckResult.Failed(UpdateError.NETWORK), slow().check())
+        stallPath = "/dl/SHA256SUMS.txt"
+        assertEquals(DownloadResult.Failed(UpdateError.NETWORK), slow().download(r, wifiOnly = false))
+        stallPath = "/dl/ScanKiwi-2.1.0.apk"
+        assertEquals(DownloadResult.Failed(UpdateError.NETWORK), slow().download(r, wifiOnly = false))
+        assertTrue("files left: ${work.list()?.toList()}", work.listFiles().orEmpty().isEmpty())
+        // The automatic check at app open survives it too.
+        stallPath = "/repos/x/releases/latest"
+        val settings = Settings(RuntimeEnvironment.getApplication()).apply { updateNoticeShown = true; autoUpdateCheck = true; lastUpdateCheck = 0L }
+        val c = UpdateController(RuntimeEnvironment.getApplication(), settings, CoroutineScope(Dispatchers.Unconfined), slow(), { 5L })
+        runBlocking { c.onAppOpened()?.join() }
+        runBlocking { c.checkNow()?.join() }
+        assertEquals(UpdateState.Failed(UpdateError.NETWORK), c.state.value)
+    }
+
+    /** Bug hunt 2.0 (S3): Wi-Fi lost during the download (phone moves to mobile data) stops it when «Wi-Fi فقط» is on. */
+    @Test
+    fun wifiLostDuringTheDownloadStopsItWhenWifiOnly() {
+        var net = NetworkState.WIFI
+        val u = Updater(client(), "2.0.0", { true }, work) { net }
+        val r = available(u)
+        val result = u.download(r, wifiOnly = true) { done, _ -> if (done > 100_000) net = NetworkState.MOBILE }
+        assertEquals(DownloadResult.Failed(UpdateError.WIFI_REQUIRED), result)
+        assertTrue("files left: ${work.list()?.toList()}", work.listFiles().orEmpty().isEmpty())
+        net = NetworkState.WIFI
+        assertTrue(u.download(r, wifiOnly = false) { _, _ -> net = NetworkState.MOBILE } is DownloadResult.Verified)
+    }
+
+    /** Bug hunt 2.0 (S3): the archive must also carry a higher versionCode than the installed app (no same-version loop, no downgrade). */
+    @Test
+    fun archiveMustBeTheSameAppSameSignerAndAHigherVersionCode() {
+        val k = setOf("26e5ed00")
+        assertTrue(AndroidApkVerifier.acceptable("com.fastkiwi.scan", "com.fastkiwi.scan", k, k, 6, 5))
+        assertFalse("same version", AndroidApkVerifier.acceptable("com.fastkiwi.scan", "com.fastkiwi.scan", k, k, 5, 5))
+        assertFalse("downgrade", AndroidApkVerifier.acceptable("com.fastkiwi.scan", "com.fastkiwi.scan", k, k, 4, 5))
+        assertFalse("other package", AndroidApkVerifier.acceptable("com.evil", "com.fastkiwi.scan", k, k, 6, 5))
+        assertFalse("other key", AndroidApkVerifier.acceptable("com.fastkiwi.scan", "com.fastkiwi.scan", setOf("aa"), k, 6, 5))
+        assertFalse("unsigned", AndroidApkVerifier.acceptable("com.fastkiwi.scan", "com.fastkiwi.scan", emptySet(), emptySet(), 6, 5))
+    }
+
     // ------------------------------------------------------------------ 7-day limit
 
     @Test
@@ -237,6 +290,13 @@ class UpdaterTest {
         runBlocking { c.checkNow()?.join() }
         runBlocking { c.checkNow()?.join() }
         assertEquals(5, checks())
+        // Bug hunt 2.0 (S3): a check recorded under a clock that ran ahead (here 1000 days) must not switch the
+        // automatic check off until that date: the wait restarts from the corrected clock.
+        settings.lastUpdateCheck = 3_000 * day
+        now = 2_000 * day; open()
+        assertEquals("clock set back: no check right away", 5, checks())
+        now = 2_007 * day; open()
+        assertEquals("7 days after the clock was set back: checked", 6, checks())
     }
 
     @Test

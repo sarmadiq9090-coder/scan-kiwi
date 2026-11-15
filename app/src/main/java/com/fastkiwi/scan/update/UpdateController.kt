@@ -63,9 +63,20 @@ class UpdateController(
 
     /** At app start: the weekly automatic check, if it is due. Returns the job (tests wait on it). */
     fun onAppOpened(): Job? {
-        val due = UpdatePolicy.autoCheckDue(settings.autoUpdateCheck, settings.updateNoticeShown, settings.lastUpdateCheck, now())
-        if (!due || job?.isActive == true) return null
+        if (job?.isActive == true) return null
+        val t = now()
+        // A check recorded while the clock ran ahead would switch the automatic check off until that date:
+        // restart the 7-day wait from the corrected clock instead.
+        if (settings.lastUpdateCheck > t) settings.lastUpdateCheck = t
+        val due = UpdatePolicy.autoCheckDue(settings.autoUpdateCheck, settings.updateNoticeShown, settings.lastUpdateCheck, t)
+        if (!due) {
+            // Leftovers of an earlier run (a download cut by process death, a verified file the user did not
+            // install): nothing resumes them, so they only hold storage.
+            if (_state.value == UpdateState.Idle) return scope.launch(Dispatchers.IO) { updater.clean() }.also { job = it }
+            return null
+        }
         return scope.launch {
+            if (_state.value == UpdateState.Idle) withContext(Dispatchers.IO) { updater.clean() }
             val r = withContext(Dispatchers.IO) { updater.check() }
             // Offline: nothing was asked; try again at the next start. Otherwise wait 7 days.
             if (!(r is CheckResult.Failed && r.error == UpdateError.OFFLINE)) settings.lastUpdateCheck = now()

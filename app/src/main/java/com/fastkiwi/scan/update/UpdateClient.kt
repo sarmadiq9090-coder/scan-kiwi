@@ -28,15 +28,18 @@ class UpdateClient(
 
     /** GET a small text resource (release JSON, SHA256SUMS). */
     fun getText(url: String, maxBytes: Int = 1 shl 20): String = open(url, accept = "application/vnd.github+json").use { c ->
-        val bytes = c.stream.readBounded(maxBytes)
+        // A connection that dies while the body is read (timeout, reset, TLS) is a network error too.
+        val bytes = try { c.stream.readBounded(maxBytes) } catch (e: NetworkException) { throw e } catch (e: IOException) { throw NetworkException("read", e) }
         String(bytes, Charsets.UTF_8)
     }
 
     /**
      * Streams [url] into [dest], returning the file's sha256 (lower-case hex). [maxBytes] guards against
-     * a runaway download; [onProgress] gets (bytes so far, total or -1).
+     * a runaway download; [onProgress] gets (bytes so far, total or -1); [keepGoing] is asked before each
+     * chunk (false stops with a [NetworkException] [STOPPED], e.g. Wi-Fi lost with «Wi-Fi فقط»). Errors while
+     * reading are [NetworkException]; errors while writing [dest] stay plain [IOException] (storage).
      */
-    fun download(url: String, dest: File, maxBytes: Long, onProgress: (Long, Long) -> Unit = { _, _ -> }): String {
+    fun download(url: String, dest: File, maxBytes: Long, keepGoing: () -> Boolean = { true }, onProgress: (Long, Long) -> Unit = { _, _ -> }): String {
         val md = MessageDigest.getInstance("SHA-256")
         open(url, accept = "application/octet-stream").use { c ->
             val total = c.conn.contentLengthLong
@@ -47,7 +50,8 @@ class UpdateClient(
                 var n = 0L
                 while (true) {
                     if (Thread.currentThread().isInterrupted) throw NetworkException("cancelled")
-                    val r = c.stream.read(buf)
+                    if (!keepGoing()) throw NetworkException(STOPPED)
+                    val r = try { c.stream.read(buf) } catch (e: IOException) { throw NetworkException("read", e) }
                     if (r < 0) break
                     n += r
                     if (n > maxBytes) throw NetworkException("too large")
@@ -117,6 +121,8 @@ class UpdateClient(
         /** The same list as `res/xml/network_security_config.xml`. */
         val GITHUB_HOSTS = setOf("api.github.com", "github.com", "objects.githubusercontent.com", "release-assets.githubusercontent.com")
         const val MAX_REDIRECTS = 5
+        /** [download] stopped because its keepGoing check said no. */
+        const val STOPPED = "stopped"
 
         private fun InputStream.readBounded(max: Int): ByteArray {
             val out = java.io.ByteArrayOutputStream()

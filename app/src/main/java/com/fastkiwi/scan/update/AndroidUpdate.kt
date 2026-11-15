@@ -26,9 +26,19 @@ class AndroidApkVerifier(private val ctx: Context) : ApkVerifier {
         val archive = archiveInfo(pm, apk.path) ?: return false
         if (archive.packageName != ctx.packageName) return false
         val installed = installedInfo(pm) ?: return false
-        val a = certs(archive)
-        val b = certs(installed)
-        return a.isNotEmpty() && a == b
+        return acceptable(archive.packageName, ctx.packageName, certs(archive), certs(installed),
+            androidx.core.content.pm.PackageInfoCompat.getLongVersionCode(archive),
+            androidx.core.content.pm.PackageInfoCompat.getLongVersionCode(installed))
+    }
+
+    companion object {
+        /**
+         * The archive is this app, signed with exactly the installed app's certificate(s), with a higher
+         * versionCode: a release whose tag says newer but whose APK is the same or an older build is refused
+         * here (before Android's own downgrade refusal) instead of being offered again and again.
+         */
+        fun acceptable(archivePackage: String?, appPackage: String, archiveCerts: Set<String>, installedCerts: Set<String>, archiveVersionCode: Long, installedVersionCode: Long): Boolean =
+            archivePackage == appPackage && archiveCerts.isNotEmpty() && archiveCerts == installedCerts && archiveVersionCode > installedVersionCode
     }
 
     @Suppress("DEPRECATION")
@@ -76,13 +86,19 @@ object UpdateInstaller {
         }
         val id = installer.createSession(params)
         installer.openSession(id).use { session ->
-            session.openWrite("base.apk", 0, apk.length()).use { out ->
-                apk.inputStream().use { it.copyTo(out) }
-                session.fsync(out)
+            try {
+                session.openWrite("base.apk", 0, apk.length()).use { out ->
+                    apk.inputStream().use { it.copyTo(out) }
+                    session.fsync(out)
+                }
+                val intent = Intent(ACTION).setPackage(ctx.packageName)
+                val flags = PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= 31) PendingIntent.FLAG_MUTABLE else 0)
+                session.commit(PendingIntent.getBroadcast(ctx, id, intent, flags).intentSender)
+            } catch (e: Exception) {
+                // A half-written session would hold the copied bytes until Android expires it.
+                runCatching { session.abandon() }
+                throw e
             }
-            val intent = Intent(ACTION).setPackage(ctx.packageName)
-            val flags = PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= 31) PendingIntent.FLAG_MUTABLE else 0)
-            session.commit(PendingIntent.getBroadcast(ctx, id, intent, flags).intentSender)
         }
     }
 }

@@ -50,6 +50,11 @@ class Updater(
             client.getText(client.latestUrl)
         } catch (e: UpdateClient.NetworkException) {
             return CheckResult.Failed(if (e.message == "HTTP 404") UpdateError.NO_RELEASE else UpdateError.NETWORK)
+        } catch (e: java.io.IOException) {
+            return CheckResult.Failed(UpdateError.NETWORK)
+        } catch (e: RuntimeException) {
+            // Never crash the app over an update check (the automatic one runs at app open).
+            return CheckResult.Failed(UpdateError.NETWORK)
         }
         val release = parse(json) ?: return CheckResult.Failed(UpdateError.BAD_RELEASE)
         val current = SemVer.parse(currentVersion) ?: return CheckResult.Failed(UpdateError.BAD_RELEASE)
@@ -66,16 +71,27 @@ class Updater(
         // The expected hash comes from the same release's SHA256SUMS.txt.
         val expected = try {
             sha256For(client.getText(release.sumsUrl, maxBytes = 64 * 1024), release.apkName)
-        } catch (e: UpdateClient.NetworkException) {
+        } catch (e: java.io.IOException) {
+            return DownloadResult.Failed(UpdateError.NETWORK)
+        } catch (e: RuntimeException) {
             return DownloadResult.Failed(UpdateError.NETWORK)
         } ?: return DownloadResult.Failed(UpdateError.BAD_RELEASE)
         val part = File(workDir, release.apkName + ".part")
+        // «Wi-Fi فقط» holds for the whole download: moving to mobile data (or going offline) stops it.
+        var stoppedBy: UpdateError? = null
+        val keepGoing = {
+            val now = network()
+            stoppedBy = if (!now.connected) UpdateError.OFFLINE else if (!UpdatePolicy.downloadAllowed(wifiOnly, now)) UpdateError.WIFI_REQUIRED else null
+            stoppedBy == null
+        }
         val got = try {
-            client.download(release.apkUrl, part, MAX_APK_BYTES, onProgress)
+            client.download(release.apkUrl, part, MAX_APK_BYTES, keepGoing, onProgress)
         } catch (e: UpdateClient.NetworkException) {
-            part.delete(); return DownloadResult.Failed(UpdateError.NETWORK)
+            part.delete(); return DownloadResult.Failed(stoppedBy ?: UpdateError.NETWORK)
         } catch (e: java.io.IOException) {
             part.delete(); return DownloadResult.Failed(UpdateError.STORAGE)
+        } catch (e: RuntimeException) {
+            part.delete(); return DownloadResult.Failed(UpdateError.NETWORK)
         }
         if (!got.equals(expected, ignoreCase = true)) { part.delete(); return DownloadResult.Failed(UpdateError.SHA_MISMATCH) }
         val apk = File(workDir, release.apkName)
