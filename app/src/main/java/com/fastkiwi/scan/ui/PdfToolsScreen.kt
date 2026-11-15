@@ -551,7 +551,8 @@ private fun ResultSheet(appVm: AppViewModel, files: List<File>, onDismiss: () ->
             for (f in files) DocumentsContract.createDocument(ctx.contentResolver, parent, mime, f.name)?.let { copyOut(ctx, f, it) }
         }
     }
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = MaterialTheme.colorScheme.surfaceContainerLow) {
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = MaterialTheme.colorScheme.surfaceContainerLow, dragHandle = null) {
+        KiwiSheetHandle()
         Column(Modifier.fillMaxWidth().padding(horizontal = Dimens.sheet).padding(bottom = Dimens.xl)) {
             Text(stringResource(R.string.pdf_result_ready), style = MaterialTheme.typography.titleLarge)
             Text(

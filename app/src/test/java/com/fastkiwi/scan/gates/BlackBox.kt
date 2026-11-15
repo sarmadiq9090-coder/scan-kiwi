@@ -231,6 +231,9 @@ class BlackBox(private val rule: ComposeTestRule, val dir: File) {
             "type" -> {
                 if (args.size < 2) usage("type \"<field label>\" \"<text>\"")
                 val n = target(args.dropLast(1), prefer = { it.editable }, require = { it.editable }, what = "text field")
+                // A read-only field (a drop-down's value) cannot be typed into, on a phone either: say so instead of
+                // failing inside the test framework (torture monkey: "Failed to perform text input").
+                if (!n.sn.config.contains(androidx.compose.ui.semantics.SemanticsActions.SetText)) usage("\"${n.label}\" is read-only: tap it to choose a value")
                 val i = interaction(n)
                 i.performTouchInput { click(center) }
                 rule.waitForIdle()

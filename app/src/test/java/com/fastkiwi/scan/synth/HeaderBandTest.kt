@@ -97,6 +97,31 @@ class HeaderBandTest {
     @Test
     fun aDarkBandAtThePapersBottomStaysInsideThePage() = check("bottom", bandScenes(bottom = true))
 
+    /** The paper's own shadow on the desk (darker desk along two sides) is not a band: the outline does not move. */
+    @Test
+    fun thePapersShadowIsNotABand() {
+        var seed = 7300
+        var moved = 0
+        var n = 0
+        for (bg in Background.entries.filter { it != Background.WHITE_TABLE }) for (light in Light.entries) for (tilt in intArrayOf(0, 15)) {
+            val w = 360; val h = 480
+            val rnd = java.util.Random((seed++).toLong())
+            val quad = SceneGenerator.placePage(rnd, tilt.toFloat(), w, h, 0.30f..0.55f, 0.08f)
+            val shadow = quad.map { com.fastkiwi.scan.core.Pt(it.x + 5f, it.y + 6f) }
+            val desk = SceneGenerator.backgroundFn(bg, rnd, w, h)
+            val bgf: (Float, Float) -> Int = { x, y ->
+                val c = desk(x, y)
+                if (SceneGenerator.inside(shadow, x, y)) SceneGenerator.rgb(((c shr 16) and 0xFF) * 6 / 10, ((c shr 8) and 0xFF) * 6 / 10, (c and 0xFF) * 6 / 10) else c
+            }
+            val s = SceneGenerator.renderFrame("shadow-$bg-$light-$tilt", w, h, quad, SceneGenerator.paperFn(rnd), bgf, SceneGenerator.lightFn(light, rnd, w, h), SceneGenerator.noiseOf(light), rnd)
+            val plain = still(s, band = false) ?: continue
+            n++
+            if (still(s, band = true)!!.quad.maxCornerShift(plain.quad) > 0.5f) { moved++; println("[header band] shadow taken for a band: ${s.label}") }
+        }
+        println("[header band] shadow: $moved of $n outlines moved")
+        assertTrue("$moved of $n moved", moved == 0)
+    }
+
     /** The camera/edge benchmark (72 pages, 20 empty scenes) with the band step: no page gets worse, no false page. */
     @Test
     fun theEdgeBenchmarkDoesNotRegress() {

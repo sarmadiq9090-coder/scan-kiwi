@@ -86,8 +86,27 @@ class TortureChaosTest {
     }
 
     private fun restore(snap: File, target: File) {
-        target.deleteRecursively()
-        snap.copyRecursively(target, overwrite = true)
+        // The test's view model lives on (a real process would be gone) and may still hold a page image open,
+        // which Windows will not delete or replace. A file whose bytes already equal the snapshot is left as it
+        // is; every other file is replaced, and files that are not in the snapshot are removed.
+        val deadline = System.currentTimeMillis() + 60_000
+        while (true) {
+            val ok = runCatching {
+                target.walkBottomUp().forEach { f ->
+                    val rel = f.relativeTo(target)
+                    if (!File(snap, rel.path).exists()) f.delete()
+                }
+                snap.walkTopDown().forEach { f ->
+                    val dst = File(target, f.relativeTo(snap).path)
+                    if (f.isDirectory) dst.mkdirs()
+                    else if (!(dst.isFile && dst.length() == f.length() && dst.readBytes().contentEquals(f.readBytes()))) f.copyTo(dst, overwrite = true)
+                }
+                target.walkTopDown().none { !File(snap, it.relativeTo(target).path).exists() }
+            }.getOrDefault(false)
+            if (ok) return
+            check(System.currentTimeMillis() < deadline) { "could not restore ${target.path} from the snapshot" }
+            Thread.sleep(200)
+        }
     }
 
     private fun nextMessage(vm: AppViewModel, ms: Long): UiMessage? = runBlocking {
@@ -114,6 +133,9 @@ class TortureChaosTest {
         vm.cancelExport()
         Gates.pump(30_000) { vm.exportState.value == null }
         Gates.awaitIdle(vm)
+        // The process is dead from here: end the old view model (its background reading holds page images
+        // open, and Windows cannot replace an open file).
+        androidx.lifecycle.ViewModelStore().apply { put("dead", vm) }.clear()
         // Restart from the snapshot.
         restore(snapFiles, app.filesDir)
         restore(snapCache, app.cacheDir)

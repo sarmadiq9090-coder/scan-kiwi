@@ -7,6 +7,74 @@ Each release section is written in Arabic first, then English.
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-11-15
+
+### العربية
+
+#### أُضيف
+- **قراءة نص عربية أدق («دقيق»)**: كشف PP-OCRv6 وتعرّف PP-OCRv5 العربي على المعالج، مع إعادة قراءة Tesseract؛ خطأ الحروف 9.0٪ بدل 29.0٪ على صفحات اختبار محجوزة، والجداول صفوفاً بترتيب القراءة. «سريع» يبقى بديلاً تلقائياً.
+- **البحث في كل المستندات** بالأسماء والنص المقروء (عربي بلا حركات أو همزات، أرقام هندية)، مع تظليل الكلمة على صورة الصفحة.
+- **«عرض النص وتصحيحه»**: نسخ النص وتصحيحه؛ البحث وطبقة نص PDF يأخذان التصحيح. تصدير **TXT** من نافذة التصدير.
+- **المجلدات والمفضلة وترتيب القائمة** في الرئيسية.
+- **أدوات PDF**: دمج، تقسيم، استخراج صفحات، إعادة ترتيب بالسحب، تدوير وحفظ، صفحة فارغة، استخراج النص، صفحات إلى JPG، **حجم محدد** للملف، **ترقيم الصفحات** و**علامة مائية** (اختياريتان)، **كلمة مرور AES-256** وإزالتها بكلمة المرور الصحيحة. الملف الأصلي لا يتغير أبداً، والمعالجة في عملية منفصلة.
+- **الكاميرا**: كشف حواف أفضل في الإضاءة الخافتة والخلفيات المزدحمة، تنبيه الاهتزاز وعدم الوضوح والصفحة الناقصة والوهج، **وضع الكتاب** (صفحتان تُقسمان عند الكعب، من الكاميرا أو المعرض)، **إزالة الوهج** بدمج لقطتين، تسوية الميل تلقائياً، وتقليل الضجيج.
+- **التحقق من التحديثات من GitHub** (أمر المالك): فحص يدوي، أو تلقائي مرة كل 7 أيام على الأكثر (يمكن إيقافه)، والتنزيل عبر Wi-Fi فقط افتراضياً. يُثبَّت التحديث فقط إن طابق SHA256SUMS وشهادة التوقيع نفسها.
+- وضع الذاكرة المنخفضة، ودعم أندرويد 7.0 فما فوق.
+
+#### تغيّر
+- **الإنترنت للتحديثات فقط**: كل الميزات تعمل دون اتصال. الاتصال الوحيد بخوادم GitHub للتحقق من التحديثات وتنزيلها، ولا يُرسل أي مستند أو صورة أو نص. الأذونات: الكاميرا، الإنترنت، حالة الشبكة، وتثبيت الحزم (للتحديث).
+- الالتقاط التلقائي ينتظر ثانيتين ونصفاً بعد فتح الكاميرا أو تغيير الوضع، ليتسع الوقت لاختيار «كتاب» أو «بطاقة هوية».
+- عند الخط الكبير (150٪ فأكثر) تصبح خيارات نافذة التصدير قائمة رأسية فلا تُقص التسميات؛ زرّا «مشاركة» و«حفظ في الجهاز» ثابتان ومتساويان.
+- أسماء المستندات التلقائية تتبع لغة الواجهة.
+
+#### أُصلح
+- الشريط الداكن المطبوع على حافة الورقة (رأس فاتورة مثلاً) يبقى داخل الصفحة بدل أن يُقص مع نصه.
+- صورة الكتاب المختارة من المعرض تفتح شاشة التقسيم؛ والصورة الثانية لإزالة الوهج من المعرض تُدمج في الصفحة بدل إضافة صفحة.
+- الصفحتان المقسومتان من الكتاب لا تُظهران تنبيه «جزء من الصفحة مقصوص» خطأً.
+- رسالة الحفظ تذكر الحجم مقرّباً تقريباً صحيحاً وتظهر مرة واحدة؛ لا «لا توجد نتائج» مضللة بعد نقل مستند إلى مجلد.
+- نوافذ إدخال النص (مجلد جديد، إعادة التسمية…) تستقر على الهواتف العريضة.
+
+### English
+
+#### Added
+- **More accurate Arabic text recognition ("Accurate")**: PP-OCRv6 detection and PP-OCRv5 Arabic recognition on the CPU,
+  with a Tesseract re-read; character error 9.0 % instead of 29.0 % on held-out test pages, tables as rows in reading
+  order. "Fast" stays as the automatic fallback.
+- **Search across all documents** by name and recognised text (Arabic without diacritics or hamza variants, Arabic-Indic
+  digits), with the word highlighted on the page image.
+- **"View and correct text"**: copy and correct the text; search and the PDF text layer use the correction. **TXT** export
+  in the export sheet.
+- **Folders, favourites and sorting** on Home.
+- **PDF tools**: merge, split, extract pages, drag to reorder, rotate and save, blank page, extract text, pages to JPG,
+  an **exact target size**, optional **page numbers** and **watermark**, **AES-256 password** and its removal with the right
+  password. The original file is never changed; the work runs in a separate process.
+- **Camera**: better edge detection in dim light and on busy backgrounds, warnings for shake, blur, a cut-off page and
+  glare, **book mode** (two pages split at the spine, from the camera or the gallery), **glare removal** from two shots,
+  automatic deskew, and noise reduction.
+- **Update check from GitHub** (owner's decision): by hand, or automatically at most once every 7 days (can be turned off),
+  downloads over Wi-Fi only by default. An update is installed only if it matches SHA256SUMS and the same signing
+  certificate.
+- Low-memory mode; Android 7.0 and later.
+
+#### Changed
+- **Internet for updates only**: every feature works offline. The only connection is to GitHub to check for and download
+  updates; no document, image or text is ever sent. Permissions: camera, internet, network state, and install packages
+  (for updates).
+- Auto capture waits 2.5 s after the camera opens or the mode changes, so there is time to choose Book or ID card.
+- At large text (150 % and more) the export sheet's choices become a vertical list, so no label is cut; Share and Save
+  stay fixed and equal.
+- Automatic document names follow the app language.
+
+#### Fixed
+- A dark band printed along the paper's edge (an invoice title bar) stays inside the page instead of being cut away with
+  its text.
+- A book photo picked from the gallery opens the split screen; a second glare photo from the gallery is fused into the
+  page instead of adding a page.
+- The two split book pages no longer warn "Part of the page is cut off".
+- The save message rounds the size correctly and appears once; no misleading "No results" after moving a document into
+  a folder.
+- Text-field dialogs (new folder, rename, …) settle on wide phones.
+
 ## [1.2.0] - 2026-11-14
 
 ### العربية
@@ -115,7 +183,8 @@ Each release section is written in Arabic first, then English.
 ### English
 - First release: camera scanning with edge detection, filters, PDF with optional OCR and password, fully offline.
 
-[Unreleased]: https://github.com/sarmadiq9090-coder/scan-kiwi/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/sarmadiq9090-coder/scan-kiwi/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/sarmadiq9090-coder/scan-kiwi/compare/v1.2.0...v2.0.0
 [1.2.0]: https://github.com/sarmadiq9090-coder/scan-kiwi/releases/tag/v1.2.0
 [1.1.1]: https://github.com/sarmadiq9090-coder/scan-kiwi/releases/tag/v1.1.1
 [1.1.0]: https://github.com/sarmadiq9090-coder/scan-kiwi/releases/tag/v1.1.0

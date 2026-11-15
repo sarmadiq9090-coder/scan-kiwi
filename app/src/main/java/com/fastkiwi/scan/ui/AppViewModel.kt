@@ -946,10 +946,18 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     val edited = keepStampsOnPaper(docId, before, edit(before))
                     if (edited == before) return@job
                     val page = edited.copy(revision = edited.revision + 1)
-                    pushUndo(doc)
                     PageRenderer.renderAndSave(store, docId, page)?.recycle()
                     val pages = doc.pages.toMutableList().also { it[idx] = page }
-                    saveAndPublish(doc.copy(pages = pages))
+                    try {
+                        saveAndPublish(doc.copy(pages = pages))
+                    } catch (e: Exception) {
+                        // The document was not saved (disk full, blocked write): the page image goes back to
+                        // what the saved document says, so thumbnail, page view and export agree with it
+                        // (torture chaos: a rotated image under a 0° page).
+                        runCatching { PageRenderer.renderAndSave(store, docId, before)?.recycle() }
+                        throw e
+                    }
+                    pushUndo(doc)
                 }
             }
         }

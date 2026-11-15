@@ -360,7 +360,8 @@ private fun PageGrid(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AddPagesSheet(onDismiss: () -> Unit, onCamera: () -> Unit, onImport: () -> Unit, onIdCard: () -> Unit) {
-    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = MaterialTheme.colorScheme.surfaceContainerLow) {
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = MaterialTheme.colorScheme.surfaceContainerLow, dragHandle = null) {
+        KiwiSheetHandle()
         Column(Modifier.fillMaxWidth().padding(horizontal = Dimens.sheet).padding(bottom = Dimens.xl)) {
             Text(stringResource(R.string.add_pages), style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(bottom = Dimens.l))
             SettingsGroup(3) { i, shape ->
@@ -627,9 +628,11 @@ fun ExportSheet(vm: AppViewModel, docId: String, onDismiss: () -> Unit) {
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
+        dragHandle = null,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
+        KiwiSheetHandle()
         // Options scroll; the footer (Save / Share, or progress with Cancel) stays fixed at the
         // bottom of the sheet so the primary action is always in the thumb zone (spec §3, §3.6).
         Column(Modifier.fillMaxWidth()) {

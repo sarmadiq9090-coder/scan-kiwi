@@ -248,6 +248,9 @@ private fun CameraContent(vm: AppViewModel, initial: Screen.Camera, onClose: () 
     // BLACKBOX-2.0 re-test: no shot by itself in the first seconds after the camera opens or the mode changes,
     // so there is time to choose Book (or ID card) before a page in view is taken as a document page.
     val gate = remember { AutoCapture(startDelayMillis = AutoCapture.CAMERA_START_DELAY_MS) }
+    // The gate's clock. 2.0-gates: with the test camera it is the wall clock the driver holds the page for
+    // (Robolectric's uptime clock only moves with the main looper, not with the simulated hold).
+    val now: () -> Long = { if (CaptureSeam.camera != null) System.nanoTime() / 1_000_000 else android.os.SystemClock.uptimeMillis() }
     val autoFlag = remember { java.util.concurrent.atomic.AtomicBoolean(vm.settings.autoCapture) }
     var torch by remember { mutableStateOf(false) }
     var auto by remember { mutableStateOf(vm.settings.autoCapture) }
@@ -335,7 +338,7 @@ private fun CameraContent(vm: AppViewModel, initial: Screen.Camera, onClose: () 
                         QualityMetrics.contentSignature(gray, det.quad.scale(small.width.toFloat(), small.height.toFloat()))
                     }.getOrNull()
                 } else null
-                val u = synchronized(gate) { gate.feed(det?.quad, det?.confident == true, android.os.SystemClock.uptimeMillis(), autoFlag.get(), true, content) }
+                val u = synchronized(gate) { gate.feed(det?.quad, det?.confident == true, now(), autoFlag.get(), true, content) }
                 live = Live(u.quad, frame.width.toFloat() / frame.height, u.state, u.progress)
             }
             kotlinx.coroutines.delay(100)
@@ -378,7 +381,7 @@ private fun CameraContent(vm: AppViewModel, initial: Screen.Camera, onClose: () 
                     // 2.0-cam2 (CAM-06): the page's content decides re-arming, not only its outline.
                     val content = if (det != null && autoFlag.get()) runCatching { QualityMetrics.contentSignature(gray, det.quad) }.getOrNull() else null
                     val u = synchronized(gate) {
-                        gate.feed(norm, confident, android.os.SystemClock.uptimeMillis(), autoFlag.get(), sharp, content)
+                        gate.feed(norm, confident, now(), autoFlag.get(), sharp, content)
                     }
                     ContextCompat.getMainExecutor(ctx).execute { live = Live(u.quad, upright, u.state, u.progress, warning) }
                 } catch (_: Throwable) {
@@ -531,7 +534,7 @@ private fun CameraContent(vm: AppViewModel, initial: Screen.Camera, onClose: () 
                     ModeTabs(mode, Modifier.align(Alignment.CenterHorizontally).padding(vertical = Dimens.s)) { m ->
                         if (m != mode) {
                             vm.cancelIdCard()
-                            synchronized(gate) { gate.restartDelay(android.os.SystemClock.uptimeMillis()) }
+                            synchronized(gate) { gate.restartDelay(now()) }
                             vm.replaceTop(target.copy(idCard = m == 1, book = m == 2))
                         }
                     }

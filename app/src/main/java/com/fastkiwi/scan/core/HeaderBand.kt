@@ -73,8 +73,10 @@ object HeaderBand {
         if (others.size < 16) return null
         if (others.count { dist(it, band) <= tol } > others.size * 0.25f) return null
         val ground = median(others) ?: return null
-        // Clearly another colour than the surroundings (wood grain or a shadow on the desk is not a band).
+        // Clearly another colour than the surroundings (wood grain on the desk is not a band) and not the
+        // surroundings in shade (the paper's own shadow: the same colour, somewhat darker).
         if (dist(band, ground) < 2f * tolerance(band, ground)) return null
+        if (cosine(band, ground) >= 0.99f && level(band) >= 0.45f * level(ground)) return null
         trace?.invoke("side $i: band=${Integer.toHexString(band)} paper=${Integer.toHexString(paper)} ground=${Integer.toHexString(ground)} tol=$tol")
         // Each sample goes to the nearest of band, paper (or the blend of band and paper at print edges) and
         // surroundings. Light changes along a side, so each half of it uses its own band colour.
@@ -101,7 +103,8 @@ object HeaderBand {
         val slope = (kb - ka) / 0.54f
         val endA = ka - slope * 0.23f - 0.5f
         val endB = kb + slope * 0.23f - 0.5f
-        if (min(endA, endB) < 2.5f) return null
+        // A printed band is at least 2 % of the page (a shadow line along the edge is thinner).
+        if (min(endA, endB) < max(2.5f, 0.02f * extent)) return null
         if (!bandRows(p, i, px, w, h, endA, endB) { col -> min(clsA(col), clsB(col)) }) { trace?.invoke("side $i: not a printed band ($ka, $kb)"); return null }
         // As wide as the paper: just beyond the page's side lines, the band rows are not band colour.
         var lateral = 0
@@ -226,6 +229,15 @@ object HeaderBand {
         val dg = ((a shr 8) and 0xFF) - ((b shr 8) and 0xFF)
         val db = (a and 0xFF) - (b and 0xFF)
         return sqrt((dr * dr + dg * dg + db * db).toFloat())
+    }
+
+    /** Cosine of the angle between two colours as RGB vectors (1 = same hue and saturation, any brightness). */
+    private fun cosine(a: Int, b: Int): Float {
+        fun ch(v: Int, s: Int) = ((v shr s) and 0xFF).toFloat()
+        val dot = ch(a, 16) * ch(b, 16) + ch(a, 8) * ch(b, 8) + ch(a, 0) * ch(b, 0)
+        val na = sqrt(ch(a, 16) * ch(a, 16) + ch(a, 8) * ch(a, 8) + ch(a, 0) * ch(a, 0))
+        val nb = sqrt(ch(b, 16) * ch(b, 16) + ch(b, 8) * ch(b, 8) + ch(b, 0) * ch(b, 0))
+        return if (na < 1f || nb < 1f) 0f else dot / (na * nb)
     }
 
     /** Distance from colour [c] to the straight line between colours [a] and [b] in RGB. */

@@ -28,6 +28,7 @@
 | الميزة | المعرّف | الحالة | معيار القبول | النتيجة | الاختبار |
 |---|---|---|---|---|---|
 | كشف الحواف (إضاءة خافتة، تباين منخفض، خلفيات معقدة) | CAM-01/02/05 | منجز | ≥ 90٪ ضمن 3٪، صفحات كاذبة ≤ 5٪، ≤ 25 م.ث/إطار | **91.7٪**، **0٪** كاذبة، 18–22 م.ث (1.2.0: 69.4٪) | `EdgeBenchTest.acceptance20` |
+| الشريط الداكن المطبوع على حافة الورقة (رأس فاتورة، بطاقة) يبقى داخل الصفحة | CAM-01 (فقد محتوى) | منجز (2.0.0، بعد اختبار المطوّر) | ≥ 90٪ ضمن 3٪ على صفحات بشريط؛ لا تراجع في معيار الحواف | **0٪ ← 93.3٪** (شريط أعلى) و**91.1٪** (أسفل) على 45 مشهداً؛ ظل الورقة لا يُحسب شريطاً (0/30)؛ معيار الحواف **91.7٪، 0 كاذبة** كما هو؛ على طاولة بيضاء لا يُكشف إطار فيُسأل المستخدم (لا فقد) | `synth/HeaderBandTest`، `BlackBoxRetestTest.theInvoiceTitle…` |
 | الاهتزاز وعدم الوضوح | CAM-03 | منجز | AUC ≥ 0.95 | **0.996** (معاينة)، 0.954 (لقطات) | `QualityBenchTest` |
 | الصفحة غير المكتملة | CAM-04 | منجز | ≥ 95٪ | **95.0٪** (38/40) | `QualityBenchTest` |
 | التصوير المتتابع حسب محتوى الصفحة | CAM-06 | منجز | معيار منفصل | **42/42**، 0 تكرار | batch bench |
@@ -116,6 +117,7 @@ synthetic data). Status: done / partial / not done (with reason).
 | OCR | Benchmark harness | partial | 27.7 % reproduced (Edge); Chromium +1.8 pp | `tools/ocr-bench` |
 | OCR | Accurate ≤ 8 s/page, ≤ 300 MB native on the phone | not done | no phone (desktop 1.17 s, 231 MB) | owner check |
 | Camera | Edge detection (dim, low contrast, clutter), blur, incomplete page, content-based batch | done | 91.7 % / 0 % false; AUC 0.996; 95 %; 42/42 | `EdgeBenchTest`, `QualityBenchTest` |
+| Camera | A dark band printed on the paper edge (invoice title bar) stays inside the page (content loss, developer report) | done | band set 0 % → 93.3 % top, 91.1 % bottom within 3 %; paper shadow never taken (0/30); edge bench unchanged 91.7 % / 0 false | `HeaderBandTest`, `BlackBoxRetestTest` |
 | Camera | Quality report and chips, re-crop from original, book mode, glare fusion, denoise, auto-deskew, strip processing | done | 40/40 spine; 96.7 % glare; 54/54 PSNR; 40/40 deskew; 50 MP in ≤ 24.2 MB | `CameraUi20Test`, benches |
 | Camera | Curved-page dewarping | not done | decision A4 (needs a neural model) | — |
 | PDF | PDF-01..14 (merge, split, extract, reorder, rotate, compress/target size, images↔PDF/JPG, numbers, watermark, blank page, text, AES-256, unlock) | done (external PDF→JPG: phone check) | target size 0 false successes / 50; veraPDF pass; fuzz 200/200 | `PdfOpsAcceptanceTest`, `TargetSizeTest`, `PdfFuzzTest` |

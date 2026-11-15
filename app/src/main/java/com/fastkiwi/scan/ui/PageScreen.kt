@@ -136,8 +136,10 @@ fun PageScreen(vm: AppViewModel, docId: String, startIndex: Int, snackbar: Snack
     ) { padding ->
         Column(Modifier.padding(padding).fillMaxSize()) {
             Box(Modifier.weight(1f).fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainerLow)) {
-                HorizontalPager(pager, Modifier.fillMaxSize(), key = { doc.pages[it].id }) { i ->
-                    val p = doc.pages[i]
+                // The pager can lay out once more with the old page count after a page went (torture monkey:
+                // IndexOutOfBounds in the key): an index past the end is skipped for that frame.
+                HorizontalPager(pager, Modifier.fillMaxSize(), key = { doc.pages.getOrNull(it)?.id ?: "gone-$it" }) { i ->
+                    val p = doc.pages.getOrNull(i) ?: return@HorizontalPager
                     val file = vm.store.outFile(docId, p.id)
                     val aspect by androidx.compose.runtime.produceState(0.707f, file, p.revision) {
                         value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {

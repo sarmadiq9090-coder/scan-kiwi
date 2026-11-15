@@ -52,6 +52,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -292,14 +293,14 @@ fun ChoiceSegmentedRow(options: List<String>, selected: Int, onSelect: (Int) -> 
         }
         return
     }
-    SingleChoiceSegmentedButtonRow(modifier.fillMaxWidth()) {
+    SingleChoiceSegmentedButtonRow(modifier.fillMaxWidth().height(androidx.compose.foundation.layout.IntrinsicSize.Min)) {
         options.forEachIndexed { i, label ->
             SegmentedButton(
                 selected = i == selected,
                 onClick = { onSelect(i) },
                 shape = SegmentedButtonDefaults.itemShape(i, options.size),
-                modifier = Modifier.heightIn(min = Dimens.button),
-            ) { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                modifier = Modifier.fillMaxHeight().heightIn(min = Dimens.button),
+            ) { Text(label, maxLines = 2, overflow = TextOverflow.Ellipsis, textAlign = androidx.compose.ui.text.style.TextAlign.Center) } // QC 2.0.0: "Exact si…" at 100 % (English)
         }
     }
 }
@@ -392,4 +393,16 @@ object LocalFormat {
 
     /** Isolates a Latin run (document name, A4, AES-256) inside Arabic text. */
     fun isolate(s: String): String = "${0x2068.toChar()}$s${0x2069.toChar()}"
+}
+
+/**
+ * Bottom-sheet handle, drawn only. Material's default handle carries a tooltip anchor without a name, which
+ * TalkBack reaches as an unlabelled control (torture monkey, QC 2.0.0); the scrim («إغلاق الورقة») and Back
+ * already close the sheet.
+ */
+@Composable
+fun KiwiSheetHandle() {
+    Box(Modifier.fillMaxWidth().padding(vertical = 22.dp).clearAndSetSemantics { }, contentAlignment = Alignment.Center) {
+        Box(Modifier.size(width = 32.dp, height = 4.dp).background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f), RoundedCornerShape(2.dp)))
+    }
 }
