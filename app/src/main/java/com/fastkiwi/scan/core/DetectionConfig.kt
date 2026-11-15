@@ -68,6 +68,16 @@ data class DetectionConfig(
     val medianFrames: Int = 5,
     /** Corner speed above which the phone counts as moving (frame fraction per 100 ms, CAM-03). */
     val maxMotionPer100ms: Float = 0.03f,
+    /**
+     * 2.0-cam2 (CAM-06): re-arm auto-capture by page content, not only by outline movement: the
+     * same page seen again (phone moved, page lifted and put back) is not taken twice, and a new
+     * page laid on the same spot is taken. Off = the 2.0 camera-agent rule (outline only).
+     */
+    val contentRearm: Boolean = true,
+    /** Signature correlation at or above which a page counts as the one just taken. */
+    val sameContent: Float = 0.8f,
+    /** Consecutive frames of different content that re-arm the gate while the outline stays put. */
+    val contentChangeFrames: Int = 3,
     // ---------------------------------------------------------------- quality (CAM-03/04, PRD §4.3)
     /** Contrast-normalised Laplacian variance below which the live frame is blurry (320 px). */
     val liveBlurThreshold: Float = 0.0003f,
@@ -93,7 +103,7 @@ data class DetectionConfig(
         /** The 1.2.0 detector: no closing, no stretch, first confident channel wins, no side check. */
         val LEGACY_1_2 = DetectionConfig(
             closeRadius = 0, stretchBelowSpread = 0, minSideContrast = 0f, fuseChannels = false, detectCut = false, linePasses = 0,
-            medianFrames = 1,
+            medianFrames = 1, contentRearm = false,
         )
     }
 }

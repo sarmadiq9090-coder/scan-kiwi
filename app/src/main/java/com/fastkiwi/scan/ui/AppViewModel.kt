@@ -99,15 +99,35 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     val settings = Settings(app)
     // 2.0-ocr: one OCR service (Accurate/Fast engines) shared by exports and the background reader.
     val ocrDiagnostics = com.fastkiwi.scan.ocr.OcrDiagnostics(app)
+    // 2.0-perf: low-memory mode (phone + Settings override) decided before anything decodes or reads.
+    init { com.fastkiwi.scan.perf.MemoryBudget.configure(app, settings.lowMemoryMode) }
     private val ocrService = com.fastkiwi.scan.ocr.OcrService(
-        com.fastkiwi.scan.ocr.DefaultOcrEngineFactory(app), viewModelScope,
+        com.fastkiwi.scan.ocr.DefaultOcrEngineFactory(
+            app,
+            // 2.0-perf: low-memory mode (also when forced in Settings) = the single-worker Fast engine.
+            device = { com.fastkiwi.scan.ocr.DeviceProfile(com.fastkiwi.scan.perf.MemoryBudget.lowMemory) },
+        ),
+        viewModelScope, idleMillis = com.fastkiwi.scan.perf.MemoryBudget.OCR_IDLE_RELEASE_MS,
         onPage = ocrDiagnostics::record, heapProbe = { android.os.Debug.getNativeHeapAllocatedSize() },
     )
     private val exporter = Exporter(app, store, ocrService) { settings.ocrMode }
     private val ocrReader = com.fastkiwi.scan.ocr.BackgroundOcr(store, ocrService, viewModelScope, options = {
         if (!settings.ocrAfterCapture) null
-        else com.fastkiwi.scan.ocr.OcrOptions(settings.ocrLanguage.toOcrLangs(), settings.ocrMode) to settings.ocrLanguage
+        else com.fastkiwi.scan.ocr.OcrOptions(
+            settings.ocrLanguage.toOcrLangs(), settings.ocrMode, com.fastkiwi.scan.perf.MemoryBudget.ocrMaxSide(), // 2.0-perf
+        ) to settings.ocrLanguage
     }) { refresh() }
+
+    // 2.0-perf: Settings «وضع الذاكرة المنخفضة». The OCR engine is chosen again on the next page.
+    val lowMemoryMode = mutableStateOf(settings.lowMemoryMode)
+
+    fun setLowMemoryMode(m: com.fastkiwi.scan.perf.MemoryBudget.Mode) {
+        settings.lowMemoryMode = m
+        lowMemoryMode.value = m
+        com.fastkiwi.scan.perf.MemoryBudget.configure(getApplication<Application>(), m)
+        BitmapIO.configureForBudget()
+        ocrService.close() // releases the current engine; the next read picks Fast or Accurate anew
+    }
     // 2.0-ocr end
     // 2.0-docs: declared before init { refresh() }, which reads them on a background thread.
     val folderStore = FolderStore(app.filesDir)
@@ -201,7 +221,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val startedAt = System.currentTimeMillis()
 
     init {
-        BitmapIO.configureForDevice(app)
+        BitmapIO.configureForBudget() // 2.0-perf: was configureForDevice; same rule plus low-memory mode
         refresh()
         // Page files are kept after delete/retake so Undo can bring them back;
         // anything no longer referenced is cleaned up on the next start. Files
@@ -432,7 +452,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 val retake = target.retakePageId
                 val keepFilter = retake?.let { id -> doc.pages.firstOrNull { it.id == id }?.filter }
                 // The heavy work (encode, render) happens outside the lock...
-                val newPage = addSource(doc.id, bmp, corners, keepFilter ?: settings.defaultFilter).copy(quality = quality) // 2.0-cam: quality report
+                // 2.0-cam2: automatic alignment (PRD §4.2): a small residual skew the report measured is
+                // removed by turning the outline (one warp, nothing invented); Undo or «قص» brings it back.
+                val straight = if (corners != null && quality != null) {
+                    com.fastkiwi.scan.core.Deskew.straighten(corners, bmp.width, bmp.height, quality.skewDegrees)
+                } else null
+                val pageQuality = if (straight != null) quality?.copy(skewDegrees = 0f) else quality
+                val newPage = addSource(doc.id, bmp, straight ?: corners, keepFilter ?: settings.defaultFilter).copy(quality = pageQuality) // 2.0-cam: quality report
                 bmp.recycle()
                 // 2.0-cam: glare found -> the camera offers a second shot from another angle.
                 glareOffer.value = if (retake == null && quality != null && com.fastkiwi.scan.core.GlareFusion.needsSecondShot(quality.glare)) doc.id to newPage.id else null
@@ -802,6 +828,24 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Removes a page from the document; its files stay until restart so Undo works. */
     fun deletePage(docId: String, index: Int) = mutatePages(docId, UiMessage(R.string.msg_page_deleted, undoDocId = docId)) { p ->
         if (index in p.indices) p.removeAt(index)
+    }
+
+    // 2.0-cam2: «تسوية الميل» in the page screen (automatic alignment on demand, imports too).
+    /** Measures the page's residual skew now and turns its outline by it (an ordinary, undoable crop edit). */
+    fun straightenPage(docId: String, pageId: String) {
+        viewModelScope.launch {
+            val turned = job("STRAIGHTEN") {
+                val page = store.load(docId)?.pages?.firstOrNull { it.id == pageId } ?: return@job null
+                com.fastkiwi.scan.imaging.AutoStraighten.measureAndTurn(store, docId, page)
+            }
+            if (turned == null) {
+                _messages.send(UiMessage(R.string.straighten_none))
+                return@launch
+            }
+            val (page, degrees) = turned
+            editPage(docId, pageId) { cur -> if (cur.corners == page.corners || cur.revision != page.revision) cur else cur.copy(corners = page.corners, quality = page.quality) }
+            _messages.send(UiMessage(R.string.straighten_done, String.format(Locale.getDefault(), "%.1f", kotlin.math.abs(degrees)), undoDocId = docId))
+        }
     }
 
     /** Applies an edit to one page and re-renders it. Edits apply in order, each to the latest page state. */
@@ -1211,7 +1255,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             val f = store.outFile(doc.id, page.id)
             if (!f.exists()) PageRenderer.renderAndSave(store, doc.id, page)?.recycle()
             val lang = vm.settings.ocrLanguage
-            val options = com.fastkiwi.scan.ocr.OcrOptions(lang.toOcrLangs(), vm.settings.ocrMode)
+            val options = com.fastkiwi.scan.ocr.OcrOptions(lang.toOcrLangs(), vm.settings.ocrMode, com.fastkiwi.scan.perf.MemoryBudget.ocrMaxSide()) // 2.0-perf
             val bmp = BitmapIO.decodeFile(f, options.maxSide) ?: return null
             return try {
                 val r = vm.ocrService.recognize(com.fastkiwi.scan.ocr.OcrInput.fromBitmap(bmp, options.maxSide), options)

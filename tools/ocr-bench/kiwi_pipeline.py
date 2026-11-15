@@ -414,10 +414,98 @@ def latin_letters(s: str) -> int:
     return sum(1 for ch in s if "a" <= ch.lower() <= "z")
 
 
+LRM, RLM = "‎", "‏"
+TESS_REORDER = True      # Tesseract's mixed-direction lines back into logical order (TesseractLineOrder.kt)
+ROUTE_MIXED = True       # 2.0 mixed-page fix, per-line script routing (OcrFusion.kt); tuned on dev + dev2 only
+MIXED_MIN_GAIN = 4       # an Arabic line where Tesseract read this many more Latin letters ...
+MIXED_AGREE = 0.8        # ... and agrees with PP-OCR on the Arabic letters this much (and keeps every digit)
+
+
+def is_arabic_letter(ch: str) -> bool:
+    return "ؠ" <= ch <= "ي" or "ٱ" <= ch <= "ۓ"
+
+
+def tess_logical(s: str) -> str:
+    """Tesseract writes a mixed Arabic/Latin line with bidi marks and its runs in display order. If the
+    first mark is RLM, the line was laid out left to right and each Arabic run is wrapped RLM..LRM: the
+    logical order is the runs reversed. If it is LRM, the line is right to left and each Latin run is
+    wrapped LRM..RLM, with neighbouring numbers in display order: such a run of non-Arabic words is
+    reversed word by word."""
+    if not TESS_REORDER or (LRM not in s and RLM not in s):
+        return s
+    first_rlm = s.find(RLM) != -1 and (s.find(LRM) == -1 or s.find(RLM) < s.find(LRM))
+    if first_rlm:
+        runs, buf, inside = [], [], False
+        for ch in s:
+            if ch == RLM:
+                runs.append("".join(buf)); buf = []; inside = True
+            elif ch == LRM and inside:
+                runs.append("".join(buf)); buf = []; inside = False
+            elif ch in (LRM, RLM):
+                continue
+            else:
+                buf.append(ch)
+        runs.append("".join(buf))
+        runs = [r.strip() for r in runs if r.strip()]
+        return " ".join(reversed(runs))
+    tokens = s.split()
+    marked = [LRM in t or RLM in t for t in tokens]
+    clean = [t.replace(LRM, "").replace(RLM, "") for t in tokens]
+    out, i = [], 0
+    while i < len(clean):
+        if clean[i] and not any(is_arabic_letter(c) for c in clean[i]):
+            j = i
+            while j < len(clean) and clean[j] and not any(is_arabic_letter(c) for c in clean[j]):
+                j += 1
+            run = clean[i:j]
+            out.extend(reversed(run) if j - i > 1 and any(marked[i:j]) else run)
+            i = j
+        else:
+            out.append(clean[i]); i += 1
+    return " ".join(t for t in out if t)
+
+
+def digits(s: str) -> int:
+    """Western and Arabic-Indic digits: Tesseract's eng model reads Arabic-Indic digits as Latin letters
+    (٧ -> V, ٨ -> A), so 'more Latin' that costs digits is a misreading, not an English word."""
+    return sum(1 for ch in s if "0" <= ch <= "9" or "٠" <= ch <= "٩")
+
+
+def levenshtein(a: str, b: str) -> int:
+    prev = list(range(len(b) + 1))
+    for i, ca in enumerate(a, 1):
+        cur = [i]
+        for j, cb in enumerate(b, 1):
+            cur.append(min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (ca != cb)))
+        prev = cur
+    return prev[-1]
+
+
+MIXED_MIN_ARABIC = 3      # ... on a line PP-OCR read at least this many Arabic letters on (not a cell of digits)
+
+
+def arabic_agreement(a: str, b: str) -> float:
+    """How alike the Arabic letters of two readings are (0..1); 0 when [a] has fewer than MIXED_MIN_ARABIC
+    of them: a cell of Arabic-Indic digits that Tesseract read as Latin letters is not an Arabic line."""
+    x = "".join(c for c in a if is_arabic_letter(c))
+    y = "".join(c for c in b if is_arabic_letter(c))
+    if len(x) < MIXED_MIN_ARABIC:
+        return 0.0
+    return 1.0 - levenshtein(x, y) / max(len(x), len(y))
+
+
 def fuse(pp: str, tess: str, latin_rule: bool) -> str:
     more_num = count_numbers(tess) > count_numbers(pp)
     more_lat = latin_rule and latin_letters(tess) >= latin_letters(pp) + 3
-    return tess if (more_num or more_lat) else pp
+    if more_num or more_lat:
+        return tess
+    # An Arabic line with Latin words the Arabic model dropped or mangled: Tesseract (ara+eng) read the
+    # same Arabic and more Latin, without losing digits. (A "Latin line -> Tesseract" rule was tried on
+    # the dev sets and dropped: it sends table cells of Arabic-Indic digits to Tesseract, tables 7.5 -> 15.4 %.)
+    if (ROUTE_MIXED and latin_letters(tess) >= latin_letters(pp) + MIXED_MIN_GAIN
+            and arabic_agreement(pp, tess) >= MIXED_AGREE and digits(tess) >= digits(pp)):
+        return tess
+    return pp
 
 
 def post_process(s: str) -> str:
@@ -555,9 +643,9 @@ class KiwiFused:
                 continue
             pick = t
             if self.use_tess:
-                tt = self.tess_read(norm, b)
-                tess_texts.append(tt)
-                pick = fuse(t, tt, self.latin_rule)
+                raw = self.tess_read(norm, b)
+                tess_texts.append(raw)  # raw Tesseract text (the golden test feeds it to Kotlin)
+                pick = fuse(t, tess_logical(raw), self.latin_rule)
             else:
                 tess_texts.append(None)
             pick = post_process(pick)

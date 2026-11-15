@@ -123,6 +123,16 @@ fun SettingsScreen(vm: AppViewModel) {
                 }
             }
 
+            // 2.0-perf: low-memory mode (automatic / always on / off)
+            SectionHeader(stringResource(R.string.perf_settings_group))
+            SettingsGroup(1) { _, shape ->
+                SettingsRow(
+                    KiwiIcons.settings(), stringResource(R.string.perf_low_memory_title),
+                    stringResource(lowMemorySummary(vm.lowMemoryMode.value)) + " · " + stringResource(R.string.perf_low_memory_hint),
+                    shape, { dialog = "low_memory" },
+                )
+            }
+
             SectionHeader(stringResource(R.string.privacy_title))
             Surface(color = MaterialTheme.colorScheme.tertiaryContainer, shape = MaterialTheme.shapes.large, modifier = Modifier.fillMaxWidth()) {
                 Row(Modifier.padding(Dimens.l)) {
@@ -179,8 +189,27 @@ fun SettingsScreen(vm: AppViewModel) {
             onDismiss = { dialog = null },
         ) { ocrMode = OcrMode.entries[it]; s.ocrMode = ocrMode; dialog = null }
         "ocr_diag" -> OcrDiagnosticsDialog(vm.ocrDiagnostics.snapshot()) { dialog = null }
+        // 2.0-perf
+        "low_memory" -> ChoiceDialog(
+            stringResource(R.string.perf_low_memory_title),
+            com.fastkiwi.scan.perf.MemoryBudget.Mode.entries.map { stringResource(lowMemoryLabel(it)) },
+            com.fastkiwi.scan.perf.MemoryBudget.Mode.entries.indexOf(vm.lowMemoryMode.value),
+            onDismiss = { dialog = null },
+        ) { vm.setLowMemoryMode(com.fastkiwi.scan.perf.MemoryBudget.Mode.entries[it]); dialog = null }
     }
 }
+
+// 2.0-perf: low-memory mode labels
+private fun lowMemoryLabel(m: com.fastkiwi.scan.perf.MemoryBudget.Mode) = when (m) {
+    com.fastkiwi.scan.perf.MemoryBudget.Mode.AUTO -> R.string.perf_low_memory_auto
+    com.fastkiwi.scan.perf.MemoryBudget.Mode.ON -> R.string.perf_low_memory_on
+    com.fastkiwi.scan.perf.MemoryBudget.Mode.OFF -> R.string.perf_low_memory_off
+}
+
+private fun lowMemorySummary(m: com.fastkiwi.scan.perf.MemoryBudget.Mode) =
+    if (m != com.fastkiwi.scan.perf.MemoryBudget.Mode.AUTO) lowMemoryLabel(m)
+    else if (com.fastkiwi.scan.perf.MemoryBudget.deviceLow) R.string.perf_low_memory_auto_on
+    else R.string.perf_low_memory_auto_off
 
 // 2.0-ocr: OCR settings helpers
 private fun ocrModeLabel(m: OcrMode) = if (m == OcrMode.ACCURATE) R.string.ocr_mode_accurate else R.string.ocr_mode_fast

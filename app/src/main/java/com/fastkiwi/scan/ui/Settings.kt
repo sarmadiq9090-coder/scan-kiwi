@@ -68,6 +68,12 @@ class Settings(ctx: Context) {
         get() = p.getBoolean("ocr_after_capture", true)
         set(v) = p.edit().putBoolean("ocr_after_capture", v).apply()
 
+    // 2.0-perf
+    /** «وضع الذاكرة المنخفضة»: automatic (the phone decides, default), always on, or off. */
+    var lowMemoryMode: com.fastkiwi.scan.perf.MemoryBudget.Mode
+        get() = enumOr(p.getString("low_memory_mode", null), com.fastkiwi.scan.perf.MemoryBudget.Mode.AUTO)
+        set(v) = p.edit().putString("low_memory_mode", v.name).apply()
+
     companion object {
         inline fun <reified T : Enum<T>> enumOr(name: String?, default: T): T =
             name?.let { n -> enumValues<T>().firstOrNull { it.name == n } } ?: default

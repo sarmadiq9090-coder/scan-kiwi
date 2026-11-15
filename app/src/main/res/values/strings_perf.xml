@@ -1,4 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- 2.0 strings: low-memory mode, Android 7, hardening. Arabic (default). Keep keys identical in values/ and values-en/. -->
 <resources>
+    <string name="perf_settings_group">الأداء</string>
+    <string name="perf_low_memory_title">وضع الذاكرة المنخفضة</string>
+    <string name="perf_low_memory_hint">صفحات وقراءة نص بدقة ٢٠٠٠ بكسل، وقارئ نص واحد سريع. للهواتف ذات الذاكرة الأقل من ٣ غيغابايت.</string>
+    <string name="perf_low_memory_auto">تلقائي</string>
+    <string name="perf_low_memory_on">مفعّل دائماً</string>
+    <string name="perf_low_memory_off">متوقف</string>
+    <string name="perf_low_memory_auto_on">تلقائي · مفعّل على هذا الهاتف</string>
+    <string name="perf_low_memory_auto_off">تلقائي · غير مطلوب على هذا الهاتف</string>
 </resources>

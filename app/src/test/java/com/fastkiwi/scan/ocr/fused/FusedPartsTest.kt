@@ -16,6 +16,38 @@ class FusedPartsTest {
 
     // ------------------------------------------------------------------ OcrFusion
     @Test
+    fun mixedLinesGoToTesseractOnlyWhenTheArabicAgreesAndNoDigitIsLost() {
+        // 2.0 mixed-page fix (docs/ocr-benchmark.md): Latin words the Arabic model dropped.
+        val f = OcrFusion()
+        assertEquals(
+            "تم تثبيت نظام Windows على جميع الأجهزة الجديدة",
+            f.choose("تم تثبيت نظام  على جميع الأجهزة الجديدة", "تم تثبيت نظام Windows على جميع الأجهزة الجديدة"),
+        )
+        // A table cell of Arabic-Indic digits that Tesseract's eng model read as letters: not an Arabic line.
+        assertFalse(f.preferTesseract("١٦٧٨١،٧٥", "VTVAI,VO"))
+        // "More Latin" that costs digits is a misreading.
+        assertFalse(f.preferTesseract("تم استلام ٣٨٩ طلبا في الربع", "تم استلام Lbxy في الربع"))
+        // Different Arabic: the Arabic recogniser keeps the line.
+        assertFalse(f.preferTesseract("أوصى المجلس بتشكيل فريق عمل", "sagsag بتشكيل فريق"))
+    }
+
+    @Test
+    fun tesseractMixedLinesAreReorderedToLogicalOrder() {
+        val lrm = TesseractLineOrder.LRM
+        val rlm = TesseractLineOrder.RLM
+        // Laid out left to right (RLM first): Arabic runs wrapped RLM..LRM, runs in display order.
+        assertEquals(
+            "اسم المنتج Smart Router موديل AX700",
+            TesseractLineOrder.logical("AX700 ${rlm}موديل$lrm Smart Router ${rlm}اسم المنتج$lrm"),
+        )
+        // Right to left (LRM first): a run of marked non-Arabic words is reversed word by word.
+        assertEquals("رقم الفاتورة 2024 INV", TesseractLineOrder.logical("رقم الفاتورة ${lrm}INV 2024$rlm"))
+        assertEquals("البريد support@example.com", TesseractLineOrder.logical("البريد ${lrm}support@example.com$rlm"))
+        // No marks: unchanged.
+        assertEquals("Total 12 ريال", TesseractLineOrder.logical("Total 12 ريال"))
+    }
+
+    @Test
     fun tesseractWinsWhenItReadsMoreNumbers() {
         val f = OcrFusion()
         // PP-OCRv5 Arabic drops Western digits inside Arabic lines.
@@ -30,8 +62,10 @@ class FusedPartsTest {
     @Test
     fun latinRuleIsOffAsTunedOnTheDevSet() {
         assertFalse(OcrFusion.LATIN_RULE)
-        assertEquals("اسم المنتج موديل", OcrFusion().choose("اسم المنتج موديل", "اسم المنتج Smart Router موديل"))
-        assertEquals("اسم المنتج Smart Router موديل", OcrFusion(latinRule = true).choose("اسم المنتج موديل", "اسم المنتج Smart Router موديل"))
+        // The 1.5 Latin rule (any 3 more Latin letters) stays off; the 2.0 mixed rule also needs the same Arabic.
+        assertEquals("اسم المنتج موديل", OcrFusion().choose("اسم المنتج موديل", "اسم Smart Router"))
+        assertEquals("اسم Smart Router", OcrFusion(latinRule = true).choose("اسم المنتج موديل", "اسم Smart Router"))
+        assertEquals("اسم المنتج Smart Router موديل", OcrFusion().choose("اسم المنتج موديل", "اسم المنتج Smart Router موديل"))
     }
 
     @Test
