@@ -5,7 +5,6 @@ package com.fastkiwi.scan.export
 import android.content.Context
 import android.graphics.Bitmap
 import com.fastkiwi.scan.core.Filter
-import com.fastkiwi.scan.core.ImageFilters
 import com.fastkiwi.scan.core.OcrWord
 import com.fastkiwi.scan.core.PageSize
 import com.fastkiwi.scan.core.PdfImage
@@ -30,6 +29,8 @@ import com.fastkiwi.scan.pdf.PageNumbering
 import com.fastkiwi.scan.pdf.SafeOutput
 import com.fastkiwi.scan.pdf.TargetSize
 import com.fastkiwi.scan.pdf.Watermark
+import com.fastkiwi.scan.perf.MemoryBudget
+import com.fastkiwi.scan.perf.PixelStrips
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import java.io.ByteArrayOutputStream
@@ -104,12 +105,15 @@ class Exporter(
         return if (name80.isNotEmpty() && name80.last().isHighSurrogate()) name80.dropLast(1) else name80
     }
 
-    /** Decodes a finished page no larger than [maxSide] (decoding smaller is much faster). */
-    private suspend fun pageBitmap(doc: ScanDocument, index: Int, maxSide: Int = BitmapIO.MAX_SOURCE_SIDE): Bitmap? {
+    /**
+     * Decodes a finished page no larger than [maxSide] (decoding smaller is much faster).
+     * 2.0-perf: with a [pool], into the bitmap the previous page used (give it back with [release]).
+     */
+    private suspend fun pageBitmap(doc: ScanDocument, index: Int, maxSide: Int = BitmapIO.MAX_SOURCE_SIDE, pool: BitmapIO.Pool? = null): Bitmap? {
         val page = doc.pages[index]
         val f = store.outFile(doc.id, page.id)
         if (!f.exists()) PageRenderer.renderAndSave(store, doc.id, page)?.recycle()
-        return BitmapIO.decodeFile(f, maxSide)
+        return if (pool != null) BitmapIO.decodeFile(f, maxSide, pool) else BitmapIO.decodeFile(f, maxSide)
     }
 
     /** What a PDF export depends on; equal keys mean the last file can be shared again as is. */
@@ -170,7 +174,7 @@ class Exporter(
         val result = try {
             val target = opt.targetBytes
             if (target == null) {
-                val s = opt.quality.settings
+                val s = MemoryBudget.cap(opt.quality.settings) // 2.0-perf
                 safe.checkSpace(estimatePdfSize(doc, s))
                 pass.write(safe, s)
                 PdfExportResult(safe.final, safe.final.length(), null, s)
@@ -233,24 +237,32 @@ class Exporter(
         val icc = if (pdfA) ctx.assets.open("icc/sRGB-v2-micro.icc").use { it.readBytes() } else null
         // 2.0-ocr: one OCR service for the export (shared with the background reader when given).
         val ocr = if (opt.ocr) (sharedOcr ?: OcrService(DefaultOcrEngineFactory(ctx))) else null
-        val ocrOptions = OcrOptions(opt.ocrLanguage.toOcrLangs(), ocrMode())
+        // 2.0-perf: low-memory mode reads a 2000 px plane (MemoryBudget).
+        val ocrOptions = OcrOptions(opt.ocrLanguage.toOcrLangs(), ocrMode(), MemoryBudget.ocrMaxSide())
         var ocrOn = ocr != null
         var revived = false
+        // 2.0-perf: one decode bitmap reused page after page (inBitmap).
+        val pool = BitmapIO.Pool()
 
-        fun close() { if (sharedOcr == null) runCatching { ocr?.close() } }
+        fun close() {
+            pool.close()
+            if (sharedOcr == null) runCatching { ocr?.close() }
+        }
 
-        /** Bytes of page [i] encoded at [s] (decorations included), for the size search. */
-        suspend fun encodedSize(i: Int, s: EncodeSettings): Long {
+        /** Bytes of page [i] encoded at [s0] (decorations included), for the size search. */
+        suspend fun encodedSize(i: Int, s0: EncodeSettings): Long {
+            val s = MemoryBudget.cap(s0) // 2.0-perf
             val bitonal = doc.pages[i].filter == Filter.BW
-            val full = pageBitmap(doc, i, if (bitonal) s.bitonalLongSide else s.longSide) ?: return 0L
-            return when (val img = encode(full, bitonal, s, i, doc.pages.size, opt).first) {
+            val full = pageBitmap(doc, i, if (bitonal) s.bitonalLongSide else s.longSide, pool) ?: return 0L
+            return when (val img = encode(full, bitonal, s, i, doc.pages.size, opt, pool).first) {
                 is PdfImage.Jpeg -> img.bytes.size.toLong()
                 is PdfImage.Bitonal -> PdfWriter.deflate(img.bits).size.toLong()
             }
         }
 
-        /** One full pass: every page at [s] into [safe]'s `.part` file, then validated and renamed. */
-        suspend fun write(safe: SafeOutput, s: EncodeSettings) {
+        /** One full pass: every page at [s0] into [safe]'s `.part` file, then validated and renamed. */
+        suspend fun write(safe: SafeOutput, s0: EncodeSettings) {
+            val s = MemoryBudget.cap(s0) // 2.0-perf: low-memory mode keeps pages at most 2000 px
             val writer = PdfWriter(opt.pageSize, doc.name, opt.password?.takeIf { it.isNotEmpty() }, font, pdfAIccProfile = icc)
             var written = 0
             safe.write { stream ->
@@ -267,7 +279,7 @@ class Exporter(
                     val needOcr = engineKey != null && cached == null
                     // Decode only as large as needed: the export size, or OCR's working size.
                     val target = if (bitonal) s.bitonalLongSide else s.longSide
-                    val full = pageBitmap(doc, i, if (needOcr) max(target, ocrOptions.maxSide) else target) ?: continue
+                    val full = pageBitmap(doc, i, if (needOcr) max(target, ocrOptions.maxSide) else target, pool) ?: continue
                     // Cached boxes are in the frame OCR read (often larger than this export's
                     // image): bring them into this bitmap's pixels before anything else.
                     var words: List<OcrWord> = cached?.let {
@@ -291,7 +303,7 @@ class Exporter(
                         }
                     }
                     phase(Phase.WRITING)
-                    val (pdfImage, k) = encode(full, bitonal, s, i, doc.pages.size, opt)
+                    val (pdfImage, k) = encode(full, bitonal, s, i, doc.pages.size, opt, pool)
                     val scaledWords = scaleWords(words, k, k)
                     // Physical size so a page is about A4 tall when "fit to image" is chosen.
                     val dpi = max(pdfImage.width, pdfImage.height) / 11.69f
@@ -317,26 +329,32 @@ class Exporter(
      * Encodes one finished page for the PDF at the chosen quality (recycles [full]).
      * Returns the image and the scale factor applied to it.
      */
-    private fun encode(full: Bitmap, bitonal: Boolean, quality: EncodeSettings, index: Int = 0, total: Int = 1, opt: ExportOptions? = null): Pair<PdfImage, Float> {
+    private fun encode(full: Bitmap, bitonal: Boolean, quality: EncodeSettings, index: Int = 0, total: Int = 1, opt: ExportOptions? = null, pool: BitmapIO.Pool? = null): Pair<PdfImage, Float> {
         val fullW = full.width
-        var img = BitmapIO.fit(full, if (bitonal) quality.bitonalLongSide else quality.longSide)
+        // 2.0-perf: a pooled bitmap goes back to the pool instead of being recycled.
+        val release: (Bitmap) -> Unit = { b -> if (pool != null) pool.give(b) else b.recycle() }
+        val side = if (bitonal) quality.bitonalLongSide else quality.longSide
+        var img = if (max(full.width, full.height) <= side) full else {
+            val kk = side.toFloat() / max(full.width, full.height)
+            Bitmap.createScaledBitmap(full, max(1, (full.width * kk).toInt()), max(1, (full.height * kk).toInt()), true)
+                .also { if (it !== full) release(full) }
+        }
         val k = img.width.toFloat() / fullW
         // 2.0-pdf: page numbers and watermark go into the pixels (see PageDecor for why).
         if (opt != null && decor.isActive(opt.pageNumbers, opt.watermark)) {
-            if (!img.isMutable) img = img.copy(Bitmap.Config.ARGB_8888, true).also { img.recycle() }
+            if (!img.isMutable) img = img.copy(Bitmap.Config.ARGB_8888, true).also { release(img) }
             decor.draw(img, index, total, opt.pageNumbers, opt.watermark, bitonal)
         }
         val pdfImage = if (bitonal) {
-            val px = IntArray(img.width * img.height)
-            img.getPixels(px, 0, img.width, 0, 0, img.width, img.height)
-            PdfImage.Bitonal(img.width, img.height, ImageFilters.packBits(px, img.width, img.height))
+            // 2.0-perf: packed a strip of rows at a time (no full ARGB IntArray copy); same bits as packBits.
+            PdfImage.Bitonal(img.width, img.height, PixelStrips.packBits(img))
         } else {
             val bos = ByteArrayOutputStream()
             img.compress(Bitmap.CompressFormat.JPEG, quality.jpegQuality, bos)
             val bytes = bos.toByteArray()
             PdfImage.Jpeg(img.width, img.height, bytes, PdfWriter.jpegComponents(bytes))
         }
-        img.recycle()
+        release(img)
         return pdfImage to k
     }
 
@@ -349,7 +367,8 @@ class Exporter(
     fun estimatePdfSize(doc: ScanDocument, opt: ExportOptions): Long =
         opt.targetBytes?.let { minOf(it, estimatePdfSize(doc, TargetSize.LADDER.first())) } ?: estimatePdfSize(doc, opt.quality.settings)
 
-    fun estimatePdfSize(doc: ScanDocument, s: EncodeSettings): Long {
+    fun estimatePdfSize(doc: ScanDocument, s0: EncodeSettings): Long {
+        val s = MemoryBudget.cap(s0) // 2.0-perf: what the export will really write
         var total = 2000L
         for (p in doc.pages) {
             val f = store.outFile(doc.id, p.id)
@@ -392,8 +411,10 @@ class Exporter(
             for (i in doc.pages.indices) {
                 currentCoroutineContext().ensureActive()
                 progress(i, doc.pages.size)
-                val full = pageBitmap(doc, i) ?: continue
-                var img = BitmapIO.fit(full, opt.quality.longSide)
+                // 2.0-perf: decode only as large as the export (was the 3200 px source size), within the budget.
+                val side = MemoryBudget.capSide(opt.quality.longSide)
+                val full = pageBitmap(doc, i, side) ?: continue
+                var img = BitmapIO.fit(full, side)
                 if (decor.isActive(opt.pageNumbers, opt.watermark)) {
                     if (!img.isMutable) img = img.copy(Bitmap.Config.ARGB_8888, true).also { img.recycle() }
                     decor.draw(img, i, doc.pages.size, opt.pageNumbers, opt.watermark, bitonal = false)

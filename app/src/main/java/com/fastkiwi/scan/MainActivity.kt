@@ -61,6 +61,8 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // 2.0-perf: StrictMode (main-thread disk/network, leaks → log) in debug builds only.
+        com.fastkiwi.scan.perf.DebugStrictMode.install(BuildConfig.DEBUG)
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         if (savedInstanceState == null) handleIncoming(intent)

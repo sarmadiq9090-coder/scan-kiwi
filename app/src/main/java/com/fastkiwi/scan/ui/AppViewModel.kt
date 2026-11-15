@@ -99,15 +99,35 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     val settings = Settings(app)
     // 2.0-ocr: one OCR service (Accurate/Fast engines) shared by exports and the background reader.
     val ocrDiagnostics = com.fastkiwi.scan.ocr.OcrDiagnostics(app)
+    // 2.0-perf: low-memory mode (phone + Settings override) decided before anything decodes or reads.
+    init { com.fastkiwi.scan.perf.MemoryBudget.configure(app, settings.lowMemoryMode) }
     private val ocrService = com.fastkiwi.scan.ocr.OcrService(
-        com.fastkiwi.scan.ocr.DefaultOcrEngineFactory(app), viewModelScope,
+        com.fastkiwi.scan.ocr.DefaultOcrEngineFactory(
+            app,
+            // 2.0-perf: low-memory mode (also when forced in Settings) = the single-worker Fast engine.
+            device = { com.fastkiwi.scan.ocr.DeviceProfile(com.fastkiwi.scan.perf.MemoryBudget.lowMemory) },
+        ),
+        viewModelScope, idleMillis = com.fastkiwi.scan.perf.MemoryBudget.OCR_IDLE_RELEASE_MS,
         onPage = ocrDiagnostics::record, heapProbe = { android.os.Debug.getNativeHeapAllocatedSize() },
     )
     private val exporter = Exporter(app, store, ocrService) { settings.ocrMode }
     private val ocrReader = com.fastkiwi.scan.ocr.BackgroundOcr(store, ocrService, viewModelScope, options = {
         if (!settings.ocrAfterCapture) null
-        else com.fastkiwi.scan.ocr.OcrOptions(settings.ocrLanguage.toOcrLangs(), settings.ocrMode) to settings.ocrLanguage
+        else com.fastkiwi.scan.ocr.OcrOptions(
+            settings.ocrLanguage.toOcrLangs(), settings.ocrMode, com.fastkiwi.scan.perf.MemoryBudget.ocrMaxSide(), // 2.0-perf
+        ) to settings.ocrLanguage
     }) { refresh() }
+
+    // 2.0-perf: Settings «وضع الذاكرة المنخفضة». The OCR engine is chosen again on the next page.
+    val lowMemoryMode = mutableStateOf(settings.lowMemoryMode)
+
+    fun setLowMemoryMode(m: com.fastkiwi.scan.perf.MemoryBudget.Mode) {
+        settings.lowMemoryMode = m
+        lowMemoryMode.value = m
+        com.fastkiwi.scan.perf.MemoryBudget.configure(getApplication<Application>(), m)
+        BitmapIO.configureForBudget()
+        ocrService.close() // releases the current engine; the next read picks Fast or Accurate anew
+    }
     // 2.0-ocr end
     // 2.0-docs: declared before init { refresh() }, which reads them on a background thread.
     val folderStore = FolderStore(app.filesDir)
@@ -201,7 +221,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val startedAt = System.currentTimeMillis()
 
     init {
-        BitmapIO.configureForDevice(app)
+        BitmapIO.configureForBudget() // 2.0-perf: was configureForDevice; same rule plus low-memory mode
         refresh()
         // Page files are kept after delete/retake so Undo can bring them back;
         // anything no longer referenced is cleaned up on the next start. Files
@@ -1235,7 +1255,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             val f = store.outFile(doc.id, page.id)
             if (!f.exists()) PageRenderer.renderAndSave(store, doc.id, page)?.recycle()
             val lang = vm.settings.ocrLanguage
-            val options = com.fastkiwi.scan.ocr.OcrOptions(lang.toOcrLangs(), vm.settings.ocrMode)
+            val options = com.fastkiwi.scan.ocr.OcrOptions(lang.toOcrLangs(), vm.settings.ocrMode, com.fastkiwi.scan.perf.MemoryBudget.ocrMaxSide()) // 2.0-perf
             val bmp = BitmapIO.decodeFile(f, options.maxSide) ?: return null
             return try {
                 val r = vm.ocrService.recognize(com.fastkiwi.scan.ocr.OcrInput.fromBitmap(bmp, options.maxSide), options)
