@@ -52,9 +52,14 @@ class SafeOutput(
             override fun write(b: ByteArray, off: Int, len: Int) = buf.write(b, off, len)
             override fun flush() = buf.flush()
             override fun close() {
-                buf.flush()
-                (raw as? FileOutputStream)?.fd?.sync()
-                buf.close()
+                // The file handle is released even when the last write fails (full disk), so
+                // the part file can be deleted at once (Windows hosts refuse to delete open files).
+                try {
+                    buf.flush()
+                    (raw as? FileOutputStream)?.fd?.sync()
+                } finally {
+                    raw.close()
+                }
             }
         }
     }
