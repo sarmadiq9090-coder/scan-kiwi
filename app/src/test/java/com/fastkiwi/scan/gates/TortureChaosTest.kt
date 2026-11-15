@@ -208,6 +208,56 @@ class TortureChaosTest {
     }
 
     /**
+     * 2.0-gates (`data/IoFaults` seam): the disk fills up in the *middle* of a write, after 0, 1 KB, 100 KB
+     * and 1 MB, for (a) a page edit (doc.json and the page images) and (b) the PDF export. Each attempt
+     * either completes or leaves the document as it was; no `.tmp` / `.part` file stays exposed; a failed
+     * export never reaches the share sheet; with space back everything works.
+     */
+    @Test(timeout = 600_000)
+    fun diskFullMidWriteKeepsDocumentsIntact() {
+        val vm = AppViewModel(app)
+        val doc = Gates.seed(vm.store, 3, w = 1200, h = 1600)
+        val exports = File(app.cacheDir, "exports")
+        try {
+            for (n in listOf(0L, 1024L, 100_000L, 1_000_000L)) {
+                // (a) A page edit: doc.json and the page images are written through writeAtomically.
+                val rotationBefore = vm.store.load(doc.id)!!.pages[0].rotation
+                com.fastkiwi.scan.data.IoFaults.hook = { f, written ->
+                    if (written >= n && (f.name == "doc.json" || f.name.endsWith(".jpg"))) com.fastkiwi.scan.data.IoFaults.diskFull()
+                }
+                vm.editPage(doc.id, doc.pages[0].id) { it.copy(rotation = (it.rotation + 90) % 360) }
+                Gates.awaitIdle(vm)
+                com.fastkiwi.scan.data.IoFaults.hook = null
+                nextMessage(vm, 2_000)
+                val now = vm.store.load(doc.id)
+                assertNotNull("document unreadable after a disk-full edit at $n bytes", now)
+                assertTrue("rotation $rotationBefore -> ${now!!.pages[0].rotation}", now.pages[0].rotation in listOf(rotationBefore, (rotationBefore + 90) % 360))
+                assertEquals("integrity after a disk-full edit at $n bytes", emptyList<String>(), Gates.integrity(vm.store))
+                assertTrue("a .tmp file is left at $n bytes", vm.store.dir(doc.id).walkTopDown().none { it.isFile && it.name.endsWith(".tmp") })
+                // (b) The PDF export: its .part file fills the disk.
+                com.fastkiwi.scan.data.IoFaults.hook = { f, written -> if (written >= n && f.name.endsWith(".part")) com.fastkiwi.scan.data.IoFaults.diskFull() }
+                vm.share(doc.id, ExportOptions(PageSize.A4, Quality.HIGH), asJpeg = false)
+                val shared = Gates.awaitExport(vm, 60_000)
+                com.fastkiwi.scan.data.IoFaults.hook = null
+                assertTrue(Gates.pump(20_000) { vm.exportState.value == null })
+                if (shared == null) assertEquals("no error shown for a disk-full export at $n bytes", R.string.msg_error, nextMessage(vm, 5_000)?.res)
+                assertTrue("a .part file is left at $n bytes", exports.listFiles().orEmpty().none { it.name.endsWith(".part") })
+            }
+        } finally {
+            com.fastkiwi.scan.data.IoFaults.hook = null
+        }
+        // Space is back: an edit and an export work, nothing was lost.
+        vm.editPage(doc.id, doc.pages[1].id) { it.copy(rotation = 180) }
+        Gates.awaitIdle(vm)
+        assertEquals(180, vm.store.load(doc.id)!!.pages[1].rotation)
+        vm.share(doc.id, ExportOptions(PageSize.A4, Quality.SMALL), asJpeg = false)
+        assertNotNull(Gates.awaitExport(vm, 60_000))
+        assertEquals(3, vm.store.load(doc.id)!!.pages.size)
+        assertTrue(Gates.integrity(vm.store).isEmpty())
+        Gates.perf("chaos: disk full mid-write (0 B, 1 KB, 100 KB, 1 MB; page edit and PDF export): documents intact, no partial file")
+    }
+
+    /**
      * When saving an edit fails, the page image on disk must still show the saved state:
      * the thumbnail, the page view and the next export read that image.
      */

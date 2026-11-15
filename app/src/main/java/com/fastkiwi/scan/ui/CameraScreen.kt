@@ -269,6 +269,17 @@ private fun CameraContent(vm: AppViewModel, initial: Screen.Camera, onClose: () 
         status = R.string.status_capturing
         val liveQuad = live.quad
         synchronized(gate) { gate.captured(liveQuad) }
+        // 2.0-gates (test seam): a test-supplied photo goes through the same path as a real shot.
+        CaptureSeam.camera?.let { fake ->
+            val shot = fake.takePicture()
+            if (shot == null) { capturing = false; status = R.string.status_error; return }
+            vm.addCapture(target, shot.first, shot.second, liveQuad) { r ->
+                capturing = false
+                cooldownUntil = System.currentTimeMillis() + 2000
+                if (r == null) status = R.string.status_error else if (vm.afterCapture(target, r, auto)) status = R.string.status_added
+            }
+            return
+        }
         imageCapture.takePicture(ContextCompat.getMainExecutor(ctx), object : ImageCapture.OnImageCapturedCallback() {
             override fun onCaptureSuccess(image: ImageProxy) {
                 val buf = image.planes[0].buffer
@@ -291,6 +302,33 @@ private fun CameraContent(vm: AppViewModel, initial: Screen.Camera, onClose: () 
                 status = R.string.status_error
             }
         })
+    }
+
+    // 2.0-gates (test seam): frames from a test drive the same detection and auto-capture gate as the camera.
+    LaunchedEffect(Unit) {
+        val fake = CaptureSeam.camera ?: return@LaunchedEffect
+        while (true) {
+            val frame = fake.previewFrame()
+            if (frame != null) {
+                val det = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { com.fastkiwi.scan.imaging.BitmapIO.detectPage(frame) }
+                // The same content signature the camera path feeds (2.0-cam2, CAM-06), on a 320 px copy.
+                val content = if (det != null && autoFlag.get()) kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                    runCatching {
+                        // Not BitmapIO.fit: that recycles its source, and the frame belongs to the test.
+                        val k = minOf(1f, 320f / maxOf(frame.width, frame.height))
+                        val small = android.graphics.Bitmap.createScaledBitmap(frame, maxOf(1, (frame.width * k).toInt()), maxOf(1, (frame.height * k).toInt()), true)
+                        val px = IntArray(small.width * small.height)
+                        small.getPixels(px, 0, small.width, 0, 0, small.width, small.height)
+                        if (small !== frame) small.recycle()
+                        val gray = com.fastkiwi.scan.core.ImageFilters.toGray(px, small.width, small.height)
+                        QualityMetrics.contentSignature(gray, det.quad.scale(small.width.toFloat(), small.height.toFloat()))
+                    }.getOrNull()
+                } else null
+                val u = synchronized(gate) { gate.feed(det?.quad, det?.confident == true, android.os.SystemClock.uptimeMillis(), autoFlag.get(), true, content) }
+                live = Live(u.quad, frame.width.toFloat() / frame.height, u.state, u.progress)
+            }
+            kotlinx.coroutines.delay(100)
+        }
     }
 
     DisposableEffect(lifecycleOwner) {

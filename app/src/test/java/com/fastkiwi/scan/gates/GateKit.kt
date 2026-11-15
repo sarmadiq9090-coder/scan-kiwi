@@ -106,7 +106,7 @@ object Gates {
         repeat(10) {
             if (!dir.exists() || dir.deleteRecursively()) return true
             System.gc()
-            ("DEPRECATION") System.runFinalization()
+            @Suppress("DEPRECATION") System.runFinalization()
             Thread.sleep(20)
         }
         return !dir.exists()

@@ -51,16 +51,24 @@ class TorturePerfTest {
     private val app get() = RuntimeEnvironment.getApplication()
 
     /** Stands in for Tesseract (no native library on the JVM): a few words per page, ~20 ms. */
-    private class FakeOcr(val calls: AtomicInteger) : PageOcr {
-        override fun recognize(page: Bitmap, lang: OcrLanguage): List<OcrWord> {
+    /** A fake «دقيق» engine behind the 2.0 `OcrEngine` seam: three words per page, 20 ms per page. */
+    private class FakeOcr(val calls: AtomicInteger) : com.fastkiwi.scan.ocr.OcrEngine {
+        override val id = "fake"
+        override val version = 1
+        override suspend fun recognize(page: com.fastkiwi.scan.ocr.OcrInput, options: com.fastkiwi.scan.ocr.OcrOptions): com.fastkiwi.scan.ocr.OcrResult {
             calls.incrementAndGet()
             Thread.sleep(20)
-            return listOf(OcrWord("فاتورة", 100, 100, 400, 160), OcrWord("Invoice", 450, 100, 700, 160), OcrWord("1047", 100, 200, 260, 250))
+            fun w(t: String, l: Int, tp: Int, r: Int, b: Int) = com.fastkiwi.scan.ocr.RecognizedWord(t, com.fastkiwi.scan.ocr.OcrBox(l, tp, r, b), 1f)
+            val ws = listOf(w("فاتورة", 100, 100, 400, 160), w("Invoice", 450, 100, 700, 160), w("1047", 100, 200, 260, 250))
+            val box = ws.drop(1).fold(ws[0].box) { a, x -> a.union(x.box) }
+            return com.fastkiwi.scan.ocr.OcrResult(listOf(com.fastkiwi.scan.ocr.RecognizedLine(ws, box, 1f, com.fastkiwi.scan.ocr.TextDirection.RTL)), page.pageWidth, page.pageHeight, id, version)
         }
 
-        override fun stop() = Unit
         override fun close() = Unit
     }
+
+    private fun ocrExporter(store: DocumentStore, engine: com.fastkiwi.scan.ocr.OcrEngine) =
+        Exporter(app, store, com.fastkiwi.scan.ocr.OcrService(com.fastkiwi.scan.ocr.OcrEngineFactory.fixed(engine)))
 
     @Before
     fun setUp() {
@@ -120,13 +128,13 @@ class TorturePerfTest {
             val calls = AtomicInteger()
             val ocrOpt = opt.copy(ocr = true, ocrLanguage = OcrLanguage.ARABIC_ENGLISH)
             val withOcr = timed("export 100 pages Balanced, OCR on, no cache (fake engine)", 600_000) {
-                runBlocking { Exporter(app, store) { FakeOcr(calls) }.exportPdf(doc, ocrOpt) { _, _ -> } }
+                runBlocking { ocrExporter(store, FakeOcr(calls)).exportPdf(doc, ocrOpt) { _, _ -> } }
             }
             assertEquals(100, calls.get())
             val sizeOcr = withOcr.length()
             val cached = AtomicInteger()
             val again = timed("export 100 pages Balanced, OCR on, OCR cache warm", 300_000) {
-                runBlocking { Exporter(app, store) { FakeOcr(cached) }.exportPdf(doc, ocrOpt) { _, _ -> } }
+                runBlocking { ocrExporter(store, FakeOcr(cached)).exportPdf(doc, ocrOpt) { _, _ -> } }
             }
             assertEquals("OCR ran again although every page was cached", 0, cached.get())
             org.apache.pdfbox.Loader.loadPDF(again).use { assertEquals(100, it.numberOfPages) }

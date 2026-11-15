@@ -17,7 +17,7 @@ fun writeAtomically(target: File, write: (OutputStream) -> Unit) {
     val tmp = File(target.parentFile, target.name + ".tmp")
     try {
         FileOutputStream(tmp).use { fos ->
-            val out = fos.buffered()
+            val out = IoFaults.wrap(fos, target).buffered() // 2.0-gates: fault-injection seam
             write(out)
             out.flush()
             fos.fd.sync()

@@ -68,6 +68,39 @@ class BlackBox(private val rule: ComposeTestRule, val dir: File) {
     private var autoFired = Pair(-1, -1)
     private var wasOnCamera = false
     private var shotSeed = 100
+    /** 2.0-gates camera seam: set while the driver taps the shutter, so a still is reported as manual. */
+    @Volatile private var shutterTapped = false
+    @Volatile private var shotsTaken = 0
+    private var frameKey: Pair<String, Int>? = null
+    private var frame: android.graphics.Bitmap? = null
+
+    /**
+     * The simulated camera (`ui/CaptureSeam`): CameraScreen takes its preview frames and stills from here,
+     * so the shutter, the live outline, the auto-capture gate and the status texts are the app's own code.
+     */
+    private val fakeCamera = object : com.fastkiwi.scan.ui.CaptureSeam.FakeCamera {
+        override fun previewFrame(): android.graphics.Bitmap? = synchronized(this@BlackBox) {
+            // A steady hold: the same frame for as long as the same thing is in view.
+            val key = cameraView to viewSerial
+            if (frameKey != key) {
+                // Not recycled: the app may still be reading the previous frame on a worker thread.
+                frame = SyntheticPages.photo(cameraView, 7000 + viewSerial, 600, 800)
+                frameKey = key
+            }
+            frame
+        }
+
+        override fun takePicture(): Pair<ByteArray, Int>? {
+            val view = cameraView
+            val photo = SyntheticPages.photo(view, shotSeed++)
+            val jpeg = SyntheticPages.jpeg(photo)
+            photo.recycle()
+            shotsTaken++
+            val how = if (shutterTapped) "with the shutter" else "automatically"
+            events.add("camera: photo taken $how (it shows: ${SyntheticPages.spec(view)!!.description})")
+            return jpeg to 0
+        }
+    }
     private var whatsappArmed = false
     private var pendingShare: Intent? = null
     private var pendingPicker: org.robolectric.shadows.ShadowActivity.IntentForResult? = null
@@ -104,6 +137,7 @@ class BlackBox(private val rule: ComposeTestRule, val dir: File) {
         RuntimeEnvironment.setFontScale(1f)
         Locale.setDefault(Locale.forLanguageTag(language))
         resetViewModelFactory()
+        com.fastkiwi.scan.ui.CaptureSeam.camera = fakeCamera // 2.0-gates: the camera seam
         scenario = ActivityScenario.launch(MainActivity::class.java)
         dropStaleViewModel()
         settle()
@@ -135,6 +169,8 @@ class BlackBox(private val rule: ComposeTestRule, val dir: File) {
         runCatching { scenario?.onActivity { it.viewModelStore.clear() } }
         runCatching { scenario?.close() }
         scenario = null
+        com.fastkiwi.scan.ui.CaptureSeam.camera = null
+        synchronized(this) { frame = null; frameKey = null }
     }
 
     /** Runs one command line and records the step. Never throws for app problems. */
@@ -339,9 +375,15 @@ class BlackBox(private val rule: ComposeTestRule, val dir: File) {
         val vm = vm()
         val shutter = app.getString(R.string.take_photo)
         if (vm != null && vm.screen is Screen.Camera && norm(n.label).contains(norm(shutter))) {
-            // The shutter: Robolectric has no camera, so take the simulated photo.
+            // The shutter: the real button; the camera seam supplies the photo.
             if (n.states.contains("disabled")) { events.add("the shutter is disabled"); return }
-            shoot(auto = false)
+            shutterTapped = true
+            try {
+                interaction(n).performTouchInput { click(center) }
+                settle()
+            } finally {
+                shutterTapped = false
+            }
             return
         }
         interaction(n).performTouchInput { click(center) }
@@ -458,15 +500,6 @@ class BlackBox(private val rule: ComposeTestRule, val dir: File) {
 
     // ------------------------------------------------------------------ simulated world
 
-    private fun shoot(auto: Boolean) {
-        val vm = vm() ?: return
-        val top = vm.screen as? Screen.Camera ?: return
-        val photo = SyntheticPages.photo(cameraView, shotSeed++)
-        val jpeg = SyntheticPages.jpeg(photo)
-        photo.recycle()
-        vm.addCapture(top, jpeg, 0, null) { r -> if (r != null) vm.afterCapture(top, r, auto) }
-        events.add("camera: photo taken ${if (auto) "automatically" else "with the shutter"} (it shows: ${SyntheticPages.spec(cameraView)!!.description})")
-    }
 
     private fun galleryHas(args: List<String>): String {
         val name = args.firstOrNull() ?: usage("gallery_has <file name> [<page-id>|garbage|empty|truncated|huge]")
@@ -652,15 +685,18 @@ class BlackBox(private val rule: ComposeTestRule, val dir: File) {
         if (vm.screen !is Screen.Camera) return
         if (ContextCompat.checkSelfPermission(app, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) return
         if (!vm.settings.autoCapture || cameraView == "desk") return
-        if (autoFired == Pair(viewSerial, cameraEntry)) return
+        // The app's own gate decides (outline median, hold time, content re-arm). Hold the page still for
+        // up to 4 s the first time it is in view, ~1 s after that (the gate should not fire again).
+        val first = autoFired != Pair(viewSerial, cameraEntry)
         autoFired = Pair(viewSerial, cameraEntry)
-        waitForSteadyHold()
-        shoot(auto = true)
-        settle()
-    }
-
-    private fun waitForSteadyHold() {
-        repeat((1000 / tickMs).toInt().coerceAtMost(25)) { tick(tickMs) } // about one second of holding still
+        val before = shotsTaken
+        val ticks = ((if (first) 4000L else 1000L) / tickMs).toInt()
+        for (i in 0 until ticks) {
+            tick(tickMs)
+            if (shotsTaken != before) break
+        }
+        if (shotsTaken != before) settle()
+        else if (first) events.add("camera: no photo was taken automatically after holding the page still for 4 s")
     }
 
     private fun harvest() {
