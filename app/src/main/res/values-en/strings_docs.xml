@@ -1,4 +1,77 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- 2.0 strings: search, text, favorites, folders, Home. English. Keep keys identical in values/ and values-en/. -->
 <resources>
+    <!-- Home -->
+    <string name="docs_search_hint">Search names and text</string>
+    <string name="docs_filter_all">All</string>
+    <string name="docs_filter_favorites">Favorites</string>
+    <string name="docs_section_folders">Folders</string>
+    <string name="docs_section_recent">Recent</string>
+    <string name="docs_sort_date">Newest first</string>
+    <string name="docs_sort_name">By name</string>
+    <string name="docs_sort_size">Largest first</string>
+    <string name="docs_sort_by">Sort: %1$s</string>
+    <string name="docs_favorite_add">Add “%1$s” to favorites</string>
+    <string name="docs_favorite_remove">Remove “%1$s” from favorites</string>
+    <string name="docs_favorite">Favorite</string>
+    <string name="docs_favorites_empty_title">No favorites yet</string>
+    <string name="docs_favorites_empty_body">Tap the star next to any document to find it here quickly.</string>
+    <!-- Folders -->
+    <string name="docs_folder_new">New folder</string>
+    <string name="docs_folder_name">Folder name</string>
+    <string name="docs_folder_create">Create</string>
+    <string name="docs_folder_rename">Rename folder</string>
+    <string name="docs_folder_delete">Delete folder</string>
+    <string name="docs_folder_delete_title">Delete folder “%1$s”?</string>
+    <string name="docs_folder_delete_body">No document is deleted: the folder’s documents move to Home.</string>
+    <string name="docs_folder_empty_title">This folder is empty</string>
+    <string name="docs_folder_empty_body">Move documents here from the ⋮ menu next to a document, or scan a new page here.</string>
+    <string name="docs_folder_options">Options for folder %1$s</string>
+    <string name="docs_folder_open">Open folder</string>
+    <string name="docs_move_to_folder">Move to folder</string>
+    <string name="docs_copy_to_folder">Copy to folder</string>
+    <string name="docs_top_level">Home (no folder)</string>
+    <string name="docs_copy_name">%1$s (copy)</string>
+    <string name="docs_msg_moved">Moved to “%1$s”</string>
+    <string name="docs_msg_copied">Copied to “%1$s”</string>
+    <string name="docs_msg_folder_deleted">Folder deleted; its documents are now on Home</string>
+    <plurals name="docs_folder_doc_count">
+        <item quantity="one">%d document</item>
+        <item quantity="other">%d documents</item>
+    </plurals>
+    <!-- Search -->
+    <string name="docs_search_field">Search for a word or a document name</string>
+    <string name="docs_search_names">Documents by name</string>
+    <string name="docs_search_pages">In the page text</string>
+    <string name="docs_search_page_n">Page %1$s</string>
+    <string name="docs_search_no_results">No results for “%1$s”</string>
+    <string name="docs_search_tip">Searches document names and the text read from pages. Arabic diacritics and alef, ya and ta marbuta variants do not matter, and Arabic-Indic digits match Western digits.</string>
+    <string name="docs_search_unread_note">Pages whose text has not been read yet are not searched. Text is read when you export with text recognition, or from the Text screen.</string>
+    <!-- Text (view, copy, correct) -->
+    <string name="docs_text">Text</string>
+    <string name="docs_text_title">Text of page %1$s</string>
+    <string name="docs_text_copy">Copy text</string>
+    <string name="docs_text_copied">Text copied</string>
+    <string name="docs_text_edit">Correct text</string>
+    <string name="docs_text_save">Save correction</string>
+    <string name="docs_text_saved">Correction saved. Search, the PDF text layer and TXT now use it.</string>
+    <string name="docs_text_undo">Undo correction</string>
+    <string name="docs_text_undone">Previous text restored</string>
+    <string name="docs_text_none_title">No text for this page yet</string>
+    <string name="docs_text_none_body">Read the text now, or export a PDF with text recognition.</string>
+    <string name="docs_text_read_now">Read text now</string>
+    <string name="docs_text_reading">Reading text…</string>
+    <string name="docs_text_unavailable">Text recognition is not available on this device</string>
+    <string name="docs_text_edit_hint">Correct words only: each word keeps its place on the page and the image never changes. A correction is dropped if you change the page itself (crop, rotate, filter).</string>
+    <string name="docs_text_corrected">Corrected</string>
+    <string name="docs_text_page_image">Image of page %1$s</string>
+    <string name="docs_text_matches">Image of page %1$s, matching words highlighted</string>
+    <string name="docs_text_field">Page text</string>
+    <!-- TXT export -->
+    <string name="docs_txt_title">Text only (TXT)</string>
+    <string name="docs_txt_hint">UTF-8 text file with the recognised text and your corrections</string>
+    <string name="docs_txt_share">Share text as TXT</string>
+    <string name="docs_txt_save">Save text as TXT to the device</string>
+    <string name="docs_txt_page_header">— Page %1$s —</string>
+    <string name="docs_txt_empty">This document has no text yet</string>
 </resources>

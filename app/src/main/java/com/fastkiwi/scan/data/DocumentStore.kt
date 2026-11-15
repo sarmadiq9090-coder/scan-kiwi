@@ -22,6 +22,8 @@ class DocumentStore(root: File) {
     fun thumbFile(docId: String, pageId: String) = File(dir(docId), "p_${pageId}_thumb.jpg")
     private fun ocrFile(docId: String, pageId: String) = File(dir(docId), "p_${pageId}_ocr.json")
     private fun metaFile(docId: String) = File(dir(docId), "doc.json")
+    /** The user's text corrections for a page (OCR-10, see [TextOverlay]). */
+    private fun textFile(docId: String, pageId: String) = File(dir(docId), "p_${pageId}_text.json")
 
     @Synchronized
     fun list(): List<ScanDocument> =
@@ -37,10 +39,14 @@ class DocumentStore(root: File) {
         return ScanDocument.fromJson(JSONObject(f.readText()))
     }
 
+    /**
+     * Saves [doc]. [touch] = false keeps its modified time: starring or filing a document into a
+     * folder is not an edit and must not move it to the top of "Recent".
+     */
     @Synchronized
-    fun save(doc: ScanDocument): ScanDocument {
+    fun save(doc: ScanDocument, touch: Boolean = true): ScanDocument {
         val d = dir(doc.id).apply { mkdirs() }
-        val updated = doc.copy(modified = System.currentTimeMillis())
+        val updated = if (touch) doc.copy(modified = System.currentTimeMillis()) else doc
         // Atomic and synced: a crash never leaves a half-written doc.json (which
         // would hide the whole document).
         writeAtomically(File(d, "doc.json")) { it.write(updated.toJson().toString().toByteArray(Charsets.UTF_8)) }
@@ -62,6 +68,7 @@ class DocumentStore(root: File) {
         outFile(docId, pageId).delete()
         thumbFile(docId, pageId).delete()
         ocrFile(docId, pageId).delete()
+        textFile(docId, pageId).delete()
     }
 
     /** Copies a page's files into another document under a new id (for merge/duplicate). */
@@ -72,6 +79,7 @@ class DocumentStore(root: File) {
         outFile(fromDoc, page.id).takeIf { it.exists() }?.copyTo(outFile(toDoc, np.id), overwrite = true)
         thumbFile(fromDoc, page.id).takeIf { it.exists() }?.copyTo(thumbFile(toDoc, np.id), overwrite = true)
         ocrFile(fromDoc, page.id).takeIf { it.exists() }?.copyTo(ocrFile(toDoc, np.id), overwrite = true)
+        textFile(fromDoc, page.id).takeIf { it.exists() }?.copyTo(textFile(toDoc, np.id), overwrite = true)
         return np
     }
 
@@ -148,7 +156,7 @@ class DocumentStore(root: File) {
      * stand in for an Arabic + English export. Search passes no language and uses any
      * cached text, including 1.1.x caches that did not record one.
      */
-    fun loadOcr(docId: String, page: ScanPage, lang: String? = null): List<OcrWord>? {
+    fun loadOcr(docId: String, page: ScanPage, lang: String? = null, corrected: Boolean = true /* 2.0-docs */): List<OcrWord>? {
         val f = ocrFile(docId, page.id)
         if (!f.exists()) return null
         return runCatching {
@@ -160,8 +168,65 @@ class DocumentStore(root: File) {
                 val a = arr.getJSONArray(it)
                 OcrWord(a.getString(0), a.getInt(1), a.getInt(2), a.getInt(3), a.getInt(4))
             }
+        }.getOrNull()?.let { if (corrected) applyTextEdits(docId, page, it) else it } // 2.0-docs: OCR-10 overlay
+    }
+
+    // ------------------------------------------------- text corrections (2.0-docs, OCR-10)
+
+    /** The page's correction overlay, whether or not it still applies. */
+    fun loadTextOverlay(docId: String, pageId: String): TextOverlay? {
+        val f = textFile(docId, pageId)
+        if (!f.exists()) return null
+        return runCatching { TextOverlay.fromJson(JSONObject(f.readText())) }.getOrNull()
+    }
+
+    /** Stores (or with null / no edits removes) a page's corrections; atomic, like doc.json. */
+    fun saveTextOverlay(docId: String, pageId: String, overlay: TextOverlay?) {
+        val f = textFile(docId, pageId)
+        if (overlay == null || overlay.edits.isEmpty()) { f.delete(); return }
+        writeAtomically(f) { it.write(overlay.toJson().toString().toByteArray(Charsets.UTF_8)) }
+    }
+
+    /** [words] (as cached) with the page's corrections, when they were made on exactly these words. */
+    private fun applyTextEdits(docId: String, page: ScanPage, words: List<OcrWord>): List<OcrWord> {
+        val ov = loadTextOverlay(docId, page.id) ?: return words
+        return if (ov.appliesTo(page.revision, words)) ov.apply(words) else words
+    }
+
+    /**
+     * A page's text for viewing and correcting: the cached words as recognised ([base]) and with
+     * the corrections ([corrected]). Null when the page has no text for its current revision.
+     */
+    class PageWords(val base: List<OcrWord>, val corrected: List<OcrWord>, val overlay: TextOverlay?)
+
+    fun pageWords(docId: String, page: ScanPage): PageWords? {
+        val base = loadOcr(docId, page, corrected = false) ?: return null
+        val ov = loadTextOverlay(docId, page.id)?.takeIf { it.appliesTo(page.revision, base) }
+        return PageWords(base, ov?.apply(base) ?: base, ov)
+    }
+
+    /**
+     * Size (w, h) of the image the cached boxes are measured in, any language; null for caches
+     * that did not record it (1.1.x, early 1.2.0), whose boxes cannot be placed on the page.
+     */
+    fun ocrFrame(docId: String, page: ScanPage): Pair<Int, Int>? {
+        val f = ocrFile(docId, page.id)
+        if (!f.exists()) return null
+        return runCatching {
+            val a = JSONObject(f.readText()).optJSONArray("frame") ?: return null
+            (a.getInt(0) to a.getInt(1)).takeIf { it.first > 0 && it.second > 0 }
         }.getOrNull()
     }
+
+    /** Changes whenever anything the search index reads for this page changes (revision, OCR, corrections). */
+    fun searchStamp(docId: String, page: ScanPage): String {
+        val o = ocrFile(docId, page.id)
+        val t = textFile(docId, page.id)
+        return "${page.revision}:${o.lastModified()}:${o.length()}:${t.lastModified()}:${t.length()}"
+    }
+
+    /** Bytes the document takes on disk (pages and caches), for "sort by size". */
+    fun sizeOnDisk(docId: String): Long = (dir(docId).listFiles() ?: emptyArray()).sumOf { if (it.isFile) it.length() else 0L }
 
     /** Plain recognised text of a document, for in-app search. */
     fun documentText(doc: ScanDocument): String =
@@ -169,7 +234,7 @@ class DocumentStore(root: File) {
 
     companion object {
         /** Page files, plus the ".tmp" an interrupted atomic write leaves behind (group 4). */
-        private val PAGE_FILE = Regex("p_([0-9a-f]+)(_out|_thumb|_ocr)?\\.(jpg|json)(\\.tmp)?")
+        private val PAGE_FILE = Regex("p_([0-9a-f]+)(_out|_thumb|_ocr|_text)?\\.(jpg|json)(\\.tmp)?")
 
         fun newId(): String = UUID.randomUUID().toString().replace("-", "").take(16)
     }

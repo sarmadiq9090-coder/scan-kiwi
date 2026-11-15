@@ -21,6 +21,14 @@ import com.fastkiwi.scan.data.Stamp
 import com.fastkiwi.scan.data.DocumentStore
 import com.fastkiwi.scan.data.ScanDocument
 import com.fastkiwi.scan.data.ScanPage
+import com.fastkiwi.scan.data.Folder
+import com.fastkiwi.scan.data.FolderStore
+import com.fastkiwi.scan.data.PageText
+import com.fastkiwi.scan.data.TextOverlay
+import com.fastkiwi.scan.export.TextExporter
+import com.fastkiwi.scan.search.ArabicNormalizer
+import com.fastkiwi.scan.search.SearchIndex
+import kotlinx.coroutines.ensureActive
 import com.fastkiwi.scan.export.ExportOptions
 import com.fastkiwi.scan.export.Exporter
 import com.fastkiwi.scan.imaging.BitmapIO
@@ -54,9 +62,14 @@ sealed interface Screen {
     data class Feedback(val errorCode: String? = null, val errorClass: String? = null) : Screen
     data object Settings : Screen
     data object Updates : Screen
+    // 2.0-docs: search, page text, folder contents
+    data object Search : Screen
+    data class Text(val docId: String, val pageId: String, val query: String? = null) : Screen
+    data class FolderDocs(val folderId: String) : Screen
 }
 
-data class DocEntry(val doc: ScanDocument, val text: String)
+/** [bytes]: size on disk, for "sort by size" (2.0-docs). */
+data class DocEntry(val doc: ScanDocument, val text: String, val bytes: Long = 0L)
 
 /** A user-visible message: string resource + optional argument. */
 data class UiMessage(
@@ -80,6 +93,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     val store = DocumentStore(app.filesDir)
     val settings = Settings(app)
     private val exporter = Exporter(app, store)
+    // 2.0-docs: declared before init { refresh() }, which reads them on a background thread.
+    val folderStore = FolderStore(app.filesDir)
+    val searchIndex = SearchIndex(File(app.filesDir, "search/search.db"))
+    private val _folders = MutableStateFlow<List<Folder>>(emptyList())
+    val folders: StateFlow<List<Folder>> = _folders
 
     val backStack = mutableStateListOf<Screen>(Screen.Home)
     val screen: Screen get() = backStack.last()
@@ -226,7 +244,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun refresh() {
         viewModelScope.launch(Dispatchers.IO) {
-            _docs.value = store.list().map { DocEntry(it, store.documentText(it)) }
+            val all = store.list()
+            _docs.value = all.map { DocEntry(it, store.documentText(it), store.sizeOnDisk(it.id)) }
+            // 2.0-docs: folders, and the search index brought up to date with every OCR cache.
+            _folders.value = folderStore.list()
+            runCatching { searchIndex.sync(store, all) }
         }
     }
 
@@ -262,11 +284,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    private fun saveAndPublish(doc: ScanDocument): ScanDocument {
-        val saved = store.save(doc)
+    private fun saveAndPublish(doc: ScanDocument, touch: Boolean = true /* 2.0-docs */): ScanDocument {
+        val saved = store.save(doc, touch)
         val list = _docs.value.filter { it.doc.id != saved.id }.toMutableList()
-        list.add(0, DocEntry(saved, store.documentText(saved)))
-        _docs.value = list
+        list.add(0, DocEntry(saved, store.documentText(saved), store.sizeOnDisk(saved.id)))
+        _docs.value = list.sortedByDescending { it.doc.modified } // 2.0-docs: a star or move keeps its place
+        runCatching { searchIndex.syncDoc(store, saved) } // 2.0-docs
         return saved
     }
 
@@ -290,7 +313,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** The document to add pages to: [docId] if it still exists, else a new one. */
     private fun targetDoc(docId: String?): ScanDocument =
-        docId?.let { store.load(it) } ?: store.create(defaultName())
+        docId?.let { store.load(it) } ?: newDocument() // 2.0-docs: in the open folder
 
     /**
      * Loads, changes and saves a document under [docLock]. A document deleted in
@@ -407,7 +430,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             val id = job("IMPORT") {
                 val ctx = getApplication<Application>()
                 val existing = docId?.let { store.load(it) }
-                val doc = existing ?: store.create(defaultName())
+                val doc = existing ?: newDocument() // 2.0-docs: in the open folder
                 val pending = ArrayList<ScanPage>()
                 var added = 0
                 var undoPushed = existing == null // a new document has nothing to undo to
@@ -569,7 +592,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun deleteDocs(ids: Collection<String>) {
         viewModelScope.launch {
-            job { docLock.withLock { ids.forEach { store.delete(it) } } }
+            job { docLock.withLock { ids.forEach { store.delete(it); runCatching { searchIndex.removeDoc(it) } /* 2.0-docs */ } } }
             _docs.value = _docs.value.filter { it.doc.id !in ids }
         }
     }
@@ -579,7 +602,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             val id = job("MERGE") {
                 docLock.withLock {
-                    val target = store.create(defaultName())
+                    val target = newDocument() // 2.0-docs: in the open folder
                     val pages = ArrayList<ScanPage>()
                     for (id in ids) {
                         val d = store.load(id) ?: continue
@@ -672,6 +695,326 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun suggestedFileName(docId: String): String = exporter.safeName(doc(docId)?.name ?: "scan") + ".pdf"
+
+    // ===================================================================== 2.0-docs
+    // Folders, favorites, search, page text (view / correct) and TXT export. The logic lives
+    // in data/FolderStore, data/TextEdits, search/* and export/TextExporter; this block only
+    // runs it under docLock and publishes the result.
+
+    private val docsPrefs = app.getSharedPreferences("docs", android.content.Context.MODE_PRIVATE)
+
+    /** Home order, remembered. */
+    val docSort = mutableStateOf(runCatching { DocSort.valueOf(docsPrefs.getString("sort", null) ?: "") }.getOrDefault(DocSort.DATE))
+    fun setDocSort(s: DocSort) { docSort.value = s; docsPrefs.edit().putString("sort", s.name).apply() }
+
+    /** Home filter: favorites only. */
+    val favoritesOnly = mutableStateOf(false)
+
+    /** Star / unstar; not an edit, so the document keeps its place in "Recent". */
+    fun setFavorite(docId: String, on: Boolean) {
+        viewModelScope.launch { job { docLock.withLock { store.load(docId)?.takeIf { it.favorite != on }?.let { saveAndPublish(it.copy(favorite = on), touch = false) } } } }
+    }
+
+    /** Creates a folder; [docs] are then moved (or with [copy], copied) into it. */
+    fun createFolder(name: String, docs: Collection<String> = emptyList(), copy: Boolean = false) {
+        val n = name.trim()
+        if (n.isEmpty()) return
+        viewModelScope.launch {
+            job {
+                val f = folderStore.create(n)
+                _folders.value = folderStore.list()
+                if (docs.isNotEmpty()) { if (copy) copyNow(docs, f.id) else moveNow(docs, f.id) }
+            }
+        }
+    }
+
+    fun renameFolder(id: String, name: String) {
+        viewModelScope.launch { job { folderStore.rename(id, name); _folders.value = folderStore.list() } }
+    }
+
+    /** Deletes a folder; its documents move to the top level (never deleted). */
+    fun deleteFolder(id: String) {
+        viewModelScope.launch {
+            job {
+                docLock.withLock { folderStore.delete(id, store) }
+                _folders.value = folderStore.list()
+                _docs.value = store.list().map { DocEntry(it, store.documentText(it), store.sizeOnDisk(it.id)) }
+                _messages.send(UiMessage(R.string.docs_msg_folder_deleted))
+            }
+        }
+    }
+
+    private fun folderLabel(folderId: String?): String =
+        folderId?.let { id -> _folders.value.firstOrNull { it.id == id }?.name } ?: getApplication<Application>().getString(R.string.docs_top_level)
+
+    private suspend fun moveNow(ids: Collection<String>, folderId: String?) {
+        docLock.withLock {
+            for (id in ids) store.load(id)?.takeIf { it.folderId != folderId }?.let { saveAndPublish(it.copy(folderId = folderId), touch = false) }
+        }
+        _messages.send(UiMessage(R.string.docs_msg_moved, folderLabel(folderId)))
+    }
+
+    /** Moves documents into [folderId] (null = top level). */
+    fun moveDocs(ids: Collection<String>, folderId: String?) {
+        viewModelScope.launch { job { moveNow(ids, folderId) } }
+    }
+
+    /** Copies documents (all pages, OCR text and corrections) into [folderId]; the originals stay. */
+    fun copyDocs(ids: Collection<String>, folderId: String?) {
+        viewModelScope.launch { job("COPY") { copyNow(ids, folderId) } }
+    }
+
+    private suspend fun copyNow(ids: Collection<String>, folderId: String?) {
+        docLock.withLock {
+            for (id in ids) {
+                val d = store.load(id) ?: continue
+                val name = getApplication<Application>().getString(R.string.docs_copy_name, d.name)
+                val target = store.create(name)
+                val pages = d.pages.map { store.copyPage(d.id, it, target.id) }
+                saveAndPublish(target.copy(pages = pages, folderId = folderId))
+            }
+        }
+        _messages.send(UiMessage(R.string.docs_msg_copied, folderLabel(folderId)))
+    }
+
+    /** One page that contains the query: [snippet] is its first matching line, [marks] the matched ranges in it. */
+    data class PageHit(val doc: ScanDocument, val page: ScanPage, val index: Int, val snippet: String, val marks: List<IntRange>)
+    data class SearchResults(val query: String, val byName: List<ScanDocument>, val pages: List<PageHit>, val millis: Long)
+
+    /** Searches names (in memory) and page text (FTS4 index); results in Home order, then page order. */
+    suspend fun search(query: String): SearchResults = withContext(Dispatchers.IO) {
+        val t0 = System.nanoTime()
+        val q = ArabicNormalizer.tokens(query)
+        if (q.isEmpty()) return@withContext SearchResults(query, emptyList(), emptyList(), 0)
+        val entries = _docs.value
+        val byName = entries.map { it.doc }.filter { d -> val n = ArabicNormalizer.normalize(d.name); q.all { n.contains(it) } }
+        val hits = runCatching { searchIndex.search(query) }.getOrDefault(emptyList())
+        val order = entries.withIndex().associate { (i, e) -> e.doc.id to i }
+        val docsById = entries.associate { it.doc.id to it.doc }
+        val pages = hits.mapNotNull { h ->
+            val d = docsById[h.docId] ?: return@mapNotNull null
+            val idx = d.pages.indexOfFirst { it.id == h.pageId }
+            if (idx < 0) null else Triple(d, idx, order[d.id] ?: Int.MAX_VALUE)
+        }.sortedWith(compareBy({ it.third }, { it.second })).take(MAX_HITS).map { (d, idx, _) ->
+            val p = d.pages[idx]
+            val (snippet, marks) = snippet(store.loadOcr(d.id, p).orEmpty(), q)
+            PageHit(d, p, idx, snippet, marks)
+        }
+        SearchResults(query, byName, pages, (System.nanoTime() - t0) / 1_000_000)
+    }
+
+    private fun snippet(words: List<com.fastkiwi.scan.core.OcrWord>, q: List<String>): Pair<String, List<IntRange>> {
+        val lines = PageText.lines(words)
+        val line = lines.firstOrNull { l -> l.any { w -> q.any { ArabicNormalizer.wordMatches(w.text, it) } } } ?: lines.firstOrNull() ?: return "" to emptyList()
+        val sb = StringBuilder()
+        val marks = ArrayList<IntRange>()
+        for (w in line) {
+            if (sb.isNotEmpty()) sb.append(' ')
+            val t = w.text.trim()
+            if (q.any { ArabicNormalizer.wordMatches(t, it) }) marks.add(sb.length until sb.length + t.length)
+            sb.append(t)
+        }
+        return sb.toString() to marks
+    }
+
+    /** A page's text for the Text screen, with the boxes of words matching [query] as fractions of the page. */
+    data class PageTextState(
+        val page: ScanPage,
+        val index: Int,
+        val words: List<com.fastkiwi.scan.core.OcrWord>,
+        val text: String,
+        val corrected: Boolean,
+        val highlights: List<android.graphics.RectF>,
+    )
+
+    suspend fun pageText(docId: String, pageId: String, query: String?): PageTextState? = withContext(Dispatchers.IO) {
+        val d = store.load(docId) ?: return@withContext null
+        val idx = d.pages.indexOfFirst { it.id == pageId }
+        if (idx < 0) return@withContext null
+        val p = d.pages[idx]
+        val pw = store.pageWords(docId, p)
+        val words = pw?.corrected.orEmpty()
+        val q = query?.let { ArabicNormalizer.tokens(it) }.orEmpty()
+        val frame = store.ocrFrame(docId, p)
+        val boxes = if (q.isEmpty() || frame == null) emptyList() else words.filter { w -> q.any { ArabicNormalizer.wordMatches(w.text, it) } }.map {
+            android.graphics.RectF(it.left / frame.first.toFloat(), it.top / frame.second.toFloat(), it.right / frame.first.toFloat(), it.bottom / frame.second.toFloat())
+        }
+        PageTextState(p, idx, words, PageText.text(words), pw?.overlay != null, boxes)
+    }
+
+    /** Previous correction overlays per page ("docId/pageId"), for «تراجع عن التصحيح». */
+    private val textUndo = HashMap<String, ArrayDeque<TextOverlay?>>()
+    val textUndoCounts = mutableStateMapOf<String, Int>()
+
+    /** After a correction: the last exported PDF / TXT no longer matches, and search must see it. */
+    private fun afterTextChange(doc: ScanDocument) {
+        exporter.clearOldExports()
+        saveAndPublish(doc)
+    }
+
+    /**
+     * Saves the user's corrected text of a page as an overlay on its OCR words (OCR-10).
+     * [onDone] gets false when the page has no recognised words to correct.
+     */
+    fun saveText(docId: String, pageId: String, edited: String, onDone: (Boolean) -> Unit = {}) {
+        viewModelScope.launch {
+            val ok = job {
+                docLock.withLock {
+                    val d = store.load(docId) ?: return@job false
+                    val p = d.pages.firstOrNull { it.id == pageId } ?: return@job false
+                    val pw = store.pageWords(docId, p) ?: return@job false
+                    if (pw.base.isEmpty()) return@job false
+                    val base = pw.base.map { it.text }
+                    val edits = TextOverlay.diff(base, edited)
+                    val prev = pw.overlay
+                    if (edits == (prev?.edits ?: emptyMap<Int, String>())) return@job true
+                    store.saveTextOverlay(docId, pageId, TextOverlay(p.revision, base, edits))
+                    val key = "$docId/$pageId"
+                    val st = synchronized(textUndo) { textUndo.getOrPut(key) { ArrayDeque() } }
+                    st.addLast(prev)
+                    while (st.size > 20) st.removeFirst()
+                    viewModelScope.launch { textUndoCounts[key] = st.size }
+                    afterTextChange(d)
+                }
+                _messages.send(UiMessage(R.string.docs_text_saved))
+                true
+            } ?: false
+            onDone(ok)
+        }
+    }
+
+    /** Restores the page's text as it was before the last correction. */
+    fun undoText(docId: String, pageId: String) {
+        viewModelScope.launch {
+            job {
+                docLock.withLock {
+                    val key = "$docId/$pageId"
+                    val st = synchronized(textUndo) { textUndo[key] } ?: return@job
+                    if (st.isEmpty()) return@job
+                    val prev = st.removeLast()
+                    viewModelScope.launch { textUndoCounts[key] = st.size }
+                    val d = store.load(docId) ?: return@job
+                    val p = d.pages.firstOrNull { it.id == pageId } ?: return@job
+                    // Only an overlay made on this revision may come back.
+                    store.saveTextOverlay(docId, pageId, prev?.takeIf { it.revision == p.revision })
+                    afterTextChange(d)
+                }
+                _messages.send(UiMessage(R.string.docs_text_undone))
+            }
+        }
+    }
+
+    /**
+     * Reads pages that have no cached text (TXT export, «اقرأ النص الآن»). The one OCR call of the
+     * Documents area: it goes through the same engine and cache as the PDF export.
+     */
+    private class MissingTextReader(private val vm: AppViewModel) : TextExporter.MissingText {
+        private var engine: com.fastkiwi.scan.ocr.PageOcr? = null
+        var unavailable = false
+            private set
+
+        override suspend fun read(doc: ScanDocument, page: ScanPage): List<com.fastkiwi.scan.core.OcrWord>? {
+            if (unavailable) return null
+            val store = vm.store
+            val f = store.outFile(doc.id, page.id)
+            if (!f.exists()) PageRenderer.renderAndSave(store, doc.id, page)?.recycle()
+            val bmp = BitmapIO.decodeFile(f, com.fastkiwi.scan.ocr.OcrEngine.WORK_SIDE) ?: return null
+            val lang = vm.settings.ocrLanguage
+            return try {
+                val e = engine ?: com.fastkiwi.scan.ocr.OcrEngine(vm.getApplication<Application>()).also { engine = it }
+                val words = com.fastkiwi.scan.export.stopOnCancel(e::stop) { e.recognize(bmp, lang) }
+                kotlinx.coroutines.currentCoroutineContext().ensureActive()
+                store.saveOcr(doc.id, page, words, lang.code, bmp.width, bmp.height)
+                words
+            } catch (e: Throwable) {
+                if (e is OutOfMemoryError || e is CancellationException) throw e
+                unavailable = true
+                runCatching { engine?.close() }
+                engine = null
+                null
+            } finally {
+                bmp.recycle()
+            }
+        }
+
+        fun close() { runCatching { engine?.close() } }
+    }
+
+    /** Runs OCR on one page now (Text screen). */
+    fun readPageText(docId: String, pageId: String, onDone: () -> Unit = {}) {
+        viewModelScope.launch {
+            job("OCR_PAGE") {
+                val d = store.load(docId) ?: return@job
+                val p = d.pages.firstOrNull { it.id == pageId } ?: return@job
+                val r = MissingTextReader(this@AppViewModel)
+                try { r.read(d, p) } finally { r.close() }
+                if (r.unavailable) _messages.send(UiMessage(R.string.docs_text_unavailable, report = "OCR_INIT" to "OcrUnavailable"))
+                docLock.withLock { store.load(docId)?.let { saveAndPublish(it, touch = false) } }
+            }
+            onDone()
+        }
+    }
+
+    private suspend fun txtFile(docId: String): File? {
+        val doc = store.load(docId) ?: return null
+        if (doc.pages.isEmpty()) return null
+        val app = getApplication<Application>()
+        val reader = MissingTextReader(this)
+        val text = try {
+            TextExporter(store).text(doc, { n -> app.getString(R.string.docs_txt_page_header, LocalFormat.count(n)) }, reader) { a, b ->
+                progress.value = a to b
+                exportState.value = ExportProgress(a, b, true)
+            }
+        } finally {
+            reader.close()
+        }
+        if (reader.unavailable) _messages.send(UiMessage(R.string.msg_ocr_unavailable, report = "OCR_INIT" to "OcrUnavailable"))
+        if (text.isBlank()) { _messages.send(UiMessage(R.string.docs_txt_empty)); return null }
+        return TextExporter(store).write(text, File(app.cacheDir, "exports"), exporter.safeName(doc.name))
+    }
+
+    /** OCR-08: shares the document's text as a UTF-8 .txt file. */
+    fun shareTxt(docId: String) {
+        launchExport {
+            val r = job("EXPORT_TXT") { txtFile(docId)?.let { ExportResult.Share(listOf(it), "text/plain") } }
+            if (r != null) { refresh(); _exports.send(r) }
+        }
+    }
+
+    /** OCR-08: writes the .txt to a place the user picked ("Save as"). */
+    fun saveTxtTo(docId: String, target: Uri) {
+        launchExport {
+            val r = job("EXPORT_TXT") {
+                val f = txtFile(docId) ?: return@job null
+                try {
+                    val out = getApplication<Application>().contentResolver.openOutputStream(target, "wt") ?: throw IOException("cannot open the chosen file")
+                    out.use { o -> f.inputStream().use { it.copyTo(o) } }
+                    ExportResult.Saved(f.name, f.length())
+                } finally {
+                    f.delete()
+                }
+            }
+            if (r != null) { refresh(); _exports.send(r) }
+        }
+    }
+
+    fun suggestedTxtName(docId: String): String = exporter.safeName(doc(docId)?.name ?: "scan") + ".txt"
+
+    /**
+     * A new document (camera, import, merge) goes into the folder the user opened it from: the
+     * nearest folder screen in the back stack, if that folder still exists; else the top level.
+     */
+    private fun newDocument(): ScanDocument {
+        val d = store.create(defaultName())
+        val folder = backStack.toList().lastOrNull { it is Screen.FolderDocs }?.let { (it as Screen.FolderDocs).folderId }
+            ?.takeIf { id -> folderStore.list().any { it.id == id } } ?: return d
+        return store.save(d.copy(folderId = folder), touch = false)
+    }
+
+    private companion object {
+        const val MAX_HITS = 200
+    }
+    // ===================================================================== end 2.0-docs
 
     override fun onCleared() {
         cancelIdCard()
