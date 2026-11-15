@@ -7,6 +7,43 @@ all gates passed, signed APK. **Local commits only: no push, no PR, no publishin
 
 Work split and shared rules (ownership, env, commit identity, feature records): `C:\BahthTest\scan-kiwi-design\2.0-SPLIT.md`.
 
+## 0a. Phase 3 status (2026-11-15): torture gate 6.3 DONE, next = black-box tester (gate 6.4)
+
+Head of `release/2.0.0`: `git log -1` (torture commits 91a0dac, 2857379 + the doc/test commit after them).
+- **Leader decisions applied:** the six lint exclusions in `app/lint.xml` stay as written (accepted). The five open S3 items of phase 2
+  are fixed, each with a test written first (`UpdateInstallTest`, `TargetSizeTest.typedTargetsAreReadInTheSelectedUnit`,
+  `TextOverlayTest.aLaterExportKeepsTheUsersCorrectionsAuthoritative` + `anEmptyRereadNeverWipesCorrections`,
+  `FolderStoreTest.aDamagedFoldersFileIsRestoredFromTheLastGoodCopy`):
+  1. install failure: `UpdateError.INSTALL` («لم يُثبَّت التحديث. حاول مرة أخرى.» / "The update was not installed. Try again."),
+     row «حاول مرة أخرى», the verified file is kept, `UpdateController.retryInstall` (never "storage");
+  2. user left the app during the download: `UpdateInstallReceiver` keeps Android's confirmation in `UpdateInstallEvents.pending`
+     when the app is not in front (`MainActivity.onStart/onStop` set `foreground`); on return `UpdateConfirmDialog` shows
+     «التحديث جاهز للتثبيت» and its button opens the confirmation. A dialog, not a notification: no new permission (POST_NOTIFICATIONS would change the CI-checked list);
+  3. target size: `TargetSize.parseBytes` ("1,000", "1٬000", "١٬٠٠٠", "1 000" = 1000; "1,5", "١٫٥" = 1.5; BigDecimal, 10 TB cap);
+  4. corrections: `DocumentStore.saveOcr` (both overloads) re-bases the overlay of the same revision onto the new words
+     (`TextOverlay.rebasedOn`), so the corrected text stays authoritative; an empty re-read never replaces a corrected cache; Undo re-bases too;
+  5. `folders.json`: atomic write + `folders.json.bak` (same bytes); a damaged or missing main file is restored from it.
+- **Known issue for 2.1 (recorded in `docs/FEATURES-2.0.md`):** typed but unsaved text is lost on process death.
+- **Torture suite (gate 6.3), run once (`tools/blackbox/torture.sh`), then only the failed/unfinished cases:** 20 test methods
+  (chaos 7, fuzz 2, monkey 3, perf 1, stress 3, property 4), about 17,500 generated cases/actions: fuzz 312 (40 share intents, 272 hostile files),
+  monkey 255 actions over 8 seeds (en 505/606/707/808, ar 101/202/303/404), property-based 16,300 seeded cases (overlay diff/rebase 3000,
+  typed target size 8000, folders under damage 300, SemVer 5000), stress (200 reorder/delete/undo steps, 30-photo import, 50 export taps with cancels, 300-edit burst),
+  chaos (death mid-save 8 snapshots, disk full at 0 B/1 KB/100 KB/1 MB for edit and PDF export, blocked writes, permission revoked, memory pressure),
+  perf (100 pages: open 81 ms, export 4.4 s, OCR on 9.1 s). `TortureChaosTest.diskFullMidWriteKeepsDocumentsIntact`: passed.
+  - **S1: 0. S2: 2 found, 2 fixed (regression tests in `IntakeTest` and the fuzz cases themselves):**
+    (a) `ACTION_SEND_MULTIPLE` with a null entry crashed the intake (`isAcceptableIncoming` took a non-null Uri);
+    (b) a PDF declaring `/Count 2147483647` kept the import busy for ever: `PdfImporter.requireImportable` refuses more than 5000 pages before reading any.
+  - **S3 open (2.1):** `deletePage(docId, index)` and `movePage` are index-based and queued on `Dispatchers.Default`; a burst of many edits within a few ms
+    can run out of call order (a delete by a stale index is then a no-op). Not reachable at human speed; `deletePages(ids)` is order-independent.
+  - **Known tool issues (no app code in the stack, do not block):** monkey runs end early with 7 × `AppNotIdleException` (Robolectric/Compose
+    idle wait, 60 s, `BlackBox.settle`) and 1 × `AssertionError` ("Failed to perform text input" on a dropdown node, `BlackBox.run` line 224, seed 505 step 9).
+    Test-design fix: `fiftyRapidExportsWithCancels` waited 60 s for a result a cancelled export never sends (it made the run take 30+ minutes); `concurrentEditBurst`
+    now deletes by page id.
+- **Full suite once, at the end, on the final commit:** see the line below (filled in by the last commit).
+
+**Next:** 6.4 code-blind user tester (sonnet; `tools/blackbox/README-for-testers.md`), then 6.5 QC, screenshots, release (§4 items 6–9).
+Do not re-run the torture suite unless app code changes; do not re-run the full suite on the same commit.
+
 ## 0. Phase 2 status (2026-11-15): cleanup + bug hunt DONE, next = torture (gate 6.3)
 
 Head of `release/2.0.0`: see `git log -1` (bug-hunt commits 0014ea4, 4861f9e, 33ba415, 7f01686, b2085d1 + this doc).
@@ -30,7 +67,7 @@ Head of `release/2.0.0`: see `git log -1` (bug-hunt commits 0014ea4, 4861f9e, 33
     "storage"; English «Done, 1 pages»; Arabic plural for «و٢ تنبيه آخر»; OCR diagnostics in the app's digits; system
     back while correcting text leaves the correction, not the screen; a very thin page no longer makes a 0-pixel OCR
     input (crash-to-message); README said "camera is the only permission".
-  - S3 open (for QC / 2.1): (1) an install failure reported by PackageInstaller shows no message, and «install again»
+  - S3 open (for QC / 2.1; **items 1-5 fixed in phase 3, §0a; only item 6 stays for 2.1**): (1) an install failure reported by PackageInstaller shows no message, and «install again»
     then says storage error (file already deleted); (2) the install confirmation may not open if the user left the app
     during the download (Android's background-activity rule; «install again» works); (3) target size typed as "1,000"
     is read as 1.0 KB (true size reported, never a false success); (4) a damaged `folders.json` loses folder names
@@ -130,7 +167,7 @@ Items 1–4 of the old list (cam2, perf, OCR decisions 2 and 3, gates seams) are
       (`lintDebug`, not run since the perf/cam2 merges), `reuse lint` (fix the two missing licence texts, §3.1),
       CI-equivalent commands on a clean clone, release build + size gate (the APK grew by perf/cam2 code only);
    2. **DONE (phase 2, §0):** independent bug hunter (Opus): fix every S1/S2;
-   3. torture suite (`tools/blackbox/torture.sh`, run once, then only failed cases; includes the new
+   3. **DONE (phase 3, §0a):** torture suite (`tools/blackbox/torture.sh`, run once, then only failed cases; includes the new
       `diskFullMidWriteKeepsDocumentsIntact`, never run so far): fix everything found;
    4. code-blind user tester (sonnet; sees only `tools/blackbox/README-for-testers.md`, screenshots and the a11y tree):
       personas busy employee, older user with large text, student mixing Arabic/English; tasks cold, e.g. "scan 3 pages

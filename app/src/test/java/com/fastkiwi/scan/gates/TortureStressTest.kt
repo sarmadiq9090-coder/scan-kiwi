@@ -173,7 +173,8 @@ class TortureStressTest {
                 in 9..11 -> { val p = ids[rnd.nextInt(8)]; vm.editPage(doc.id, p) { it.copy(filter = Filter.entries[rnd.nextInt(Filter.entries.size)]) } }
                 in 12..14 -> vm.rename(doc.id, "اسم $i")
                 in 15..17 -> vm.movePage(doc.id, rnd.nextInt(16), rnd.nextInt(16))
-                else -> if (deletes < 6) { vm.deletePage(doc.id, 23 - deletes); deletes++ }
+                // By page id: index-based deletes assume the queued edits run in call order, which Dispatchers.Default does not promise.
+                else -> if (deletes < 6) { vm.deletePages(doc.id, setOf(ids[23 - deletes])); deletes++ }
             }
         }
         assertTrue("edits did not finish", Gates.awaitIdle(vm, 300_000))
