@@ -11,7 +11,7 @@ Windows 11)، ببيانات مصنوعة بالكامل في كود الاخت�
 - **لا نسخ زائدة للصور**: قراءة النص تأخذ مستوى الرمادي شريطاً شريطاً (٦٤ سطراً) بدل نسخة ARGB كاملة: صفحة ٢٤٠٠×٣٢٠٠
   كانت تحجز **٣٦٫٦ م.ب** صارت **٧٫٩ م.ب**. صفحات الأبيض والأسود تُحزم بالطريقة نفسها. التصدير يعيد استخدام صورة فك الترميز نفسها
   لكل الصفحات (`inBitmap`)، وتصدير JPEG يفك الصورة بحجم التصدير فقط. محرّك النص يحرّر ذاكرته الأصلية بعد دقيقة بلا عمل.
-- **اختبارات الذاكرة**: تصدير ٢٠ صفحة مع قراءة النص: **٦٧٫٧ م.ب** (الحد ٢٥٦). تصدير ٢٠٠ صفحة بلا نص: **٧٤٫٠ م.ب** (الحد ١٢٨)،
+- **اختبارات الذاكرة**: تصدير ٢٠ صفحة مع قراءة النص: **٨٩٫٧ م.ب** على الإصدار المدمج (٦٧٫٧ على الفرع؛ الحد ٢٥٦). تصدير ٢٠٠ صفحة بلا نص: **٤٩٫١ م.ب** (٧٤٫٠ على الفرع) (الحد ١٢٨)،
   ولا تنمو الذاكرة مع عدد الصفحات. ٥٠٠ صفحة مع النص ثم JPEG بذاكرة جافا محدودة بـ ٥١٢ م.ب: **لا نفاد للذاكرة**.
 - **بدء التشغيل**: أضيف ملف Baseline Profile للتطبيق (لم يكن موجوداً رغم ما تقوله الخارطة) يغطي مسار البدء وكل شاشات 2.0،
   واختبار يمنع أن يقدم. زمن أول إطار على الحاسوب **١٠٢ مللي ثانية** (بديل تقريبي فقط؛ هدف ١ ثانية يُقاس على هاتف المالك).
@@ -30,8 +30,8 @@ Windows 11)، ببيانات مصنوعة بالكامل في كود الاخت�
 | إعادة استخدام الصورة | Bitmap reuse (`inBitmap`) | 1.7.0 بند 2 | منجز | — | الصورة نفسها لكل صفحات التصدير، والبكسلات مطابقة لفك الترميز العادي | `perf.PerfCoreTest.poolReusesTheDecodeBitmapAndGivesIdenticalPixels` |
 | تصدير يفك ما يلزم فقط | Export decodes only what it needs | 1.7.0 بند 2 | منجز | — | JPEG يفك بحجم التصدير (كان ٣٢٠٠ دائماً)؛ PDF كان كذلك من قبل | `perf.HeapBudgetTest.jpegExportDecodesOnlyWhatItNeeds` |
 | تحرير ذاكرة المحرك بعد دقيقة | Release native OCR memory after an idle minute | 1.7.0 بند 2 | منجز (كان موجوداً، تحقّق وربط بالحد) | — | المحرك يُغلق بعد مدة الخمول ولا يُغلق قبلها؛ صفحة جديدة تعيد العدّاد؛ خدمة التطبيق ٦٠٠٠٠ مللي ثانية من `MemoryBudget` | `perf.PerfCoreTest.ocrEngineIsReleasedAfterIdleTime` |
-| اختبار الذاكرة ٢٠ صفحة مع OCR | Heap test, 20 pages + OCR | 1.7.0 قبول | منجز | ≤ ٢٥٦ م.ب | **٦٧٫٧ م.ب** (أصلية ٥٦٫٣ + جافا ١١٫٤)، HIGH، صفحات ٢٤٠٠×٣٢٠٠ | `perf.HeapBudgetTest.twentyPagesWithOcrStayUnder256MB` |
-| اختبار الذاكرة ٢٠٠ صفحة | Heap test, 200 pages, no OCR | 1.7.0 قبول | منجز | ≤ ١٢٨ م.ب | **٧٤٫٠ م.ب** (أصلية ٧٠٫٦ + جافا ٣٫٤)؛ ذاكرة جافا المتبقية بعده **٠٫٠** م.ب | `perf.HeapBudgetTest.twoHundredPagesWithoutOcrStayUnder128MB` |
+| اختبار الذاكرة ٢٠ صفحة مع OCR | Heap test, 20 pages + OCR | 1.7.0 قبول | منجز | ≤ ٢٥٦ م.ب | **٨٩٫٧ م.ب** على الإصدار المدمج (الفرع ٦٧٫٧) (أصلية ٥٦٫٣ + جافا ١١٫٤)، HIGH، صفحات ٢٤٠٠×٣٢٠٠ | `perf.HeapBudgetTest.twentyPagesWithOcrStayUnder256MB` |
+| اختبار الذاكرة ٢٠٠ صفحة | Heap test, 200 pages, no OCR | 1.7.0 قبول | منجز | ≤ ١٢٨ م.ب | **٤٩٫١ م.ب** على الإصدار المدمج (الفرع ٧٤٫٠) (أصلية ٧٠٫٦ + جافا ٣٫٤)؛ ذاكرة جافا المتبقية بعده **٠٫٠** م.ب | `perf.HeapBudgetTest.twoHundredPagesWithoutOcrStayUnder128MB` |
 | اختبار الضغط ٥٠٠ صفحة | 500-page stress, 512 MB heap cap | 1.7.0 قبول | منجز | لا OutOfMemoryError | **لا نفاد**: PDF مع OCR لـ ٥٠٠ صفحة في ٤٤ ث، ثم JPEG لـ ٥٠٠ صفحة في ٣٢ ث، في JVM حدها ٥١٢ م.ب | `perf.StressHeapCapTest` (مهمة Gradle `perfStressTest`) |
 | بدء التشغيل | Cold start / Baseline Profile | 1.7.0 بند 3 | جزئي | ≤ ١٫٠ ث على هاتف المالك | ملف `baseline-prof.txt` جديد (البدء + كل شاشات 2.0)؛ بديل JVM: أول إطار **١٠٢ مللي ثانية** (الوسيط بعد التحميل)، ٢١٨٩ مللي ثانية لأول مرة مع تحميل الأصناف. الهاتف لم يُقس | `perf.BaselineProfileTest`، `perf.StartupProxyTest` |
 | أندرويد ٧٫٠ | Android 7.0 (API 24) pass | 1.7.0 بند 4 | منجز في Robolectric | كل ميزة تعمل أو تتراجع برسالة | ٩/٩ اختبارات تدفق على API 24 و26 و28 | `perf.OldAndroidFlowTest` |
@@ -79,15 +79,20 @@ which is Robolectric's whole Java heap, garbage included, not the app's native h
 
 ## Measured results
 
+Phase-1 numbers: the full suite on the merged `release/2.0.0` (perf + cam2 + ocr + gates + update, commit 9321873,
+2026-11-15). The branch's own first run is in brackets. The heap totals move by tens of MB between runs on the same code
+(process-memory sampling while other builds ran on the PC; 20-page OCR: 31.7, 56.0, 67.7 and 89.7 MB in four runs), always
+far under the budget.
+
 | Test | Result | Budget |
 |---|---|---|
-| 20 pages 2400×3200, OCR (fake engine reading the whole plane, 40 words/page), HIGH | **67.7 MB** = native 56.3 + Java 11.4; Java retained after 0.8 MB; 3.3 s | ≤ 256 MB |
-| 200 pages, no OCR, BALANCED | **74.0 MB** = native 70.6 + Java 3.4; Java retained after 0.0 MB; 22 s incl. 202 GC checkpoints; 17 MB PDF | ≤ 128 MB |
-| 500 pages, PDF + OCR, then JPEG export of all 500, JVM `maxHeapSize = 512m` | **no OutOfMemoryError**; PDF 44 s, JPEG 32 s | no OOM |
-| 6 pages HIGH + OCR, normal vs low-memory | plane 2400 → **2000** px, largest PDF image 3200 → **2000** px, 66.4 → **58.7** MB | — |
+| 20 pages 2400×3200, OCR (fake engine reading the whole plane, 40 words/page), HIGH | **89.7 MB** = native 85.1 + Java 4.7; Java retained after 0.0 MB; 4.3 s [branch: 67.7 MB] | ≤ 256 MB |
+| 200 pages, no OCR, BALANCED | **49.1 MB** = native 45.7 + Java 3.4; Java retained after 0.0 MB; 17 MB PDF [branch: 74.0 MB] | ≤ 128 MB |
+| 500 pages, PDF + OCR, then JPEG export of all 500, JVM `maxHeapSize = 512m` | **no OutOfMemoryError**; PDF 44 s, JPEG 33 s [branch: 44 s, 32 s] | no OOM |
+| 6 pages HIGH + OCR, normal vs low-memory | plane 2400 → **2000** px, largest PDF image 3200 → **2000** px, 60.7 → **54.3** MB [branch: 66.4 → 58.7] | — |
 | OCR input of one 2400×3200 page | allocated **36.6 MB** (1.2 path: ARGB `IntArray` + plane) → **7.9 MB** (plane 7.3 + one strip) | — |
-| JPEG export, 3 pages SMALL | 37.7 MB peak; output 1700 px | — |
-| Start to first Home frame, **PROXY** (Robolectric JVM) | first 2189 ms (class loading into a fresh sandbox); warm 117 / 102 / 84 ms, median **102 ms** | phone: ≤ 1.0 s (owner check) |
+| JPEG export, 3 pages SMALL | 37.5 MB peak; output 1700 px | — |
+| Start to first Home frame, **PROXY** (Robolectric JVM) | first 226 ms (class loading); warm 110 / 86 / 71 ms, median **86 ms** [branch: 102 ms] | phone: ≤ 1.0 s (owner check) |
 
 Why the native peak is ~55–70 MB: a 3200 px source is decoded whole (inSampleSize is a power of two, so a 2400 or 2000 px
 target still decodes 3200 × 2400 = 29.3 MB), plus the scaled page (16.5 MB at 2400 px) and the JPEG encoder's buffers. New
@@ -150,11 +155,13 @@ New: `perf/MemoryBudget.kt`, `perf/PixelStrips.kt`, `perf/DebugStrictMode.kt`, `
 
 For the camera agent (not edited here): `PixelStrips.gray(bitmap)` gives a gray plane without an ARGB copy, and
 `MemoryBudget.lowMemory` / `MemoryBudget.MAX_DECODE_PIXELS` are the switches for tiling filters on > 12 MP images
-(`ImageFilters`, `PageRenderer`, `BitmapIO.detectPage` still use full `getPixels` copies; tiling there is not done).
+(2.0-cam2 since then filters `ImageFilters`/`PageRenderer` in strips; see "Not done / partial").
 
 ## Not done / partial
 
 - **Cold start ≤ 1.0 s**: partial — the profile exists and is guarded, but the time is a JVM proxy; the phone number is the owner's.
 - **OCR time −20 % on the phone**: not measured (no phone); the release notes must say so.
-- **Filter tiling for > 12 MP** (1.7.0 item 1, second half): not done here — the filter and render code belongs to the camera
-  agent working in parallel; sampled decode (13 MP cap) already keeps > 12 MP photos from allocating a full-size bitmap.
+- **Filter tiling for > 12 MP** (1.7.0 item 1, second half): done in `feat/2.0-cam2` (merged): every filter runs on the page
+  bitmap in horizontal strips (`core/PixelStore`, `PageRenderer`), a 50 MP page with ≤ 24.2 MB working memory and the same
+  pixels as one piece (`core/ImageTilesTest`; `docs/features-2.0/camera.md` row 15). `BitmapIO.detectPage` still copies its
+  ≤ 480 px working image only.
