@@ -39,7 +39,7 @@ Head of `release/2.0.0`: `git log -1` (torture commits 91a0dac, 2857379 + the do
     idle wait, 60 s, `BlackBox.settle`) and 1 × `AssertionError` ("Failed to perform text input" on a dropdown node, `BlackBox.run` line 224, seed 505 step 9).
     Test-design fix: `fiftyRapidExportsWithCancels` waited 60 s for a result a cancelled export never sends (it made the run take 30+ minutes); `concurrentEditBurst`
     now deletes by page id.
-- **Full suite once, at the end, on the final commit:** see the line below (filled in by the last commit).
+- **Full suite once, on 4c3a300 (code identical to the final commit): 302 tests, 0 failures, 0 errors, 21 skipped (the torture classes, which run only with `KIWI_TORTURE=1`).** Not re-run after the doc-only commit.
 
 **Next:** 6.4 code-blind user tester (sonnet; `tools/blackbox/README-for-testers.md`), then 6.5 QC, screenshots, release (§4 items 6–9).
 Do not re-run the torture suite unless app code changes; do not re-run the full suite on the same commit.
