@@ -103,6 +103,9 @@ import com.fastkiwi.scan.core.GrayImage
 import com.fastkiwi.scan.core.Pt
 import com.fastkiwi.scan.core.Quad
 import com.fastkiwi.scan.core.QuadDetector
+import com.fastkiwi.scan.core.DetectionConfig
+import com.fastkiwi.scan.core.QualityMetrics
+import com.fastkiwi.scan.core.QualityWarning
 import com.fastkiwi.scan.core.rotateNormalized
 import java.util.concurrent.Executors
 import kotlin.math.max
@@ -113,7 +116,25 @@ private data class Live(
     val aspect: Float,
     val state: AutoCapture.State = AutoCapture.State.SEARCHING,
     val progress: Float = 0f,
+    /** 2.0: the most important quality warning on this frame (incomplete > blur > glare > dim). */
+    val warning: QualityWarning? = null,
 )
+
+/**
+ * 2.0 live quality on the 320 px analysis frame only (CAM-03/04, A4 glare, dim light), so the
+ * preview stays smooth. [quadPx] is in frame pixels, [norm] normalised.
+ */
+private fun liveWarning(gray: GrayImage, det: com.fastkiwi.scan.core.Detection?, norm: Quad?): Pair<QualityWarning?, Boolean> {
+    if (det == null || norm == null) return null to true
+    val cfg = DetectionConfig.DEFAULT
+    if (!QualityMetrics.isComplete(norm, det.cut, cfg)) return QualityWarning.INCOMPLETE to true
+    val s = QualityMetrics.sharpness(gray, det.quad, cfg)
+    val sharp = s.isNaN() || s >= cfg.liveBlurThreshold
+    if (!sharp) return QualityWarning.BLURRY to false
+    if (QualityMetrics.glare(gray, det.quad, cfg) > cfg.glareShare) return QualityWarning.GLARE to true
+    if (QualityMetrics.lightingScore(QualityMetrics.light(gray, det.quad), cfg) < 0.5f) return QualityWarning.DIM to true
+    return null to true
+}
 
 @Composable
 fun CameraScreen(vm: AppViewModel, target: Screen.Camera) {
@@ -294,10 +315,13 @@ private fun CameraContent(vm: AppViewModel, initial: Screen.Camera, onClose: () 
                     val rot = img.imageInfo.rotationDegrees
                     val norm = det?.quad?.map { Pt(it.x / gray.width, it.y / gray.height) }?.rotateNormalized(rot)
                     val upright = if (rot == 90 || rot == 270) img.height.toFloat() / img.width else img.width.toFloat() / img.height
+                    // 2.0: quality on the same frame; auto-capture waits for a whole, sharp, steady page.
+                    val (warning, sharp) = liveWarning(gray, det, norm)
+                    val confident = det?.confident == true && warning != QualityWarning.INCOMPLETE
                     val u = synchronized(gate) {
-                        gate.feed(norm, det?.confident == true, android.os.SystemClock.uptimeMillis(), autoFlag.get())
+                        gate.feed(norm, confident, android.os.SystemClock.uptimeMillis(), autoFlag.get(), sharp)
                     }
-                    ContextCompat.getMainExecutor(ctx).execute { live = Live(u.quad, upright, u.state, u.progress) }
+                    ContextCompat.getMainExecutor(ctx).execute { live = Live(u.quad, upright, u.state, u.progress, warning) }
                 } catch (_: Throwable) {
                 } finally {
                     img.close()
@@ -313,6 +337,9 @@ private fun CameraContent(vm: AppViewModel, initial: Screen.Camera, onClose: () 
         onDispose {
             runCatching { future.get().unbindAll() }
             analysisExecutor.shutdown()
+            // 2.0: an offer or a spread belongs to this camera visit only.
+            vm.dropGlareOffer()
+            vm.cancelBookSplit()
         }
     }
 
@@ -329,9 +356,10 @@ private fun CameraContent(vm: AppViewModel, initial: Screen.Camera, onClose: () 
             // Same page still in view after a shot: say so instead of capturing it again.
             AutoCapture.State.CAPTURED -> if (recentlyAdded) status else R.string.status_next_page
             AutoCapture.State.FIRE -> R.string.status_capturing
-            AutoCapture.State.BLURRY, AutoCapture.State.MOVING -> R.string.status_hold
+            AutoCapture.State.BLURRY -> R.string.status_found
+            AutoCapture.State.MOVING -> R.string.pq_moving
         }
-        if (live.state == AutoCapture.State.FIRE && auto) {
+        if (live.state == AutoCapture.State.FIRE && auto && vm.bookPending.value == null) {
             haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.Confirm)
             capture(auto = true)
         }
@@ -365,6 +393,9 @@ private fun CameraContent(vm: AppViewModel, initial: Screen.Camera, onClose: () 
         if (captured > 0) { editUntil = System.currentTimeMillis() + editMillis; kotlinx.coroutines.delay(editMillis); editUntil = 0L }
     }
 
+    val bookPending by vm.bookPending
+    val glareOffer by vm.glareOffer
+    val glareSecond by vm.glareSecond
     val docsState by vm.docs.collectAsStateWithLifecycle()
     val last = target.docId?.let { id -> docsState.firstOrNull { it.doc.id == id }?.doc }?.takeIf { target.captured > 0 }?.pages?.lastOrNull()
     Box(Modifier.fillMaxSize()) {
@@ -387,10 +418,27 @@ private fun CameraContent(vm: AppViewModel, initial: Screen.Camera, onClose: () 
 
                 // Status pill: white on 72% black, polite live region, «تعديل» after a capture.
                 val statusText = when {
+                    glareSecond != null && status != R.string.status_capturing -> stringResource(R.string.glare_second_hint)
+                    target.book && status == R.string.status_searching -> stringResource(R.string.book_hint)
                     target.idCard && !idFront && status != R.string.status_capturing -> stringResource(R.string.id_front_hint)
                     target.idCard && idFront && status != R.string.status_capturing -> stringResource(R.string.id_back_hint)
                     status == R.string.status_added -> stringResource(R.string.status_added, captured)
                     else -> stringResource(status)
+                }
+                // 2.0: one quality pill above the status pill; after a glare shot, the second-shot offer.
+                Column(
+                    Modifier.align(Alignment.BottomCenter).padding(bottom = Dimens.l + 56.dp, start = Dimens.l, end = Dimens.l),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    if (glareOffer != null && !capturing) {
+                        GlareOfferPill(onSecond = { vm.armGlareSecondShot() }, onSkip = { vm.dropGlareOffer() })
+                    } else if (glareSecond != null) {
+                        TextButton(onClick = { vm.dropGlareOffer() }, modifier = Modifier.heightIn(min = 48.dp).background(Color.Black.copy(alpha = 0.72f), CircleShape)) {
+                            Text(stringResource(R.string.glare_skip), color = KiwiAccent)
+                        }
+                    } else {
+                        CameraQualityPill(live.warning?.takeIf { live.quad != null && !capturing }?.let { stringResource(qualityLabel(it)) })
+                    }
                 }
                 Row(
                     Modifier.align(Alignment.BottomCenter).padding(bottom = Dimens.l)
@@ -411,8 +459,9 @@ private fun CameraContent(vm: AppViewModel, initial: Screen.Camera, onClose: () 
             // Controls panel on black.
             Column(Modifier.fillMaxWidth().background(Color.Black).navigationBarsPadding().padding(bottom = Dimens.l)) {
                 if (target.retakePageId == null) {
-                    ModeTabs(target.idCard, Modifier.align(Alignment.CenterHorizontally).padding(vertical = Dimens.s)) { id ->
-                        if (id != target.idCard) { vm.cancelIdCard(); vm.replaceTop(target.copy(idCard = id)) }
+                    val mode = when { target.idCard -> 1; target.book -> 2; else -> 0 }
+                    ModeTabs(mode, Modifier.align(Alignment.CenterHorizontally).padding(vertical = Dimens.s)) { m ->
+                        if (m != mode) { vm.cancelIdCard(); vm.replaceTop(target.copy(idCard = m == 1, book = m == 2)) }
                     }
                 }
                 // Weights 1 : 96 dp : 1 keep the shutter centred whatever sits beside it.
@@ -436,6 +485,25 @@ private fun CameraContent(vm: AppViewModel, initial: Screen.Camera, onClose: () 
                 }
             }
         }
+        // 2.0 book mode: check the spine, then add both pages.
+        bookPending?.let { p ->
+            BookSplitScreen(p, onConfirm = { spine, order -> vm.confirmBookSplit(spine, order) }, onRetake = { vm.cancelBookSplit() })
+        }
+    }
+}
+
+/** After a shot with glare: «لمعان على الصفحة · لقطة ثانية» (a single-shot keeps the warning only). */
+@Composable
+private fun GlareOfferPill(onSecond: () -> Unit, onSkip: () -> Unit) {
+    Row(
+        Modifier.background(Color.Black.copy(alpha = 0.72f), CircleShape).padding(start = Dimens.l, end = Dimens.xs),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(KiwiIcons.warning(), null, Modifier.size(20.dp), tint = Color(0xFFFFC857))
+        Spacer(Modifier.width(Dimens.s))
+        Text(stringResource(R.string.pq_glare), color = Color.White, style = MaterialTheme.typography.titleSmall)
+        TextButton(onClick = onSecond, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.glare_offer_action), color = KiwiAccent) }
+        TextButton(onClick = onSkip, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.glare_skip), color = Color.White) }
     }
 }
 
@@ -461,10 +529,10 @@ private fun AutoManualPill(auto: Boolean, modifier: Modifier, onChange: (Boolean
 }
 
 @Composable
-private fun ModeTabs(idCard: Boolean, modifier: Modifier, onSelect: (Boolean) -> Unit) {
+private fun ModeTabs(mode: Int, modifier: Modifier, onSelect: (Int) -> Unit) {
     Row(modifier.selectableGroup(), horizontalArrangement = Arrangement.spacedBy(Dimens.xl)) {
-        listOf(false to R.string.mode_document, true to R.string.id_card_mode).forEach { (value, label) ->
-            val sel = idCard == value
+        listOf(0 to R.string.mode_document, 1 to R.string.id_card_mode, 2 to R.string.mode_book).forEach { (value, label) ->
+            val sel = mode == value
             Column(
                 Modifier.heightIn(min = 48.dp).selectable(selected = sel, onClick = { onSelect(value) }, role = Role.Tab).padding(horizontal = Dimens.s),
                 horizontalAlignment = Alignment.CenterHorizontally,

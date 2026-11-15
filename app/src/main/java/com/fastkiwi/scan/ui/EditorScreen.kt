@@ -243,6 +243,7 @@ private fun PageTile(vm: AppViewModel, docId: String, index: Int, count: Int, pa
                     modifier = Modifier.padding(horizontal = Dimens.m, vertical = Dimens.xs),
                 )
             }
+            QualityBadge(page.quality, Modifier.padding(start = Dimens.xs)) // 2.0-cam: quality badge
             Spacer(Modifier.weight(1f))
             Box {
                 TooltipIconButton(KiwiIcons.more(), stringResource(R.string.page_actions, index + 1), { menu = true })

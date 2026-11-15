@@ -137,6 +137,14 @@ fun PageScreen(vm: AppViewModel, docId: String, startIndex: Int, snackbar: Snack
                 if (busy > 0) CircularProgressIndicator(Modifier.align(Alignment.Center))
                 if (doc.pages.size > 1) PageDots(doc.pages.size, index, Modifier.align(Alignment.BottomCenter).padding(bottom = Dimens.s))
             }
+            // 2.0-cam: quality warning chip (PRD §4.3): retake, re-crop from the kept original, or dismiss.
+            QualityChip(
+                page.quality,
+                onRetake = { vm.open(Screen.Camera(docId, retakePageId = page.id)) },
+                onRecrop = { vm.open(Screen.Crop(docId, page.id)) },
+                onDismiss = { vm.dismissQuality(docId, page.id) },
+                modifier = Modifier.padding(top = Dimens.s),
+            )
             FilterRow(page.filter, enabled = busy == 0) { f -> if (page.filter != f) vm.editPage(docId, page.id) { it.copy(filter = f) } }
         }
     }
