@@ -416,10 +416,9 @@ def latin_letters(s: str) -> int:
 
 LRM, RLM = "‎", "‏"
 TESS_REORDER = True      # Tesseract's mixed-direction lines back into logical order (TesseractLineOrder.kt)
-ROUTE_MIXED = True       # line-script routing (OcrFusion.kt)
-LATIN_LINE_SHARE = 0.6   # a line whose Tesseract letters are at least this Latin is a Latin line
-MIXED_MIN_GAIN = 3       # an Arabic line where Tesseract read this many more Latin letters ...
-MIXED_AGREE = 0.8        # ... and agrees with PP-OCR on the Arabic letters this much
+ROUTE_MIXED = True       # 2.0 mixed-page fix, per-line script routing (OcrFusion.kt); tuned on dev + dev2 only
+MIXED_MIN_GAIN = 4       # an Arabic line where Tesseract read this many more Latin letters ...
+MIXED_AGREE = 0.8        # ... and agrees with PP-OCR on the Arabic letters this much (and keeps every digit)
 
 
 def is_arabic_letter(ch: str) -> bool:
@@ -466,6 +465,12 @@ def tess_logical(s: str) -> str:
     return " ".join(t for t in out if t)
 
 
+def digits(s: str) -> int:
+    """Western and Arabic-Indic digits: Tesseract's eng model reads Arabic-Indic digits as Latin letters
+    (٧ -> V, ٨ -> A), so 'more Latin' that costs digits is a misreading, not an English word."""
+    return sum(1 for ch in s if "0" <= ch <= "9" or "٠" <= ch <= "٩")
+
+
 def levenshtein(a: str, b: str) -> int:
     prev = list(range(len(b) + 1))
     for i, ca in enumerate(a, 1):
@@ -476,11 +481,17 @@ def levenshtein(a: str, b: str) -> int:
     return prev[-1]
 
 
+MIXED_MIN_ARABIC = 3      # ... on a line PP-OCR read at least this many Arabic letters on (not a cell of digits)
+
+
 def arabic_agreement(a: str, b: str) -> float:
+    """How alike the Arabic letters of two readings are (0..1); 0 when [a] has fewer than MIXED_MIN_ARABIC
+    of them: a cell of Arabic-Indic digits that Tesseract read as Latin letters is not an Arabic line."""
     x = "".join(c for c in a if is_arabic_letter(c))
     y = "".join(c for c in b if is_arabic_letter(c))
-    n = max(len(x), len(y))
-    return 1.0 if n == 0 else 1.0 - levenshtein(x, y) / n
+    if len(x) < MIXED_MIN_ARABIC:
+        return 0.0
+    return 1.0 - levenshtein(x, y) / max(len(x), len(y))
 
 
 def fuse(pp: str, tess: str, latin_rule: bool) -> str:
@@ -488,12 +499,12 @@ def fuse(pp: str, tess: str, latin_rule: bool) -> str:
     more_lat = latin_rule and latin_letters(tess) >= latin_letters(pp) + 3
     if more_num or more_lat:
         return tess
-    if ROUTE_MIXED:
-        lat, ar = latin_letters(tess), sum(1 for c in tess if is_arabic_letter(c))
-        if lat > 0 and lat / (lat + ar) >= LATIN_LINE_SHARE:
-            return tess  # a Latin line: Tesseract's eng model
-        if lat >= latin_letters(pp) + MIXED_MIN_GAIN and arabic_agreement(pp, tess) >= MIXED_AGREE:
-            return tess  # an Arabic line with Latin words the Arabic model dropped
+    # An Arabic line with Latin words the Arabic model dropped or mangled: Tesseract (ara+eng) read the
+    # same Arabic and more Latin, without losing digits. (A "Latin line -> Tesseract" rule was tried on
+    # the dev sets and dropped: it sends table cells of Arabic-Indic digits to Tesseract, tables 7.5 -> 15.4 %.)
+    if (ROUTE_MIXED and latin_letters(tess) >= latin_letters(pp) + MIXED_MIN_GAIN
+            and arabic_agreement(pp, tess) >= MIXED_AGREE and digits(tess) >= digits(pp)):
+        return tess
     return pp
 
 
