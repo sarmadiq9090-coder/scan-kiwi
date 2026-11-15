@@ -316,6 +316,19 @@ object SceneGenerator {
 
     // ------------------------------------------------------------------ rendering
 
+    /** 2.0-cam2 (batch benchmark): one frame with a given page outline (null = no page) and content. */
+    fun renderFrame(
+        label: String,
+        w: Int,
+        h: Int,
+        quad: Quad?,
+        paper: ((Float, Float) -> Int)?,
+        bg: (Float, Float) -> Int,
+        light: (Float, Float) -> Float,
+        noise: Float,
+        rnd: java.util.Random,
+    ): Scene = render(label, w, h, quad, rnd, bg, paper, light, noise, 0f)
+
     private fun render(
         label: String,
         w: Int,

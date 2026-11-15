@@ -143,7 +143,21 @@ object QualityMetrics {
      * Residual text-line angle (degrees) on a rectified page: the shear that makes the row
      * profile of the ink most peaked. 0 when there is too little text to tell.
      */
-    fun skewDegrees(page: GrayImage, maxDeg: Float = 6f, stepDeg: Float = 0.25f): Float {
+    fun skewDegrees(page: GrayImage, maxDeg: Float = 6f, stepDeg: Float = 0.25f): Float = skew(page, maxDeg, stepDeg).degrees
+
+    /** Residual skew and how sure the measure is (0..1: how much the best angle's profile stands out). */
+    data class Skew(val degrees: Float, val confidence: Float)
+
+    /** Below this confidence the page has no clear text lines (a photo, a drawing): skew 0. */
+    const val MIN_SKEW_CONFIDENCE = 0.25f
+
+    /**
+     * 2.0-cam2 (automatic alignment): the coarse search of [skewDegrees], then a refinement to
+     * 0.05 degrees with linear bin splitting (sub-pixel profile), and a confidence: 1 - (median
+     * angle score / best score). Pages whose profile does not stand out ([MIN_SKEW_CONFIDENCE])
+     * report 0, so pictures are never "straightened".
+     */
+    fun skew(page: GrayImage, maxDeg: Float = 6f, stepDeg: Float = 0.25f): Skew {
         val w = page.width
         val h = page.height
         val hist = IntArray(256)
@@ -155,24 +169,97 @@ object QualityMetrics {
         // Sample ink pixels on a grid; enough for a stable profile at any page size.
         val step = max(1, max(w, h) / 600)
         for (y in 0 until h step step) for (x in 0 until w step step) if (page[x, y] < ink) { xs += x; ys += y }
-        if (xs.size < 200) return 0f
-        var best = 0f
-        var bestScore = -1.0
-        val bins = DoubleArray(h + 2 * w + 2)
-        var a = -maxDeg
-        while (a <= maxDeg + 1e-3f) {
-            val t = tan(Math.toRadians(a.toDouble()))
+        if (xs.size < 200) return Skew(0f, 0f)
+        val bins = DoubleArray(h + 2 * w + 4)
+        fun score(a: Double): Double {
+            val t = tan(Math.toRadians(a))
             bins.fill(0.0)
             for (i in xs.indices) {
-                val r = (ys[i] - xs[i] * t).roundToInt() + w
-                if (r in bins.indices) bins[r] += 1.0
+                val r = ys[i] - xs[i] * t + w
+                val k = kotlin.math.floor(r).toInt()
+                if (k < 0 || k + 1 >= bins.size) continue
+                val f = r - k
+                bins[k] += 1.0 - f
+                bins[k + 1] += f
             }
             var sc = 0.0
             for (b in bins) sc += b * b
+            return sc
+        }
+        val scores = ArrayList<Double>()
+        var best = 0.0
+        var bestScore = -1.0
+        var a = -maxDeg.toDouble()
+        while (a <= maxDeg + 1e-3) {
+            val sc = score(a)
+            scores += sc
             if (sc > bestScore + 1e-9) { bestScore = sc; best = a }
             a += stepDeg
         }
-        return best
+        val median = scores.sorted()[scores.size / 2]
+        val confidence = if (bestScore <= 0) 0f else (1.0 - median / bestScore).toFloat()
+        if (confidence < MIN_SKEW_CONFIDENCE) return Skew(0f, confidence)
+        var fine = best
+        var fineScore = bestScore
+        var f = best - stepDeg
+        while (f <= best + stepDeg + 1e-6) {
+            val sc = score(f)
+            if (sc > fineScore + 1e-9) { fineScore = sc; fine = f }
+            f += 0.05
+        }
+        return Skew(fine.toFloat(), confidence)
+    }
+
+    // ------------------------------------------------------------------ page content (CAM-06)
+
+    /** Side lengths of the content signature (page rectified, area-averaged, high-passed). */
+    const val SIG_W = 24
+    const val SIG_H = 32
+
+    /**
+     * 2.0-cam2 (CAM-06 batch detection): a small fingerprint of what is on the page, so auto-capture
+     * can tell "the same page again" from "the next page" whatever the outline does. The page
+     * inside [quad] (pixels of [img]) is rectified at 4x the signature size, averaged down to
+     * [SIG_W] x [SIG_H], its slow light changes removed (minus a 7x7 local mean), and scaled to zero
+     * mean and unit length. Null for degenerate outlines or a blank page.
+     */
+    fun contentSignature(img: GrayImage, quad: Quad): FloatArray? {
+        val hm = Homography.squareToQuad(quad) ?: return null
+        val k = 4
+        val gw = SIG_W * k; val gh = SIG_H * k
+        val cells = FloatArray(SIG_W * SIG_H)
+        // Inner 90% of the page: the outline's own edge is not content.
+        for (y in 0 until gh) for (x in 0 until gw) {
+            val p = hm.map(0.05f + 0.9f * (x + 0.5f) / gw, 0.05f + 0.9f * (y + 0.5f) / gh)
+            cells[(y / k) * SIG_W + x / k] += bilinear(img, p.x - 0.5f, p.y - 0.5f).toFloat()
+        }
+        val hp = FloatArray(cells.size)
+        val r = 3
+        for (y in 0 until SIG_H) for (x in 0 until SIG_W) {
+            var sum = 0f; var n = 0
+            for (dy in -r..r) for (dx in -r..r) {
+                val xx = x + dx; val yy = y + dy
+                if (xx < 0 || yy < 0 || xx >= SIG_W || yy >= SIG_H) continue
+                sum += cells[yy * SIG_W + xx]; n++
+            }
+            hp[y * SIG_W + x] = cells[y * SIG_W + x] - sum / n
+        }
+        val mean = hp.average().toFloat()
+        var norm = 0.0
+        for (i in hp.indices) { hp[i] -= mean; norm += hp[i].toDouble() * hp[i] }
+        // Blank (or nearly): under 2.5 grey levels of detail per cell, noise would decide.
+        val minRms = 2.5 * k * k
+        if (norm < hp.size * minRms * minRms) return null
+        val inv = (1.0 / sqrt(norm)).toFloat()
+        for (i in hp.indices) hp[i] *= inv
+        return hp
+    }
+
+    /** Correlation of two content signatures (-1..1; 1 = the same page). */
+    fun similarity(a: FloatArray, b: FloatArray): Float {
+        var s = 0f
+        for (i in a.indices) s += a[i] * b[i]
+        return s
     }
 
     // ------------------------------------------------------------------ report (PRD §4.3)

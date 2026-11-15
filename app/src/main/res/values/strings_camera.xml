@@ -36,4 +36,8 @@
     <string name="book_split_add">تقسيم وإضافة صفحتين</string>
     <string name="book_retake">إعادة التصوير</string>
     <string name="book_added">أُضيفت صفحتان</string>
+    <!-- 2.0-cam2: automatic alignment (deskew) -->
+    <string name="straighten">تسوية الميل</string>
+    <string name="straighten_done">سُوّي ميل الصفحة %1$s°. للتراجع: «تراجع» أو «قص».</string>
+    <string name="straighten_none">الصفحة مستقيمة؛ لا ميل يحتاج تسوية.</string>
 </resources>
