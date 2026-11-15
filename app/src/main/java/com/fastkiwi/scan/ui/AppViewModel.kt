@@ -442,7 +442,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             val result = job("CAPTURE") {
                 val bmp = BitmapIO.decodeBytes(jpeg, rotation) ?: error("decode")
-                val det = BitmapIO.detectPage(bmp)
+                val det = BitmapIO.detectPage(bmp, headerBand = !target.book || target.idCard)
                 val corners = det?.quad ?: liveQuad
                 // Doubtful outline: ask the user instead of guessing.
                 val doubtful = det == null || !det.confident
@@ -532,7 +532,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             var fallBack = false
             val r = job("IMPORT") {
                 val bmp = BitmapIO.decodeUri(getApplication(), uris[0]) ?: run { _messages.send(UiMessage(R.string.msg_nothing_imported)); return@job null }
-                val det = BitmapIO.detectPage(bmp)
+                val det = BitmapIO.detectPage(bmp, headerBand = !target.book || target.idCard)
                 val doc = targetDoc(target.docId)
                 specialShot(target, doc, bmp, det) ?: run { bmp.recycle(); fallBack = true; null }
             }

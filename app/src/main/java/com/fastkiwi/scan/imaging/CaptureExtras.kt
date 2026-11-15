@@ -94,7 +94,9 @@ object BookCapture {
         // Whether part of the page is cut off is a question about the spread, not each half: a half's outline
         // runs along the spine in the middle of the photo and covers half the area (BLACKBOX-2.0 re-test: both
         // split pages warned «cut off»). Without a detected outline nothing is known, as for any page.
-        val whole = !p.cut && (p.spread == BitmapIO.FULL || QualityMetrics.isComplete(p.spread))
+        // Only the frame edges count: a small spread is still whole (the area rule is for a single page).
+        val m = com.fastkiwi.scan.core.DetectionConfig.DEFAULT.borderMargin
+        val whole = !p.cut && (p.spread == BitmapIO.FULL || p.spread.points.none { it.x < m || it.y < m || it.x > 1f - m || it.y > 1f - m })
         val pages = BookSplit.order(order).map { i ->
             val id = DocumentStore.newId()
             p.source.copyTo(store.srcFile(p.docId, id), overwrite = true)

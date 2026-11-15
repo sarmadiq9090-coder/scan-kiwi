@@ -197,8 +197,11 @@ object BitmapIO {
     /** Finds the page outline in a bitmap; returns normalised corners or null. */
     fun detect(bmp: Bitmap): Quad? = detectPage(bmp)?.quad
 
-    /** Page outline (normalised 0..1 corners) with its confidence, or null. */
-    fun detectPage(bmp: Bitmap): Detection? {
+    /**
+     * Page outline (normalised 0..1 corners) with its confidence, or null. [headerBand] off for a book spread:
+     * a book's cover edge around the pages is not a printed band of the page.
+     */
+    fun detectPage(bmp: Bitmap, headerBand: Boolean = true): Detection? {
         val k = 480f / max(bmp.width, bmp.height)
         val small = if (k < 1f) bmp.scale(max(1, (bmp.width * k).toInt()), max(1, (bmp.height * k).toInt())) else bmp
         val px = IntArray(small.width * small.height)
@@ -209,7 +212,7 @@ object BitmapIO {
             listOf({ ImageFilters.toGray(px, sw, sh) }, { ImageFilters.paperMap(px, sw, sh) }),
         )
         // A dark band printed along the paper's edge (an invoice title bar) stays in the page (content loss otherwise).
-        val det = com.fastkiwi.scan.core.HeaderBand.extend(found, px, sw, sh)
+        val det = if (headerBand) com.fastkiwi.scan.core.HeaderBand.extend(found, px, sw, sh) else found
         val w = small.width.toFloat()
         val h = small.height.toFloat()
         if (small !== bmp) small.recycle()
