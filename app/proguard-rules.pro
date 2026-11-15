@@ -9,3 +9,10 @@
     public static int v(...);
     public static int d(...);
 }
+
+# 2.0-pdf: PdfBox-Android without BouncyCastle (only the public-key security handler needs it,
+# and that handler then fails with an error inside the :pdf process instead of loading).
+-dontwarn org.bouncycastle.**
+# JPEG 2000 (JPXFilter) needs the optional jp2-android decoder, which we do not ship; PdfBox
+# only decodes images when rendering, and lossless page copies never decode them.
+-dontwarn com.gemalto.jp2.**
