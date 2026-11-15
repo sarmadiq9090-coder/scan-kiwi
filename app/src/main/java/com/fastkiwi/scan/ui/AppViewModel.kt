@@ -55,7 +55,8 @@ import java.util.Locale
 
 sealed interface Screen {
     data object Home : Screen
-    data class Camera(val docId: String?, val retakePageId: String? = null, val idCard: Boolean = false, val captured: Int = 0) : Screen
+    // 2.0-cam: [book] = book mode (two-page spread split at the spine).
+    data class Camera(val docId: String?, val retakePageId: String? = null, val idCard: Boolean = false, val captured: Int = 0, val book: Boolean = false) : Screen
     data class Editor(val docId: String) : Screen
     data class Page(val docId: String, val index: Int) : Screen
     data class Crop(val docId: String, val pageId: String) : Screen
@@ -354,6 +355,25 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 // Doubtful outline: ask the user instead of guessing.
                 val doubtful = det == null || !det.confident
                 val doc = targetDoc(target.docId)
+                // 2.0-cam: book spread -> split screen; armed glare second shot -> fusion.
+                if (target.book && !target.idCard && target.retakePageId == null) {
+                    if (target.docId == null) docLock.withLock { saveAndPublish(doc) }
+                    val pending = com.fastkiwi.scan.imaging.BookCapture.prepare(getApplication(), store, doc.id, bmp, det?.takeIf { !it.cut }?.quad)
+                    bmp.recycle()
+                    bookPending.value?.let { com.fastkiwi.scan.imaging.BookCapture.discard(it) }
+                    bookPending.value = pending
+                    return@job CaptureResult(doc.id, null, false)
+                }
+                val second = glareSecond.value?.takeIf { it.first == doc.id && !target.idCard && target.retakePageId == null }
+                if (second != null) {
+                    glareSecond.value = null
+                    if (fuseGlare(doc.id, second.second, bmp, det?.quad)) {
+                        bmp.recycle()
+                        return@job CaptureResult(doc.id, null, false)
+                    }
+                    // Not the same page (or not matchable): keep the photo as a new page.
+                }
+                val quality = runCatching { com.fastkiwi.scan.imaging.CaptureQuality.assess(bmp, corners, det?.cut == true) }.getOrNull()
                 if (target.idCard) {
                     val card = PageRenderer.render(bmp, ScanPage("tmp", corners ?: BitmapIO.FULL, 0, Filter.ENHANCED))
                     bmp.recycle()
@@ -378,8 +398,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 val retake = target.retakePageId
                 val keepFilter = retake?.let { id -> doc.pages.firstOrNull { it.id == id }?.filter }
                 // The heavy work (encode, render) happens outside the lock...
-                val newPage = addSource(doc.id, bmp, corners, keepFilter ?: settings.defaultFilter)
+                val newPage = addSource(doc.id, bmp, corners, keepFilter ?: settings.defaultFilter).copy(quality = quality) // 2.0-cam: quality report
                 bmp.recycle()
+                // 2.0-cam: glare found -> the camera offers a second shot from another angle.
+                glareOffer.value = if (retake == null && quality != null && com.fastkiwi.scan.core.GlareFusion.needsSecondShot(quality.glare)) doc.id to newPage.id else null
                 // ...and the page goes into the document as it is now, not as it was.
                 val saved = updateDoc(doc.id, undoable = true) { cur ->
                     val idx = if (retake != null) cur.pages.indexOfFirst { it.id == retake } else -1
@@ -411,6 +433,81 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         replaceTop(top.copy(docId = r.docId, captured = top.captured + if (added) 1 else 0))
         if (review) open(Screen.Crop(r.docId, r.pageId!!))
         return added
+    }
+
+    // ------------------------------------------------------------------ 2.0-cam: book mode, glare, quality
+
+    /** A photographed spread waiting on the split screen (book mode). */
+    val bookPending = mutableStateOf<com.fastkiwi.scan.imaging.BookPending?>(null)
+    /** (docId, pageId) of the last page when it showed glare: the camera offers a second shot. */
+    val glareOffer = mutableStateOf<Pair<String, String>?>(null)
+    /** Armed second shot: the next photo is fused into this (docId, pageId). */
+    val glareSecond = mutableStateOf<Pair<String, String>?>(null)
+
+    fun armGlareSecondShot() { glareSecond.value = glareOffer.value; glareOffer.value = null }
+
+    fun dropGlareOffer() { glareOffer.value = null; glareSecond.value = null }
+
+    /** Adds the two halves of the pending spread in reading order; remembers the order for the document. */
+    fun confirmBookSplit(spine: com.fastkiwi.scan.core.Spine, order: com.fastkiwi.scan.core.ReadingOrder) {
+        val p = bookPending.value ?: return
+        bookPending.value = null
+        viewModelScope.launch {
+            val added = job("BOOK") {
+                com.fastkiwi.scan.imaging.BookCapture.setOrder(store, p.docId, order)
+                val pages = com.fastkiwi.scan.imaging.BookCapture.split(store, p, spine, order, settings.defaultFilter)
+                com.fastkiwi.scan.imaging.BookCapture.discard(p)
+                if (pages.isEmpty()) return@job 0
+                updateDoc(p.docId, undoable = true) { it.copy(pages = it.pages + pages) }
+                pages.size
+            } ?: 0
+            if (added > 0) {
+                (screen as? Screen.Camera)?.let { top -> if (top.book) replaceTop(top.copy(docId = p.docId, captured = top.captured + added)) }
+                _messages.send(UiMessage(R.string.book_added))
+            }
+        }
+    }
+
+    fun cancelBookSplit() {
+        bookPending.value?.let { com.fastkiwi.scan.imaging.BookCapture.discard(it) }
+        bookPending.value = null
+    }
+
+    /** Replaces the page's photo with the fusion of both shots; false when they do not match. */
+    private suspend fun fuseGlare(docId: String, pageId: String, second: Bitmap, secondQuad: Quad?): Boolean {
+        val page = store.load(docId)?.pages?.firstOrNull { it.id == pageId } ?: return false
+        val fused = com.fastkiwi.scan.imaging.GlareCapture.fuse(store, docId, page, second, secondQuad)
+        if (fused == null) {
+            _messages.send(UiMessage(R.string.glare_fuse_failed))
+            return false
+        }
+        val quality = runCatching { com.fastkiwi.scan.imaging.CaptureQuality.assess(fused, page.corners, false) }.getOrNull()
+        val updated = docLock.withLock {
+            val doc = store.load(docId) ?: return@withLock false
+            val idx = doc.pages.indexOfFirst { it.id == pageId }
+            if (idx < 0) return@withLock false
+            pushUndo(doc)
+            // Like a retake: the fused photo gets a new page id, so Undo brings the first photo back.
+            val p = doc.pages[idx].copy(id = DocumentStore.newId(), revision = 0, quality = quality)
+            BitmapIO.saveJpeg(fused, store.srcFile(docId, p.id), 92)
+            PageRenderer.renderAndSave(store, docId, p)?.recycle()
+            saveAndPublish(doc.copy(pages = doc.pages.toMutableList().also { it[idx] = p }))
+            true
+        }
+        fused.recycle()
+        if (updated) _messages.send(UiMessage(R.string.glare_fused))
+        return updated
+    }
+
+    /** «تجاهل» on a quality warning: kept as is, no re-render (PRD §4.3: warnings never block). */
+    fun dismissQuality(docId: String, pageId: String) {
+        viewModelScope.launch {
+            job {
+                updateDoc(docId, undoable = false) { d ->
+                    d.copy(pages = d.pages.map { p -> if (p.id == pageId) p.copy(quality = p.quality?.copy(dismissed = true)) else p })
+                }
+            }
+        }
     }
 
     /** Removes a document that was created by the camera but never got a page. */
@@ -1032,6 +1129,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     override fun onCleared() {
         ocrService.close() // 2.0-ocr: release native OCR memory
         cancelIdCard()
+        cancelBookSplit() // 2.0-cam
         super.onCleared()
     }
 }
