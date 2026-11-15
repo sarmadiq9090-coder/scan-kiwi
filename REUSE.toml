@@ -40,3 +40,106 @@ path = "app/src/main/res/drawable/ic_sym_*.xml"
 precedence = "override"
 SPDX-FileCopyrightText = "Google LLC (Material Symbols)"
 SPDX-License-Identifier = "Apache-2.0"
+
+# 2.0-ocr: OCR models, MNN runtime and benchmark fonts
+[[annotations]]
+path = ["app/src/main/assets/ocr/**"]
+precedence = "override"
+SPDX-FileCopyrightText = "PaddlePaddle Authors (PaddleOCR models); RapidAI (ONNX export); converted to MNN by FastKiwi"
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = ["app/src/main/jniLibs/**/libMNN.so", "app/src/main/cpp/mnn-include/**"]
+precedence = "override"
+SPDX-FileCopyrightText = "Alibaba Group Holding Limited (MNN)"
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = ["tools/ocr-bench/fonts/Almarai-400.ttf", "tools/ocr-bench/fonts/OFL-almarai.txt"]
+precedence = "override"
+SPDX-FileCopyrightText = "Copyright 2019 The Almarai Project Authors (https://github.com/JuergenWillrodt/Almarai)"
+SPDX-License-Identifier = "OFL-1.1"
+
+[[annotations]]
+path = ["tools/ocr-bench/fonts/Amiri-400.ttf", "tools/ocr-bench/fonts/OFL-amiri.txt"]
+precedence = "override"
+SPDX-FileCopyrightText = "Copyright 2010-2022 The Amiri Project Authors (https://github.com/aliftype/amiri)."
+SPDX-License-Identifier = "OFL-1.1"
+
+[[annotations]]
+path = ["tools/ocr-bench/fonts/Cairo-400.ttf", "tools/ocr-bench/fonts/OFL-cairo.txt"]
+precedence = "override"
+SPDX-FileCopyrightText = "Copyright 2009 The Cairo Project Authors (https://github.com/Gue3bara/Cairo)"
+SPDX-License-Identifier = "OFL-1.1"
+
+[[annotations]]
+path = ["tools/ocr-bench/fonts/Harmattan-400.ttf", "tools/ocr-bench/fonts/OFL-harmattan.txt"]
+precedence = "override"
+SPDX-FileCopyrightText = "Copyright (c) 2007-2008, The C&MA Guinea Fulbe Team;"
+SPDX-License-Identifier = "OFL-1.1"
+
+[[annotations]]
+path = ["tools/ocr-bench/fonts/IBMPlexSansArabic-400.ttf", "tools/ocr-bench/fonts/OFL-ibmplexsansarabic.txt"]
+precedence = "override"
+SPDX-FileCopyrightText = "Copyright © 2017 IBM Corp. with Reserved Font Name 'Plex'"
+SPDX-License-Identifier = "OFL-1.1"
+
+[[annotations]]
+path = ["tools/ocr-bench/fonts/Lateef-400.ttf", "tools/ocr-bench/fonts/OFL-lateef.txt"]
+precedence = "override"
+SPDX-FileCopyrightText = "Copyright (c) 1994-2025, SIL Global (https://www.sil.org/), with Reserved Font Names 'Lateef' and 'SIL'."
+SPDX-License-Identifier = "OFL-1.1"
+
+[[annotations]]
+path = ["tools/ocr-bench/fonts/MarkaziText-400.ttf", "tools/ocr-bench/fonts/OFL-markazitext.txt"]
+precedence = "override"
+SPDX-FileCopyrightText = "Copyright 2017 The Markazi Text Project Authors (https://github.com/BornaIz/markazitext)"
+SPDX-License-Identifier = "OFL-1.1"
+
+[[annotations]]
+path = ["tools/ocr-bench/fonts/NotoKufiArabic-400.ttf", "tools/ocr-bench/fonts/OFL-notokufiarabic.txt"]
+precedence = "override"
+SPDX-FileCopyrightText = "Copyright 2022 The Noto Project Authors (https://github.com/notofonts/arabic)"
+SPDX-License-Identifier = "OFL-1.1"
+
+[[annotations]]
+path = ["tools/ocr-bench/fonts/NotoNaskhArabic-500.ttf", "tools/ocr-bench/fonts/OFL-notonaskharabic.txt"]
+precedence = "override"
+SPDX-FileCopyrightText = "Copyright 2022 The Noto Project Authors (https://github.com/notofonts/arabic)"
+SPDX-License-Identifier = "OFL-1.1"
+
+[[annotations]]
+path = ["tools/ocr-bench/fonts/NotoSans-400.ttf", "tools/ocr-bench/fonts/OFL-notosans.txt"]
+precedence = "override"
+SPDX-FileCopyrightText = "Copyright 2022 The Noto Project Authors (https://github.com/notofonts/latin-greek-cyrillic)"
+SPDX-License-Identifier = "OFL-1.1"
+
+[[annotations]]
+path = ["tools/ocr-bench/fonts/NotoSansArabic-400.ttf", "tools/ocr-bench/fonts/OFL-notosansarabic.txt"]
+precedence = "override"
+SPDX-FileCopyrightText = "Copyright 2022 The Noto Project Authors (https://github.com/notofonts/arabic)"
+SPDX-License-Identifier = "OFL-1.1"
+
+[[annotations]]
+path = ["tools/ocr-bench/fonts/ReadexPro-400.ttf", "tools/ocr-bench/fonts/OFL-readexpro.txt"]
+precedence = "override"
+SPDX-FileCopyrightText = "Copyright 2018 The Readex Pro Project Authors (https://github.com/ThomasJockin/readexpro), with Reserved Font Name “RevReading Lexend”."
+SPDX-License-Identifier = "OFL-1.1"
+
+[[annotations]]
+path = ["tools/ocr-bench/fonts/ScheherazadeNew-400.ttf", "tools/ocr-bench/fonts/OFL-scheherazadenew.txt"]
+precedence = "override"
+SPDX-FileCopyrightText = "Copyright (c) 1994-2026, SIL Global (https://www.sil.org/), with Reserved Font Names 'Scheherazade' and 'SIL'."
+SPDX-License-Identifier = "OFL-1.1"
+
+[[annotations]]
+path = ["tools/ocr-bench/fonts/Tajawal-400.ttf", "tools/ocr-bench/fonts/OFL-tajawal.txt"]
+precedence = "override"
+SPDX-FileCopyrightText = "Copyright 2018 Boutros International. (http://www.boutrosfonts.com)"
+SPDX-License-Identifier = "OFL-1.1"
+
+[[annotations]]
+path = ["tools/ocr-bench/fonts/Vazirmatn-400.ttf", "tools/ocr-bench/fonts/OFL-vazirmatn.txt"]
+precedence = "override"
+SPDX-FileCopyrightText = "Copyright 2015 The Vazirmatn Project Authors (https://github.com/rastikerdar/vazirmatn)"
+SPDX-License-Identifier = "OFL-1.1"

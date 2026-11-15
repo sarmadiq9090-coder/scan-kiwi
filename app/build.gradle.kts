@@ -204,6 +204,25 @@ tasks.register("releaseSbom") {
         )
         components += data("tessdata/ara.traineddata", "tessdata_fast ara.traineddata", "Apache-2.0", "https://github.com/tesseract-ocr/tessdata_fast")
         components += data("tessdata/eng.traineddata", "tessdata_fast eng.traineddata", "Apache-2.0", "https://github.com/tesseract-ocr/tessdata_fast")
+        // 2.0-ocr: Accurate-mode models and the MNN runtime (not Maven artifacts).
+        components += data("ocr/PP-OCRv6_det_tiny.fp16.mnn", "PP-OCRv6 tiny text detector (PaddlePaddle), MNN fp16", "Apache-2.0", "https://huggingface.co/PaddlePaddle/PP-OCRv6_tiny_det")
+        components += data("ocr/arabic_PP-OCRv5_rec_mobile.fp16.mnn", "PP-OCRv5 Arabic mobile recogniser (PaddlePaddle), MNN fp16", "Apache-2.0", "https://huggingface.co/PaddlePaddle/arabic_PP-OCRv5_mobile_rec")
+        components += data("ocr/ppocrv5_arabic_dict.txt", "PP-OCRv5 Arabic recogniser dictionary", "Apache-2.0", "https://huggingface.co/PaddlePaddle/arabic_PP-OCRv5_mobile_rec")
+        val jni = file("src/main/jniLibs")
+        for (abi in listOf("arm64-v8a", "armeabi-v7a")) {
+            components += mapOf(
+                "type" to "library", "bom-ref" to "native:MNN:$abi", "name" to "MNN libMNN.so ($abi)", "version" to "3.6.2",
+                "description" to "Official MNN Android release, CPU runtime (tools/mnn/README.md)",
+                "hashes" to listOf(mapOf("alg" to "SHA-256", "content" to sha256(File(jni, "$abi/libMNN.so")))),
+                "licenses" to listOf(mapOf("license" to mapOf("id" to "Apache-2.0"))),
+                "externalReferences" to listOf(mapOf("type" to "distribution", "url" to "https://github.com/alibaba/MNN/releases/tag/3.6.2")),
+            )
+        }
+        components += mapOf(
+            "type" to "library", "bom-ref" to "native:libc++_shared", "name" to "LLVM libc++ (libc++_shared.so)", "version" to "Android NDK 27.3.13750724",
+            "licenses" to listOf(mapOf("expression" to "Apache-2.0 WITH LLVM-exception")),
+            "externalReferences" to listOf(mapOf("type" to "website", "url" to "https://developer.android.com/ndk")),
+        )
         components += data("fonts/glyphless.ttf", "Tesseract pdf.ttf (GlyphLessFont)", "Apache-2.0", "https://github.com/tesseract-ocr/tesseract/tree/main/tessdata")
         components += data("icc/sRGB-v2-micro.icc", "sRGB-v2-micro.icc", "CC0-1.0", "https://github.com/saucecontrol/Compact-ICC-Profiles")
         // Bundled UI font (res/font) and icons (res/drawable), which Maven does not list either.

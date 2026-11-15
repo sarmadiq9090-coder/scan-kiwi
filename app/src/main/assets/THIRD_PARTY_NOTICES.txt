@@ -15,6 +15,9 @@ This app includes the following open-source components:
 - Noto Sans Arabic 2.013 (The Noto Project Authors) - SIL Open Font License 1.1 (below)
 - Material Symbols Rounded icons (Google) - Apache License 2.0
 - libyuv (The LibYuv Project Authors), built into CameraX camera-core (libimage_processing_util_jni.so) - BSD 3-clause licence (below)
+- MNN 3.6.2 (Alibaba Group Holding Limited), libMNN.so - Apache License 2.0
+- PaddleOCR models PP-OCRv6 tiny text detector and PP-OCRv5 Arabic mobile recogniser with its dictionary (PaddlePaddle Authors; ONNX export by RapidAI/RapidOCR; converted to MNN format) - Apache License 2.0
+- LLVM libc++ (libc++_shared.so, from the Android NDK) - Apache License 2.0 with LLVM Exceptions (below)
 
 
 === Apache License 2.0 ===
@@ -669,3 +672,20 @@ DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
 THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+
+=== LLVM Exceptions to the Apache 2.0 License (libc++) ===
+
+As an exception, if, as a result of your compiling your source code, portions
+of this Software are embedded into an Object form of such source code, you
+may redistribute such embedded portions in such Object form without complying
+with the conditions of Sections 4(a), 4(b) and 4(d) of the License.
+
+In addition, if you combine or link compiled forms of this Software with
+software that is licensed under the GPLv2 ("Combined Software") and if a
+court of competent jurisdiction determines that the patent provision (Section
+3), the indemnity provision (Section 9) or other Section of the License
+conflicts with the conditions of the GPLv2, you may retroactively and
+prospectively choose to deem waived or otherwise exclude such Section(s) of
+the License, but only in their entirety and only with respect to the Combined
+Software.
