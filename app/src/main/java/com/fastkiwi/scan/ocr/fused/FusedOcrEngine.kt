@@ -90,8 +90,8 @@ class FusedOcrEngine(
         /** Bump on any change that alters output: models, thresholds, the fusion rule, pre/post-processing. */
         const val VERSION = 1
         const val DEFAULT_THREADS = 4
-        const val DET_MODEL = "PP-OCRv6_det_tiny.mnn"
-        const val REC_MODEL = "arabic_PP-OCRv5_rec_mobile.mnn"
+        const val DET_MODEL = "PP-OCRv6_det_tiny.fp16.mnn"
+        const val REC_MODEL = "arabic_PP-OCRv5_rec_mobile.fp16.mnn"
         const val REC_DICT = "ppocrv5_arabic_dict.txt"
     }
 }

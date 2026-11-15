@@ -1,0 +1,47 @@
+{
+ "converter": "MNNConvert from the PyPI wheel mnn==3.6.2 (hash-pinned in tools/ocr-bench/requirements-lock.txt)",
+ "models": [
+  {
+   "name": "PP-OCRv6 tiny text detector (fp16 weights)",
+   "licence": "Apache-2.0",
+   "licence_evidence": "https://huggingface.co/PaddlePaddle/PP-OCRv6_tiny_det (revision d3177d4e5551463292a61e27cfca2b53e7c3fe9d, card: license apache-2.0); export by RapidOCR (Apache-2.0)",
+   "onnx": {
+    "file": "PP-OCRv6_det_tiny.onnx",
+    "url": "https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.10.0/onnx/PP-OCRv6/det/PP-OCRv6_det_tiny.onnx",
+    "sha256": "f42c0fbd294d95eac1a550e131b277dac97462c8025fa4b6c3cec1b7894bd3d5"
+   },
+   "mnn": {
+    "file": "PP-OCRv6_det_tiny.fp16.mnn",
+    "convert_args": [
+     "--fp16"
+    ],
+    "sha256": "a1d21086e7508b10fe977de651cdcba902d60d5fc6d1f87f17cea20f0fe129e6",
+    "masked_sha256": "b276b4df55bc19b5328fef480e64b3995c1b34f41590922a688d3a4d1e830dbb"
+   }
+  },
+  {
+   "name": "PP-OCRv5 Arabic mobile text recogniser (fp16 weights)",
+   "licence": "Apache-2.0",
+   "licence_evidence": "https://huggingface.co/PaddlePaddle/arabic_PP-OCRv5_mobile_rec (revision 33d91636a65dca87f5562cc48860332ae367ee1b, card: license apache-2.0); export by RapidOCR (Apache-2.0)",
+   "onnx": {
+    "file": "arabic_PP-OCRv5_rec_mobile.onnx",
+    "url": "https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.10.0/onnx/PP-OCRv5/rec/arabic_PP-OCRv5_rec_mobile.onnx",
+    "sha256": "c1192e632d0baa9146ae5b756a0e635e3dc63c1733737ebfd1629e87144e9295"
+   },
+   "mnn": {
+    "file": "arabic_PP-OCRv5_rec_mobile.fp16.mnn",
+    "convert_args": [
+     "--fp16"
+    ],
+    "sha256": "9c0098c4d0b37437f55e1e1225c6be2fae6506239bfef868fb3c8f90a5cc484e",
+    "masked_sha256": "ae2e807ae072dffaf01f463b0f30e6b89d1d64884f645a557a8d10e323871352"
+   }
+  }
+ ],
+ "dictionary": {
+  "file": "ppocrv5_arabic_dict.txt",
+  "url": "https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.10.0/paddle/PP-OCRv5/rec/arabic_PP-OCRv5_rec_mobile/ppocrv5_arabic_dict.txt",
+  "sha256": "7f92f7dbb9b75a4787a83bfb4f6d14a8ab515525130c9d40a9036f61cf6999e9",
+  "note": "identical to the character list stored in the ONNX file's metadata"
+ }
+}

@@ -85,7 +85,11 @@ android {
 
     packaging {
         // Compressed native libs keep the APK small enough to send in chat.
-        jniLibs { useLegacyPackaging = true }
+        jniLibs {
+            useLegacyPackaging = true
+            // 2.0-ocr: ship MNN's official libMNN.so byte for byte (pinned sha256 in THIRD_PARTY.md / SBOM).
+            keepDebugSymbols += "**/libMNN.so"
+        }
         resources {
             excludes += setOf(
                 "/META-INF/{AL2.0,LGPL2.1}",

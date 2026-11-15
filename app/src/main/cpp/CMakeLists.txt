@@ -11,7 +11,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 add_library(mnn SHARED IMPORTED)
 set_target_properties(mnn PROPERTIES
-        IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/mnn/${ANDROID_ABI}/libMNN.so
+        IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/../jniLibs/${ANDROID_ABI}/libMNN.so
         INTERFACE_INCLUDE_DIRECTORIES ${CMAKE_CURRENT_SOURCE_DIR}/mnn-include)
 
 add_library(kiwi_mnn SHARED kiwi_mnn.cpp)
