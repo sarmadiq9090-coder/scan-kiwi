@@ -81,7 +81,8 @@ class Exporter(
     // fake engine. Null: this exporter makes its own for each export and releases it at the end.
     private val sharedOcr: OcrService? = null,
     /** 2.0-pdf: opens the temp file an export writes; tests inject failures here. */
-    private val openStream: (File) -> OutputStream = { FileOutputStream(it) },
+    // 2.0-gates: through the fault-injection seam (inert unless a test sets IoFaults.hook).
+    private val openStream: (File) -> OutputStream = { com.fastkiwi.scan.data.IoFaults.wrap(FileOutputStream(it), it) },
     /** 2.0-ocr: «دقيق» Accurate or «سريع» Fast (Settings). */
     private val ocrMode: () -> OcrMode = { OcrMode.ACCURATE },
 ) {
