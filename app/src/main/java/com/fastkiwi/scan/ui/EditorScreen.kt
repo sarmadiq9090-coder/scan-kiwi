@@ -254,6 +254,7 @@ private fun PageTile(vm: AppViewModel, docId: String, index: Int, count: Int, pa
                     DropdownMenuItem(text = { Text(stringResource(R.string.rotate_right)) }, onClick = { menu = false; vm.editPage(docId, page.id) { it.copy(rotation = (it.rotation + 90) % 360) } })
                     DropdownMenuItem(text = { Text(stringResource(R.string.crop)) }, onClick = { menu = false; vm.open(Screen.Crop(docId, page.id)) })
                     DropdownMenuItem(text = { Text(stringResource(R.string.signature)) }, onClick = { menu = false; vm.open(Screen.Sign(docId, page.id)) })
+                    DropdownMenuItem(text = { Text(stringResource(R.string.docs_text)) }, onClick = { menu = false; vm.open(Screen.Text(docId, page.id)) }) // 2.0-docs: view / copy / correct text
                     DropdownMenuItem(text = { Text(stringResource(R.string.retake)) }, onClick = { menu = false; vm.open(Screen.Camera(docId, retakePageId = page.id)) })
                     DropdownMenuItem(
                         text = { Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error) },
@@ -401,6 +402,7 @@ fun ExportSheet(vm: AppViewModel, docId: String, onDismiss: () -> Unit) {
                         )
                     }
                 }
+                TxtExportRow(vm, docId) // 2.0-docs: OCR-08 TXT export
 
             }
             Column(Modifier.fillMaxWidth().padding(horizontal = Dimens.sheet).padding(top = Dimens.s, bottom = Dimens.xl)) {

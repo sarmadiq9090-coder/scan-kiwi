@@ -1,4 +1,81 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- 2.0 strings: search, text, favorites, folders, Home. Arabic (default). Keep keys identical in values/ and values-en/. -->
 <resources>
+    <!-- Home -->
+    <string name="docs_search_hint">ابحث في الأسماء والنص</string>
+    <string name="docs_filter_all">الكل</string>
+    <string name="docs_filter_favorites">المفضلة</string>
+    <string name="docs_section_folders">المجلدات</string>
+    <string name="docs_section_recent">الأخيرة</string>
+    <string name="docs_sort_date">الأحدث أولاً</string>
+    <string name="docs_sort_name">حسب الاسم</string>
+    <string name="docs_sort_size">الأكبر حجماً</string>
+    <string name="docs_sort_by">الترتيب: %1$s</string>
+    <string name="docs_favorite_add">إضافة «%1$s» إلى المفضلة</string>
+    <string name="docs_favorite_remove">إزالة «%1$s» من المفضلة</string>
+    <string name="docs_favorite">مفضّل</string>
+    <string name="docs_favorites_empty_title">لا مستندات مفضلة بعد</string>
+    <string name="docs_favorites_empty_body">اضغط النجمة بجانب أي مستند لتجده هنا بسرعة.</string>
+    <!-- Folders -->
+    <string name="docs_folder_new">مجلد جديد</string>
+    <string name="docs_folder_name">اسم المجلد</string>
+    <string name="docs_folder_create">إنشاء</string>
+    <string name="docs_folder_rename">إعادة تسمية المجلد</string>
+    <string name="docs_folder_delete">حذف المجلد</string>
+    <string name="docs_folder_delete_title">حذف المجلد «%1$s»؟</string>
+    <string name="docs_folder_delete_body">لن يُحذف أي مستند: تنتقل مستندات المجلد إلى الصفحة الرئيسية.</string>
+    <string name="docs_folder_empty_title">المجلد فارغ</string>
+    <string name="docs_folder_empty_body">انقل مستندات إليه من قائمة ⋮ بجانب المستند، أو امسح ورقة جديدة هنا.</string>
+    <string name="docs_folder_options">خيارات المجلد %1$s</string>
+    <string name="docs_folder_open">فتح المجلد</string>
+    <string name="docs_move_to_folder">نقل إلى مجلد</string>
+    <string name="docs_copy_to_folder">نسخ إلى مجلد</string>
+    <string name="docs_top_level">الصفحة الرئيسية (بلا مجلد)</string>
+    <string name="docs_copy_name">%1$s (نسخة)</string>
+    <string name="docs_msg_moved">نُقل إلى «%1$s»</string>
+    <string name="docs_msg_copied">نُسخ إلى «%1$s»</string>
+    <string name="docs_msg_folder_deleted">حُذف المجلد، ومستنداته الآن في الصفحة الرئيسية</string>
+    <plurals name="docs_folder_doc_count">
+        <item quantity="zero">فارغ</item>
+        <item quantity="one">مستند واحد</item>
+        <item quantity="two">مستندان</item>
+        <item quantity="few">%d مستندات</item>
+        <item quantity="many">%d مستندًا</item>
+        <item quantity="other">%d مستند</item>
+    </plurals>
+    <!-- Search -->
+    <string name="docs_search_field">ابحث عن كلمة أو اسم مستند</string>
+    <string name="docs_search_names">مستندات بالاسم</string>
+    <string name="docs_search_pages">في نص الصفحات</string>
+    <string name="docs_search_page_n">صفحة %1$s</string>
+    <string name="docs_search_no_results">لا نتائج لـ «%1$s»</string>
+    <string name="docs_search_tip">يُبحث في أسماء المستندات وفي النص المقروء من الصفحات. لا يلزم كتابة الحركات، ولا التمييز بين أ وإ وا أو ى وي أو ة وه، والأرقام العربية والهندية سواء.</string>
+    <string name="docs_search_unread_note">الصفحات التي لم يُقرأ نصها بعد لا تظهر في البحث. يُقرأ النص عند التصدير مع «التعرف على النص» أو من شاشة «النص».</string>
+    <!-- Text (view, copy, correct) -->
+    <string name="docs_text">النص</string>
+    <string name="docs_text_title">نص الصفحة %1$s</string>
+    <string name="docs_text_copy">نسخ النص</string>
+    <string name="docs_text_copied">نُسخ النص</string>
+    <string name="docs_text_edit">تصحيح النص</string>
+    <string name="docs_text_save">حفظ التصحيح</string>
+    <string name="docs_text_saved">حُفظ التصحيح. البحث وطبقة النص في PDF وملف TXT تستخدمه الآن.</string>
+    <string name="docs_text_undo">تراجع عن التصحيح</string>
+    <string name="docs_text_undone">أُعيد النص السابق</string>
+    <string name="docs_text_none_title">لا نص لهذه الصفحة بعد</string>
+    <string name="docs_text_none_body">اقرأ النص الآن، أو صدّر PDF مع «التعرف على النص».</string>
+    <string name="docs_text_read_now">اقرأ النص الآن</string>
+    <string name="docs_text_reading">جارٍ قراءة النص…</string>
+    <string name="docs_text_unavailable">تعذّرت قراءة النص على هذا الجهاز</string>
+    <string name="docs_text_edit_hint">صحّح الكلمات فقط: تبقى كل كلمة في مكانها على الصفحة، والصورة لا تتغير. يُلغى التصحيح إذا غيّرت الصفحة نفسها (قص، تدوير، مرشّح).</string>
+    <string name="docs_text_corrected">مصحَّح</string>
+    <string name="docs_text_page_image">صورة الصفحة %1$s</string>
+    <string name="docs_text_matches">صورة الصفحة %1$s، الكلمات المطابقة مظللة</string>
+    <string name="docs_text_field">نص الصفحة</string>
+    <!-- TXT export -->
+    <string name="docs_txt_title">النص فقط (TXT)</string>
+    <string name="docs_txt_hint">ملف نصي UTF-8 بالنص المقروء وتصحيحاتك</string>
+    <string name="docs_txt_share">مشاركة النص TXT</string>
+    <string name="docs_txt_save">حفظ النص TXT على الجهاز</string>
+    <string name="docs_txt_page_header">— صفحة %1$s —</string>
+    <string name="docs_txt_empty">لا نص في هذا المستند بعد</string>
 </resources>
