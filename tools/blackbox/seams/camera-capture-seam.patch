@@ -1,0 +1,74 @@
+diff -ruN a/app/src/main/java/com/fastkiwi/scan/ui/CameraScreen.kt b/app/src/main/java/com/fastkiwi/scan/ui/CameraScreen.kt
+--- a/app/src/main/java/com/fastkiwi/scan/ui/CameraScreen.kt	2026-11-15 07:42:04.359721500 +0300
++++ b/app/src/main/java/com/fastkiwi/scan/ui/CameraScreen.kt	2026-11-15 07:42:04.452613200 +0300
+@@ -248,6 +248,17 @@
+         status = R.string.status_capturing
+         val liveQuad = live.quad
+         synchronized(gate) { gate.captured(liveQuad) }
++        // 2.0-gates (test seam): a test-supplied photo goes through the same path as a real shot.
++        CaptureSeam.camera?.let { fake ->
++            val shot = fake.takePicture()
++            if (shot == null) { capturing = false; status = R.string.status_error; return }
++            vm.addCapture(target, shot.first, shot.second, liveQuad) { r ->
++                capturing = false
++                cooldownUntil = System.currentTimeMillis() + 2000
++                if (r == null) status = R.string.status_error else if (vm.afterCapture(target, r, auto)) status = R.string.status_added
++            }
++            return
++        }
+         imageCapture.takePicture(ContextCompat.getMainExecutor(ctx), object : ImageCapture.OnImageCapturedCallback() {
+             override fun onCaptureSuccess(image: ImageProxy) {
+                 val buf = image.planes[0].buffer
+@@ -272,6 +283,20 @@
+         })
+     }
+ 
++    // 2.0-gates (test seam): frames from a test drive the same detection and auto-capture gate as the camera.
++    LaunchedEffect(Unit) {
++        val fake = CaptureSeam.camera ?: return@LaunchedEffect
++        while (true) {
++            val frame = fake.previewFrame()
++            if (frame != null) {
++                val det = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { com.fastkiwi.scan.imaging.BitmapIO.detectPage(frame) }
++                val u = synchronized(gate) { gate.feed(det?.quad, det?.confident == true, android.os.SystemClock.uptimeMillis(), autoFlag.get()) }
++                live = Live(u.quad, frame.width.toFloat() / frame.height, u.state, u.progress)
++            }
++            kotlinx.coroutines.delay(100)
++        }
++    }
++
+     DisposableEffect(lifecycleOwner) {
+         val future = ProcessCameraProvider.getInstance(ctx)
+         val detector = QuadDetector(320)
+diff -ruN a/app/src/main/java/com/fastkiwi/scan/ui/CaptureSeam.kt b/app/src/main/java/com/fastkiwi/scan/ui/CaptureSeam.kt
+--- a/app/src/main/java/com/fastkiwi/scan/ui/CaptureSeam.kt	1970-01-01 03:00:00.000000000 +0300
++++ b/app/src/main/java/com/fastkiwi/scan/ui/CaptureSeam.kt	2026-11-15 07:42:04.497650100 +0300
+@@ -0,0 +1,28 @@
++// SPDX-FileCopyrightText: 2026 FastKiwi
++// SPDX-License-Identifier: Apache-2.0
++package com.fastkiwi.scan.ui
++
++import android.graphics.Bitmap
++import androidx.annotation.VisibleForTesting
++
++/**
++ * 2.0-gates: test seam for the camera. Robolectric (and an emulator without a camera)
++ * cannot run CameraX, so the shutter, the live outline and auto-capture could not be
++ * exercised end to end. When [camera] is set, CameraScreen takes its preview frames and
++ * stills from it instead of CameraX, and everything after that (detection, the
++ * auto-capture gate, status texts, addCapture/afterCapture, review) is the real code.
++ * Always null in the app.
++ */
++object CaptureSeam {
++    interface FakeCamera {
++        /** The next preview frame (upright), or null when nothing new is in view. */
++        fun previewFrame(): Bitmap?
++
++        /** A still: JPEG bytes and the rotation in degrees, or null for a failed shot. */
++        fun takePicture(): Pair<ByteArray, Int>?
++    }
++
++    @VisibleForTesting
++    @Volatile
++    var camera: FakeCamera? = null
++}
