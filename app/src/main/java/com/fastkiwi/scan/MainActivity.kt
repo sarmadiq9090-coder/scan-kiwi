@@ -22,7 +22,10 @@ import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.FileProvider
@@ -165,6 +168,21 @@ private fun App(vm: AppViewModel) {
                 )
             }
         }
+    }
+
+    // An information snackbar (no action) belongs to the screen it was said on: on the next screen it was
+    // shown and announced again (BLACKBOX-2.0 re-test: «تم الحفظ» on three later screens). A message that
+    // arrives with the navigation (an import that opens the document) is at most a second old and stays;
+    // a snackbar with Undo always stays.
+    var infoSince by remember { mutableLongStateOf(Long.MAX_VALUE) }
+    LaunchedEffect(snackbar) {
+        androidx.compose.runtime.snapshotFlow { snackbar.currentSnackbarData }.collect { d ->
+            infoSince = if (d != null && d.visuals.actionLabel == null) androidx.compose.runtime.withFrameMillis { it } else Long.MAX_VALUE
+        }
+    }
+    LaunchedEffect(vm.screen) {
+        val d = snackbar.currentSnackbarData ?: return@LaunchedEffect
+        if (d.visuals.actionLabel == null && androidx.compose.runtime.withFrameMillis { it } - infoSince >= 1000L) d.dismiss()
     }
 
     BackHandler(enabled = vm.backStack.size > 1) { vm.back() }

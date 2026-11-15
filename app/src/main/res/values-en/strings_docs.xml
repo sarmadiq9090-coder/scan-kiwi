@@ -73,4 +73,5 @@
     <string name="docs_txt_save">Save text as TXT to the device</string>
     <string name="docs_txt_page_header">— Page %1$s —</string>
     <string name="docs_txt_empty">This document has no text yet</string>
+    <string name="docs_top_level_empty">No documents here outside folders</string>
 </resources>

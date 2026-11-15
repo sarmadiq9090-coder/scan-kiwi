@@ -155,16 +155,23 @@ fun CameraScreen(vm: AppViewModel, target: Screen.Camera) {
     }
     BackHandler { leave() }
 
-    val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia()) { uris: List<Uri> ->
-        vm.importUris(target.docId, uris) { id -> vm.cancelIdCard(); vm.finishCamera(id) }
+    // BLACKBOX-2.0 re-test: a photo picked here goes the same way as a shot (Book mode -> split screen, the
+    // armed «إزالة الوهج» second photo -> fused); one photo is picked then, several otherwise.
+    val onPicked: (List<Uri>) -> Unit = { uris ->
+        val top = vm.screen as? Screen.Camera ?: target
+        vm.importFromCamera(top, uris) { id -> vm.cancelIdCard(); vm.finishCamera(id) }
+    }
+    val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia()) { uris: List<Uri> -> onPicked(uris) }
+    val singleLauncher = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri: Uri? -> if (uri != null) onPicked(listOf(uri)) }
+    val pickImages: () -> Unit = {
+        val request = PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+        if (!target.idCard && target.retakePageId == null && (target.book || vm.glareSecond.value != null)) singleLauncher.launch(request) else galleryLauncher.launch(request)
     }
 
     CameraTheme {
         Box(Modifier.fillMaxSize().background(Color.Black)) {
             if (granted) {
-                CameraContent(vm, target, onClose = leave, onGallery = {
-                    galleryLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                })
+                CameraContent(vm, target, onClose = leave, onGallery = pickImages)
             } else {
                 // Permission screen (design spec §3.2): one primary in the thumb zone.
                 Column(Modifier.fillMaxSize().safeDrawingPadding().padding(horizontal = Dimens.xl)) {
@@ -200,7 +207,7 @@ fun CameraScreen(vm: AppViewModel, target: Screen.Camera) {
                             modifier = Modifier.fillMaxWidth().heightIn(min = Dimens.buttonLarge),
                         ) { Text(stringResource(if (asked) R.string.open_settings else R.string.allow_camera)) }
                         OutlinedButton(
-                            onClick = { galleryLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                            onClick = pickImages,
                             modifier = Modifier.fillMaxWidth().heightIn(min = Dimens.button),
                         ) { Text(stringResource(R.string.pick_images)) }
                         TextButton(onClick = leave, modifier = Modifier.fillMaxWidth().heightIn(min = Dimens.button)) { Text(stringResource(R.string.not_now)) }
@@ -238,7 +245,9 @@ private fun CameraContent(vm: AppViewModel, initial: Screen.Camera, onClose: () 
     val captured = target.captured
     var live by remember { mutableStateOf(Live(null, 3f / 4f)) }
     // Auto-capture decisions (time based, re-arms only when the page changes).
-    val gate = remember { AutoCapture() }
+    // BLACKBOX-2.0 re-test: no shot by itself in the first seconds after the camera opens or the mode changes,
+    // so there is time to choose Book (or ID card) before a page in view is taken as a document page.
+    val gate = remember { AutoCapture(startDelayMillis = AutoCapture.CAMERA_START_DELAY_MS) }
     val autoFlag = remember { java.util.concurrent.atomic.AtomicBoolean(vm.settings.autoCapture) }
     var torch by remember { mutableStateOf(false) }
     var auto by remember { mutableStateOf(vm.settings.autoCapture) }
@@ -334,6 +343,14 @@ private fun CameraContent(vm: AppViewModel, initial: Screen.Camera, onClose: () 
     }
 
     DisposableEffect(lifecycleOwner) {
+        // 2.0-gates (test seam): with a test camera nothing is bound. The CameraX path cannot run under the
+        // test driver and its failure showed «تعذّر استخدام الكاميرا» over the simulated camera whenever the
+        // status had nothing else to say (only the desk in view: BLACKBOX-2.0 re-test, task 3).
+        if (CaptureSeam.camera != null) return@DisposableEffect onDispose {
+            analysisExecutor.shutdown()
+            vm.dropGlareOffer()
+            vm.cancelBookSplit()
+        }
         val future = ProcessCameraProvider.getInstance(ctx)
         val detector = QuadDetector(320)
         future.addListener({
@@ -512,7 +529,11 @@ private fun CameraContent(vm: AppViewModel, initial: Screen.Camera, onClose: () 
                 if (target.retakePageId == null) {
                     val mode = when { target.idCard -> 1; target.book -> 2; else -> 0 }
                     ModeTabs(mode, Modifier.align(Alignment.CenterHorizontally).padding(vertical = Dimens.s)) { m ->
-                        if (m != mode) { vm.cancelIdCard(); vm.replaceTop(target.copy(idCard = m == 1, book = m == 2)) }
+                        if (m != mode) {
+                            vm.cancelIdCard()
+                            synchronized(gate) { gate.restartDelay(android.os.SystemClock.uptimeMillis()) }
+                            vm.replaceTop(target.copy(idCard = m == 1, book = m == 2))
+                        }
                     }
                 }
                 // Weights 1 : 96 dp : 1 keep the shutter centred whatever sits beside it.

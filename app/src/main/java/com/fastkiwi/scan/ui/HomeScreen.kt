@@ -303,8 +303,9 @@ fun HomeScreen(vm: AppViewModel, snackbar: SnackbarHostState, folderId: String? 
                     when {
                         favoritesOnly -> EmptyState(DocsIcons.star(), stringResource(R.string.docs_favorites_empty_title), stringResource(R.string.docs_favorites_empty_body), Modifier.fillMaxWidth())
                         folderId != null -> EmptyState(DocsIcons.folder(), stringResource(R.string.docs_folder_empty_title), stringResource(R.string.docs_folder_empty_body), Modifier.fillMaxWidth())
+                        // Top level empty, documents in folders (BLACKBOX-2.0 re-test: «لا توجد نتائج» after a move misled).
                         else -> Text(
-                            stringResource(R.string.no_results), Modifier.fillMaxWidth().padding(Dimens.xxl),
+                            stringResource(R.string.docs_top_level_empty), Modifier.fillMaxWidth().padding(Dimens.xxl),
                             style = MaterialTheme.typography.bodyLarge,
                         )
                     }

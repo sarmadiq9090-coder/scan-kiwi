@@ -102,6 +102,10 @@ commands stand in for them.
   shutter, automatic capture and the camera's status line work as on a phone. This stays so
   after `launch`, `locale`, `darkmode` and `fontscale`. If the camera ever says it cannot be
   used, report it.
+* Time: the command that opens the camera counts as about 1.5 s of looking at the screen; any
+  later command with a sheet in view counts as holding the phone still for up to 4 s. Automatic
+  capture waits 2.5 s after the camera opens or the mode changes, so there is time to choose
+  «كتاب» / "Book" first.
 * There is no internet and no browser: a link the app opens is reported as an event only, and the
   app's own update check («تحقق من التحديثات») always finds no connection.
 * Text recognition (OCR) is simulated: it reads the sheets listed by `pages` (each half of the

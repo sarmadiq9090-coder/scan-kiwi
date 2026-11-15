@@ -448,23 +448,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 val doubtful = det == null || !det.confident
                 val doc = targetDoc(target.docId)
                 // 2.0-cam: book spread -> split screen; armed glare second shot -> fusion.
-                if (target.book && !target.idCard && target.retakePageId == null) {
-                    if (target.docId == null) docLock.withLock { saveAndPublish(doc) }
-                    val pending = com.fastkiwi.scan.imaging.BookCapture.prepare(getApplication(), store, doc.id, bmp, det?.takeIf { !it.cut }?.quad)
-                    bmp.recycle()
-                    bookPending.value?.let { com.fastkiwi.scan.imaging.BookCapture.discard(it) }
-                    bookPending.value = pending
-                    return@job CaptureResult(doc.id, null, false)
-                }
-                val second = glareSecond.value?.takeIf { it.first == doc.id && !target.idCard && target.retakePageId == null }
-                if (second != null) {
-                    glareSecond.value = null
-                    if (fuseGlare(doc.id, second.second, bmp, det?.quad)) {
-                        bmp.recycle()
-                        return@job CaptureResult(doc.id, null, false)
-                    }
-                    // Not the same page (or not matchable): keep the photo as a new page.
-                }
+                specialShot(target, doc, bmp, det)?.let { return@job it }
                 val quality = runCatching { com.fastkiwi.scan.imaging.CaptureQuality.assess(bmp, corners, det?.cut == true) }.getOrNull()
                 if (target.idCard) {
                     val card = PageRenderer.render(bmp, ScanPage("tmp", corners ?: BitmapIO.FULL, 0, Filter.ENHANCED))
@@ -508,6 +492,59 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 CaptureResult(saved.id, newPage.id, doubtful)
             }
             onDone(result)
+        }
+    }
+
+    /**
+     * Book mode (the spread goes to the split screen) and an armed glare second shot (fused into its page).
+     * Returns null when [bmp] is an ordinary page (not consumed); otherwise [bmp] is recycled.
+     */
+    private suspend fun specialShot(target: Screen.Camera, doc: ScanDocument, bmp: Bitmap, det: com.fastkiwi.scan.core.Detection?): CaptureResult? {
+        if (target.idCard || target.retakePageId != null) return null
+        if (target.book) {
+            if (target.docId == null) docLock.withLock { saveAndPublish(doc) }
+            val pending = com.fastkiwi.scan.imaging.BookCapture.prepare(getApplication(), store, doc.id, bmp, det?.takeIf { !it.cut }?.quad, cut = det?.cut == true)
+            bmp.recycle()
+            bookPending.value?.let { com.fastkiwi.scan.imaging.BookCapture.discard(it) }
+            bookPending.value = pending
+            return CaptureResult(doc.id, null, false)
+        }
+        val second = glareSecond.value?.takeIf { it.first == doc.id } ?: return null
+        glareSecond.value = null
+        if (fuseGlare(doc.id, second.second, bmp, det?.quad)) {
+            bmp.recycle()
+            return CaptureResult(doc.id, null, false)
+        }
+        // Not the same page (or not matchable): the caller keeps the photo as a new page.
+        return null
+    }
+
+    /**
+     * Photos picked from the gallery on the camera screen (BLACKBOX-2.0 re-test, task 3 and 4): in Book mode the
+     * picked spread goes to the split screen, and the second photo of «إزالة الوهج» is fused into its page, the
+     * same as a photo from the camera. Everything else is an ordinary import.
+     */
+    fun importFromCamera(target: Screen.Camera, uris: List<Uri>, onDone: (String) -> Unit) {
+        if (uris.isEmpty()) return
+        val special = uris.size == 1 && !target.idCard && target.retakePageId == null && (target.book || glareSecond.value != null)
+        if (!special) { importUris(target.docId, uris, onDone); return }
+        viewModelScope.launch {
+            var fallBack = false
+            val r = job("IMPORT") {
+                val bmp = BitmapIO.decodeUri(getApplication(), uris[0]) ?: run { _messages.send(UiMessage(R.string.msg_nothing_imported)); return@job null }
+                val det = BitmapIO.detectPage(bmp)
+                val doc = targetDoc(target.docId)
+                specialShot(target, doc, bmp, det) ?: run { bmp.recycle(); fallBack = true; null }
+            }
+            when {
+                // Fusion failed (another page): imported as a page, as the message says.
+                fallBack -> importUris(target.docId, uris, onDone)
+                r == null -> Unit
+                // Fused from the gallery: back where «إزالة الوهج» was chosen, unless this camera visit took pages.
+                !target.book -> (screen as? Screen.Camera)?.let { top -> if (top.captured == 0) back() else replaceTop(top.copy(docId = r.docId)) }
+                // Book mode: the split screen is on the camera; the camera keeps the document.
+                else -> (screen as? Screen.Camera)?.let { top -> if (top.book) replaceTop(top.copy(docId = r.docId)) }
+            }
         }
     }
 

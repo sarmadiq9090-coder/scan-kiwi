@@ -573,7 +573,11 @@ fun ExportSheet(vm: AppViewModel, docId: String, onDismiss: () -> Unit) {
     // the footer stays fixed (QC-1: reachable without scrolling) but compact: side by side, no icons,
     // labels wrap, less bottom space.
     val largeText = androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.5f
+    val optionsScroll = rememberScrollState()
     val footer: @Composable () -> Unit = {
+            // More options below (BLACKBOX-2.0 re-test, 200 %: the page-size field looked cut off behind the
+            // buttons): a divider says the list goes on under the fixed footer.
+            if (optionsScroll.canScrollForward) androidx.compose.material3.HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             Column(Modifier.fillMaxWidth().padding(horizontal = Dimens.sheet).padding(top = Dimens.s, bottom = if (largeText) Dimens.m else Dimens.xl)) {
                 // Footer: progress with a real Cancel while exporting, otherwise Save / Share.
                 val ex = vm.exportState.value
@@ -629,7 +633,7 @@ fun ExportSheet(vm: AppViewModel, docId: String, onDismiss: () -> Unit) {
         // Options scroll; the footer (Save / Share, or progress with Cancel) stays fixed at the
         // bottom of the sheet so the primary action is always in the thumb zone (spec §3, §3.6).
         Column(Modifier.fillMaxWidth()) {
-            Column(Modifier.fillMaxWidth().weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(horizontal = Dimens.sheet).padding(bottom = Dimens.l)) {
+            Column(Modifier.fillMaxWidth().weight(1f, fill = false).verticalScroll(optionsScroll).padding(horizontal = Dimens.sheet).padding(bottom = Dimens.l)) {
                 // Header: title, then what will be shared (live).
                 Text(stringResource(R.string.export), style = MaterialTheme.typography.titleLarge)
                 val doc = vm.doc(docId)

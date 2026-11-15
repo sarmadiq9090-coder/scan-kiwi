@@ -205,9 +205,11 @@ object BitmapIO {
         small.getPixels(px, 0, small.width, 0, 0, small.width, small.height)
         val sw = small.width
         val sh = small.height
-        val det = QuadDetector(workSize = 480).detectBest(
+        val found = QuadDetector(workSize = 480).detectBest(
             listOf({ ImageFilters.toGray(px, sw, sh) }, { ImageFilters.paperMap(px, sw, sh) }),
         )
+        // A dark band printed along the paper's edge (an invoice title bar) stays in the page (content loss otherwise).
+        val det = com.fastkiwi.scan.core.HeaderBand.extend(found, px, sw, sh)
         val w = small.width.toFloat()
         val h = small.height.toFloat()
         if (small !== bmp) small.recycle()

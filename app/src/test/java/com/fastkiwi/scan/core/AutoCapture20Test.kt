@@ -32,6 +32,23 @@ class AutoCapture20Test {
     }
 
     @Test
+    fun waitsAfterTheCameraOpensAndAfterAModeChange() {
+        val g = AutoCapture(holdMillis = 900, startDelayMillis = 2500)
+        var t = 1000L
+        // A page held still from the first frame: no shot before 2.5 s (BLACKBOX-2.0 re-test, Book mode).
+        while (t < 1000L + 2400) { assertEquals("at $t", AutoCapture.State.HOLD, g.feed(page, true, t).state); t += 100 }
+        t = 1000L + 2500
+        assertEquals(AutoCapture.State.FIRE, g.feed(page, true, t).state)
+        // A mode change waits again.
+        g.captured(page)
+        val g2 = AutoCapture(holdMillis = 900, startDelayMillis = 2500)
+        g2.feed(page, true, 0L)
+        g2.restartDelay(2000L)
+        for (k in 1..40) assertTrue(g2.feed(page, true, 2000L + k * 100).state != AutoCapture.State.FIRE || 2000L + k * 100 >= 4500L)
+        assertEquals(AutoCapture.State.FIRE, g2.feed(page, true, 4600L).state)
+    }
+
+    @Test
     fun waitsForSharpFrame() {
         val g = AutoCapture(holdMillis = 300)
         var t = 0L

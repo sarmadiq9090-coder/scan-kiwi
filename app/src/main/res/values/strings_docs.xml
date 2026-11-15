@@ -77,4 +77,5 @@
     <string name="docs_txt_save">حفظ النص TXT على الجهاز</string>
     <string name="docs_txt_page_header">— صفحة %1$s —</string>
     <string name="docs_txt_empty">لا نص في هذا المستند بعد</string>
+    <string name="docs_top_level_empty">لا مستندات هنا خارج المجلدات</string>
 </resources>

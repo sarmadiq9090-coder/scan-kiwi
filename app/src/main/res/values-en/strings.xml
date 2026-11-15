@@ -7,7 +7,6 @@
     <string name="import_files">Import images or PDF</string>
     <string name="clear_search">Clear search</string>
     <string name="clear_selection">Clear selection</string>
-    <string name="no_results">No results</string>
     <string name="empty_title">No documents yet</string>
     <string name="empty_body">Tap Scan to capture a page, or import images and PDFs to merge them.</string>
     <string name="privacy_short">Your files stay on your phone; the internet is used only to check for updates</string>

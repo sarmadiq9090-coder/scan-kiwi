@@ -57,12 +57,14 @@ class BookPending(
     val preview: Bitmap,
     val spine: Spine,
     val order: ReadingOrder,
+    /** The detector saw the spread run off the photo. */
+    val cut: Boolean = false,
 )
 
 /** Book mode helpers: detection on the still, the split into two pages, the page order setting. */
 object BookCapture {
 
-    fun prepare(ctx: Context, store: DocumentStore, docId: String, bmp: Bitmap, spread: Quad?): BookPending {
+    fun prepare(ctx: Context, store: DocumentStore, docId: String, bmp: Bitmap, spread: Quad?, cut: Boolean = false): BookPending {
         val dir = File(ctx.cacheDir, "book").apply { mkdirs() }
         val src = File(dir, "spread_${DocumentStore.newId()}.jpg")
         BitmapIO.saveJpeg(bmp, src, 92)
@@ -78,7 +80,7 @@ object BookCapture {
         val spine = BookSplit.findSpine(gray)
         val saved = order(store, docId)
         val order = saved ?: BookSplit.guessDirection(gray, spine) ?: defaultOrder(ctx)
-        return BookPending(docId, src, quad, preview, spine, order)
+        return BookPending(docId, src, quad, preview, spine, order, cut)
     }
 
     /**
@@ -89,10 +91,14 @@ object BookCapture {
         val (left, right) = BookSplit.halves(p.spread, spine) ?: return emptyList()
         val halves = listOf(left, right)
         val src = BitmapIO.decodeFile(p.source)
+        // Whether part of the page is cut off is a question about the spread, not each half: a half's outline
+        // runs along the spine in the middle of the photo and covers half the area (BLACKBOX-2.0 re-test: both
+        // split pages warned «cut off»). Without a detected outline nothing is known, as for any page.
+        val whole = !p.cut && (p.spread == BitmapIO.FULL || QualityMetrics.isComplete(p.spread))
         val pages = BookSplit.order(order).map { i ->
             val id = DocumentStore.newId()
             p.source.copyTo(store.srcFile(p.docId, id), overwrite = true)
-            val quality = src?.let { CaptureQuality.assess(it, halves[i], cut = false) }
+            val quality = src?.let { CaptureQuality.assess(it, halves[i], cut = false).copy(completeness = if (whole) 1f else 0f) }
             ScanPage(id, halves[i], 0, filter, quality = quality)
         }
         src?.recycle()

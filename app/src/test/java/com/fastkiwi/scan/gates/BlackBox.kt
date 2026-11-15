@@ -66,6 +66,7 @@ class BlackBox(private val rule: ComposeTestRule, val dir: File) {
     private var viewSerial = 0
     private var cameraEntry = 0
     private var autoFired = Pair(-1, -1)
+    private var entryLooked = -1
     private var wasOnCamera = false
     private var shotSeed = 100
     /** 2.0-gates camera seam: set while the driver taps the shutter, so a still is reported as manual. */
@@ -696,7 +697,19 @@ class BlackBox(private val rule: ComposeTestRule, val dir: File) {
         val vm = vm() ?: return
         if (vm.screen !is Screen.Camera) return
         if (ContextCompat.checkSelfPermission(app, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) return
-        if (!vm.settings.autoCapture || cameraView == "desk") return
+        if (!vm.settings.autoCapture) return
+        // Just opened (or allowed): the user first looks at the screen and may choose a mode, about 1.5 s,
+        // before holding the page still (BLACKBOX-2.0 re-test: a 4 s hold right away left no time to choose Book).
+        if (entryLooked != cameraEntry) {
+            entryLooked = cameraEntry
+            if (cameraView != "desk") {
+                val before = shotsTaken
+                for (i in 0 until (1500L / tickMs).toInt()) { tick(tickMs); if (shotsTaken != before) break }
+                if (shotsTaken != before) settle()
+                return
+            }
+        }
+        if (cameraView == "desk") return
         // The app's own gate decides (outline median, hold time, content re-arm). Hold the page still for
         // up to 4 s the first time it is in view, ~1 s after that (the gate should not fire again).
         val first = autoFired != Pair(viewSerial, cameraEntry)
@@ -766,9 +779,13 @@ class BlackBox(private val rule: ComposeTestRule, val dir: File) {
         // Announcements (snackbars, status lines): live regions whose text is new.
         val nodes = runCatching { A11y.snapshot() }.getOrDefault(emptyList())
         val live = nodes.filter { (it.liveRegion || it.actions.contains("dismiss")) && it.role != "clickable" }.map { l ->
-            // A snackbar is an unlabelled live pane; its message is in the nodes inside it.
+            // A snackbar is an unlabelled live pane; its message is in the nodes inside it (its semantics
+            // descendants, as TalkBack reads it, not whatever list row lies under it on screen).
             l.label.ifEmpty {
-                nodes.filter { it !== l && it.window === l.window && l.bounds.contains(it.bounds) && it.label.isNotEmpty() }
+                val inside = HashSet<Int>()
+                fun collect(n: androidx.compose.ui.semantics.SemanticsNode) { for (c in n.children) { inside += c.id; collect(c) } }
+                collect(l.sn)
+                nodes.filter { it !== l && it.window === l.window && it.id in inside && it.label.isNotEmpty() }
                     .joinToString(" · ") { if (it.clickable) "[button: ${it.label}]" else it.label }
             }
         }.filter { it.isNotEmpty() }.toHashSet()
