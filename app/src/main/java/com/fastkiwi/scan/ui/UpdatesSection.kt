@@ -120,15 +120,15 @@ fun UpdatesScreen(vm: AppViewModel) {
                     if (i == 0) {
                         SettingsRow(KiwiIcons.update(), stringResource(R.string.update_check_now), status, shape, {
                             if (!busy) vm.updates.checkNow()
-                        }, trailing = null)
+                        })
                     } else if (st is UpdateState.Ready) {
                         SettingsRow(KiwiIcons.update(), stringResource(R.string.update_install_again), stringResource(R.string.update_ready), shape, {
                             vm.updates.install(st.apk, st.release)
-                        }, trailing = null)
+                        })
                     } else if (release != null) {
                         SettingsRow(KiwiIcons.update(), stringResource(R.string.update_download_install), stringResource(R.string.update_available, release.version.toString()), shape, {
                             if (!busy) vm.updates.downloadAndInstall(release)
-                        }, trailing = null)
+                        })
                     }
                 }
                 Spacer(Modifier.height(Dimens.m))
