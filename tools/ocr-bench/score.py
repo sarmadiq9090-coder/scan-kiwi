@@ -6,7 +6,7 @@
     python -I score.py ... --json report.json --markdown table.md
     python -I score.py ... --gate base=tess_fast,new=kiwi_fused_mnn --max-cer 0.20 --min-rel-gain 0.30 \
         --max-table-cer 0.10 --min-numbers 0.65 --max-regress-pp 2 --allow-regress mixed:5
-    python -I score.py ... --parity ref.json:fused_fast_v6tiny,kiwi_fused_mnn --tol-pp 0.5
+    python -I score.py ... --parity kiwi_fused_onnx,kiwi_fused_mnn16 --tol-pp 0.5   # 2.0 parity reference
 
 Normalisation (both sides): NFKC, bidi controls and tatweel removed, Arabic-Indic and Eastern Arabic-Indic
 digits mapped to ASCII, Arabic thousands/decimal separators mapped to , and ., whitespace collapsed. "CER"

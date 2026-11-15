@@ -119,10 +119,19 @@ were measured before the mixed fix.
 Second tuning set `dev2` (76 pages, 2.0): 1.5 fusion 13.5% (mixed 30.5%) → 2.0 fusion 9.4% (mixed 6.5%).
 
 Parity:
-- **Runtime parity (same logic):** MNN fp32 vs ONNX Runtime −0.11 pp CER; MNN fp16 vs ONNX −0.1 pp. PASS (±0.5 pp).
-- **Against roadmap §3's 17.3%:** the shipped pipeline gives 15.5%, −1.8 pp, outside the ±0.5 pp band in the
-  better direction. The difference is the pipeline, not the runtime: RapidOCR's own pre/post-processing (no right
-  padding, 90° turn of narrow boxes, batch padding, larger detector input) versus the app's.
+- **Parity reference (2.0, manager decision 3):** `kiwi_fused_onnx`, the app's own pipeline logic on ONNX
+  Runtime 1.32.0 with the original ONNX model files, replaces roadmap §3's `fused_fast_v6tiny` (17.3%). The
+  ±0.5 pp band is kept around the new reference: `score.py --parity kiwi_fused_onnx,kiwi_fused_mnn16 --tol-pp 0.5`.
+  **2.0 fusion: ONNX 12.0%, shipped MNN fp16 11.8%: −0.22 pp, PASS.** (1.5 fusion: 15.6% vs 15.5%, −0.1 pp;
+  MNN fp32 −0.11 pp.)
+- **Why roadmap §3's 17.3% is no longer the reference (cause known, not model drift):** with the 1.5 fusion the
+  shipped pipeline gave 15.5%, −1.8 pp, outside the old ±0.5 pp band in the better direction. The model files
+  are the same (`ModelPinTest`), and the same logic gives the same number on ONNX Runtime and on MNN (−0.1 pp),
+  so the runtime and the weights are not the cause. The cause is the pre/post-processing around the models:
+  RapidOCR 3.10.0 (roadmap §3) gives the recogniser no right-hand padding, turns narrow boxes by 90°, pads
+  batches and feeds the detector a larger input; the app pads each line by 25% (≥ 96 px; without it prose CER
+  was 12.9%), never turns boxes and caps the detector at 960 px. The 2.0 mixed fix widens the gap further
+  (17.3% → 11.8%), again on the fusion side only.
 - **Kotlin = Python:** `FusedPipelineGoldenTest` feeds the raw MNN outputs recorded from the Python reference on
   four dev pages (2.0: re-recorded with the mixed fix, + `036_mixed`) to the Kotlin code: same model inputs,
   same boxes, identical text.
