@@ -22,7 +22,6 @@ import com.fastkiwi.scan.export.ExportOptions
 import com.fastkiwi.scan.export.Exporter
 import com.fastkiwi.scan.export.Quality
 import com.fastkiwi.scan.ocr.OcrLanguage
-import com.fastkiwi.scan.ocr.PageOcr
 import com.fastkiwi.scan.ui.AppViewModel
 import com.fastkiwi.scan.ui.Screen
 import kotlinx.coroutines.runBlocking
@@ -105,22 +104,29 @@ private fun clean(rule: Rule2) {
 }
 
 /** Like a real engine for the export: the invoice words scaled to the bitmap it is given. */
-private class InvoiceOcr : PageOcr {
-    override fun recognize(page: Bitmap, lang: OcrLanguage): List<OcrWord> {
-        val kx = page.width / 2400f
-        val ky = page.height / 3200f
-        return invoiceWords().map { OcrWord(it.text, (it.left * kx).toInt(), (it.top * ky).toInt(), (it.right * kx).toInt(), (it.bottom * ky).toInt()) }
+/** A fake engine (2.0 OcrEngine seam): the invoice words, in the frame of the page it is given. */
+private open class InvoiceOcr : com.fastkiwi.scan.ocr.OcrEngine {
+    override val id = "fake"
+    override val version = 1
+    override suspend fun recognize(page: com.fastkiwi.scan.ocr.OcrInput, options: com.fastkiwi.scan.ocr.OcrOptions): com.fastkiwi.scan.ocr.OcrResult {
+        val kx = page.pageWidth / 2400f
+        val ky = page.pageHeight / 3200f
+        val ws = invoiceWords().map {
+            com.fastkiwi.scan.ocr.RecognizedWord(it.text, com.fastkiwi.scan.ocr.OcrBox((it.left * kx).toInt(), (it.top * ky).toInt(), (it.right * kx).toInt(), (it.bottom * ky).toInt()), 1f)
+        }
+        val box = ws.drop(1).fold(ws[0].box) { b, w -> b.union(w.box) }
+        return com.fastkiwi.scan.ocr.OcrResult(listOf(com.fastkiwi.scan.ocr.RecognizedLine(ws, box, 1f, com.fastkiwi.scan.ocr.TextDirection.RTL)), page.pageWidth, page.pageHeight, id, version)
     }
-    override fun stop() {}
     override fun close() {}
 }
 
-private class CountingOcr : PageOcr {
+private class CountingOcr : InvoiceOcr() {
     var calls = 0
-    override fun recognize(page: Bitmap, lang: OcrLanguage): List<OcrWord> { calls++; return InvoiceOcr().recognize(page, lang) }
-    override fun stop() {}
-    override fun close() {}
+    override suspend fun recognize(page: com.fastkiwi.scan.ocr.OcrInput, options: com.fastkiwi.scan.ocr.OcrOptions): com.fastkiwi.scan.ocr.OcrResult { calls++; return super.recognize(page, options) }
 }
+
+private fun fakeExporter(ctx: android.content.Context, store: com.fastkiwi.scan.data.DocumentStore, engine: com.fastkiwi.scan.ocr.OcrEngine) =
+    Exporter(ctx, store, com.fastkiwi.scan.ocr.OcrService(com.fastkiwi.scan.ocr.OcrEngineFactory.fixed(engine)))
 
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -211,7 +217,7 @@ class DocsArabicUiTest {
         val imageBefore = vm.store.outFile(invoice.id, page.id).readBytes()
         // First export with OCR fills the cache in the export's frame.
         val opt = ExportOptions(PageSize.A4, Quality.SMALL, ocr = true)
-        runBlocking { Exporter(rule.activity, vm.store) { InvoiceOcr() }.exportPdf(vm.store.load(invoice.id)!!, opt) { _, _ -> } }
+        runBlocking { fakeExporter(rule.activity, vm.store, InvoiceOcr()).exportPdf(vm.store.load(invoice.id)!!, opt) { _, _ -> } }
 
         val before = runBlocking { vm.pageText(invoice.id, page.id, null) }!!
         val edited = before.text.replace("1200", "1500").replace("مارس", "أبريل")
@@ -225,7 +231,7 @@ class DocsArabicUiTest {
         assertTrue("the corrected page no longer has the old word", runBlocking { vm.search("مارس") }.pages.none { it.page.id == page.id })
 
         val again = CountingOcr()
-        val pdf = runBlocking { Exporter(rule.activity, vm.store) { again }.exportPdf(vm.store.load(invoice.id)!!, opt) { _, _ -> } }
+        val pdf = runBlocking { fakeExporter(rule.activity, vm.store, again).exportPdf(vm.store.load(invoice.id)!!, opt) { _, _ -> } }
         assertEquals("the cached (corrected) words are used, no new OCR", 0, again.calls)
         val text = Loader.loadPDF(pdf).use { PDFTextStripper().apply { startPage = 1; endPage = 1 }.getText(it) }
         assertTrue("corrected amount in the PDF text layer: $text", text.contains("1500"))

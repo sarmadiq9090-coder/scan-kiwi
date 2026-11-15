@@ -15,46 +15,21 @@ import com.fastkiwi.scan.data.DocumentStore
 import com.fastkiwi.scan.data.ScanDocument
 import com.fastkiwi.scan.imaging.BitmapIO
 import com.fastkiwi.scan.imaging.PageRenderer
-import com.fastkiwi.scan.ocr.OcrEngine
+import com.fastkiwi.scan.ocr.DefaultOcrEngineFactory
+import com.fastkiwi.scan.ocr.OcrInput
 import com.fastkiwi.scan.ocr.OcrLanguage
-import com.fastkiwi.scan.ocr.PageOcr
-import kotlinx.coroutines.CoroutineStart
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.awaitCancellation
-import kotlinx.coroutines.coroutineScope
+import com.fastkiwi.scan.ocr.OcrMode
+import com.fastkiwi.scan.ocr.OcrOptions
+import com.fastkiwi.scan.ocr.OcrService
+import com.fastkiwi.scan.ocr.fromBitmap
+import com.fastkiwi.scan.ocr.key
+import com.fastkiwi.scan.ocr.toOcrLangs
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
-import kotlinx.coroutines.launch
 import java.io.ByteArrayOutputStream
 import java.io.File
-import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.max
 import kotlin.math.roundToInt
-
-/**
- * Runs the blocking [block] (a native call that cannot see coroutine cancellation) and calls
- * [stop] from another thread as soon as the calling coroutine is cancelled, so the block can
- * return early. (1.2.0 used `Job.invokeOnCompletion`, which only runs after the job has
- * completed, i.e. never while the block is still running.)
- */
-internal suspend fun <T> stopOnCancel(stop: () -> Unit, block: () -> T): T = coroutineScope {
-    val done = AtomicBoolean(false)
-    // Starts here and suspends at once; when this scope is cancelled it resumes on a
-    // pool thread (this one is busy in [block]) and stops the work.
-    val watcher = launch(Dispatchers.Default, start = CoroutineStart.UNDISPATCHED) {
-        try {
-            awaitCancellation()
-        } finally {
-            if (!done.get()) stop()
-        }
-    }
-    try {
-        block()
-    } finally {
-        done.set(true)
-        watcher.cancel()
-    }
-}
 
 /** Size/quality presets. SMALL targets messaging apps and e-mail attachments. */
 enum class Quality(val longSide: Int, val jpegQuality: Int, val bitonalLongSide: Int) {
@@ -76,8 +51,11 @@ data class ExportOptions(
 class Exporter(
     private val ctx: Context,
     private val store: DocumentStore,
-    /** Creates the OCR engine for one export; tests pass a fake. */
-    private val newOcr: (Context) -> PageOcr = { OcrEngine(it) },
+    // 2.0-ocr: the OCR engines, shared with the background reader (AppViewModel); tests pass one with a
+    // fake engine. Null: this exporter makes its own for each export and releases it at the end.
+    private val sharedOcr: OcrService? = null,
+    /** 2.0-ocr: «دقيق» Accurate or «سريع» Fast (Settings). */
+    private val ocrMode: () -> OcrMode = { OcrMode.ACCURATE },
 ) {
 
     private fun exportDir(): File = File(ctx.cacheDir, "exports").apply { mkdirs() }
@@ -143,7 +121,11 @@ class Exporter(
         val font = if (opt.ocr) ctx.assets.open("fonts/glyphless.ttf").use { it.readBytes() } else null
         val icc = if (pdfA) ctx.assets.open("icc/sRGB-v2-micro.icc").use { it.readBytes() } else null
         val writer = PdfWriter(opt.pageSize, doc.name, opt.password?.takeIf { it.isNotEmpty() }, font, pdfAIccProfile = icc)
-        var ocr = if (opt.ocr) newOcr(ctx) else null
+        // 2.0-ocr: one OCR service for the export (shared with the background reader when given).
+        val ocr = if (opt.ocr) (sharedOcr ?: OcrService(DefaultOcrEngineFactory(ctx))) else null
+        val ocrOptions = OcrOptions(opt.ocrLanguage.toOcrLangs(), ocrMode())
+        var ocrOn = ocr != null
+        ocr?.reviveIfDead()
         val out = File(exportDir(), safeName(doc.name) + ".pdf")
         val part = File(exportDir(), out.name + ".part")
         try {
@@ -154,31 +136,31 @@ class Exporter(
                     progress(i, doc.pages.size)
                     val page = doc.pages[i]
                     val bitonal = page.filter == Filter.BW
-                    val engine = ocr
-                    val cached = if (engine != null) store.loadOcrFrame(doc.id, page, opt.ocrLanguage.code) else null
-                    val needOcr = engine != null && cached == null
+                    // 2.0-ocr: cached words count only when the engine that would read the page now wrote them.
+                    val engineKey = if (ocrOn && ocr != null) ocr.selectionFor(ocrOptions)?.engine?.key else null
+                    val cached = if (engineKey != null) store.loadOcrFrame(doc.id, page, opt.ocrLanguage.code, engineKey) else null
+                    val needOcr = engineKey != null && cached == null
                     // Decode only as large as needed: the export size, or OCR's working size.
                     val target = if (bitonal) opt.quality.bitonalLongSide else opt.quality.longSide
-                    val full = pageBitmap(doc, i, if (needOcr) max(target, OcrEngine.WORK_SIDE) else target) ?: continue
+                    val full = pageBitmap(doc, i, if (needOcr) max(target, ocrOptions.maxSide) else target) ?: continue
                     // Cached boxes are in the frame OCR read (often larger than this export's
                     // image): bring them into this bitmap's pixels before anything else.
                     var words: List<OcrWord> = cached?.let {
                         scaleWords(it.words, full.width.toFloat() / it.frameWidth, full.height.toFloat() / it.frameHeight)
                     } ?: emptyList()
-                    if (needOcr && engine != null) {
+                    if (needOcr && ocr != null) {
                         phase(Phase.READING_TEXT)
                         words = try {
-                            // Cancelling the export stops Tesseract inside this page.
-                            stopOnCancel(engine::stop) { engine.recognize(full, opt.ocrLanguage) }.also {
-                                currentCoroutineContext().ensureActive() // a stopped page is not cached
-                                store.saveOcr(doc.id, page, it, opt.ocrLanguage.code, full.width, full.height)
-                            }
+                            // Cancelling the export stops the engine inside this page.
+                            val r = ocr.recognize(OcrInput.fromBitmap(full, ocrOptions.maxSide), ocrOptions)
+                            currentCoroutineContext().ensureActive() // a stopped page is not cached
+                            store.saveOcr(doc.id, page, r, opt.ocrLanguage.code, ocrOptions.maxSide)
+                            r.toPdfWords()
                         } catch (e: Throwable) {
                             // OOM and cancellation keep their meaning; anything else (no native
                             // library, missing or broken model) means "export without text".
                             if (e is OutOfMemoryError || e is kotlinx.coroutines.CancellationException) throw e
-                            runCatching { engine.close() }
-                            ocr = null
+                            ocrOn = false
                             onOcrUnavailable()
                             emptyList()
                         }
@@ -198,7 +180,7 @@ class Exporter(
             part.delete() // also on cancel: no half-written file is left behind
             throw e
         } finally {
-            runCatching { ocr?.close() }
+            if (sharedOcr == null) runCatching { ocr?.close() }
         }
         if (key != null) { lastKey = key; lastFile = out }
         return out

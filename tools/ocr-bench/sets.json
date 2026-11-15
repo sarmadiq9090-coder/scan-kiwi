@@ -1,0 +1,22 @@
+{
+ "dev": {
+  "description": "The roadmap section 3 set: 52 pages, 304 lines. Tuning is allowed on this set only.",
+  "seed": 20261114,
+  "pool": "A",
+  "fonts": ["NotoNaskhArabic-500", "NotoSansArabic-400", "Amiri-400", "Cairo-400", "Tajawal-400", "IBMPlexSansArabic-400", "Almarai-400", "ScheherazadeNew-400"],
+  "sizes_pt": [12, 11],
+  "pages_per_category": 6,
+  "small_lowq_pages": 10,
+  "small_pt": 8
+ },
+ "heldout": {
+  "description": "Held-out set for the 1.5.0/2.0.0 accuracy gates: other seed, 6 fonts not in dev, other sizes, its own invented text. Never tuned on.",
+  "seed": 20261201,
+  "pool": "B",
+  "fonts": ["NotoKufiArabic-400", "Lateef-400", "MarkaziText-400", "Vazirmatn-400", "ReadexPro-400", "Harmattan-400"],
+  "sizes_pt": [10, 13, 14],
+  "pages_per_category": 20,
+  "small_lowq_pages": 16,
+  "small_pt": 9
+ }
+}

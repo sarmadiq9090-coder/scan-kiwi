@@ -35,6 +35,8 @@ import com.fastkiwi.scan.imaging.BitmapIO
 import com.fastkiwi.scan.imaging.IdCardComposer
 import com.fastkiwi.scan.imaging.PageRenderer
 import com.fastkiwi.scan.imaging.PdfImporter
+import com.fastkiwi.scan.ocr.fromBitmap
+import com.fastkiwi.scan.ocr.toOcrLangs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -92,7 +94,18 @@ sealed interface ExportResult {
 class AppViewModel(app: Application) : AndroidViewModel(app) {
     val store = DocumentStore(app.filesDir)
     val settings = Settings(app)
-    private val exporter = Exporter(app, store)
+    // 2.0-ocr: one OCR service (Accurate/Fast engines) shared by exports and the background reader.
+    val ocrDiagnostics = com.fastkiwi.scan.ocr.OcrDiagnostics(app)
+    private val ocrService = com.fastkiwi.scan.ocr.OcrService(
+        com.fastkiwi.scan.ocr.DefaultOcrEngineFactory(app), viewModelScope,
+        onPage = ocrDiagnostics::record, heapProbe = { android.os.Debug.getNativeHeapAllocatedSize() },
+    )
+    private val exporter = Exporter(app, store, ocrService) { settings.ocrMode }
+    private val ocrReader = com.fastkiwi.scan.ocr.BackgroundOcr(store, ocrService, viewModelScope, options = {
+        if (!settings.ocrAfterCapture) null
+        else com.fastkiwi.scan.ocr.OcrOptions(settings.ocrLanguage.toOcrLangs(), settings.ocrMode) to settings.ocrLanguage
+    }) { refresh() }
+    // 2.0-ocr end
     // 2.0-docs: declared before init { refresh() }, which reads them on a background thread.
     val folderStore = FolderStore(app.filesDir)
     val searchIndex = SearchIndex(File(app.filesDir, "search/search.db"))
@@ -290,6 +303,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         list.add(0, DocEntry(saved, store.documentText(saved), store.sizeOnDisk(saved.id)))
         _docs.value = list.sortedByDescending { it.doc.modified } // 2.0-docs: a star or move keeps its place
         runCatching { searchIndex.syncDoc(store, saved) } // 2.0-docs
+        ocrReader.enqueue(saved.id) // 2.0-ocr: read new or edited pages in the background
         return saved
     }
 
@@ -909,35 +923,34 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      * Documents area: it goes through the same engine and cache as the PDF export.
      */
     private class MissingTextReader(private val vm: AppViewModel) : TextExporter.MissingText {
-        private var engine: com.fastkiwi.scan.ocr.PageOcr? = null
         var unavailable = false
             private set
 
+        // 2.0 merge: through the shared OCR service, so «اقرأ النص الآن» and TXT use the same engine
+        // («دقيق»/«سريع» from Settings), fallback and cache format as the PDF export.
         override suspend fun read(doc: ScanDocument, page: ScanPage): List<com.fastkiwi.scan.core.OcrWord>? {
             if (unavailable) return null
             val store = vm.store
             val f = store.outFile(doc.id, page.id)
             if (!f.exists()) PageRenderer.renderAndSave(store, doc.id, page)?.recycle()
-            val bmp = BitmapIO.decodeFile(f, com.fastkiwi.scan.ocr.OcrEngine.WORK_SIDE) ?: return null
             val lang = vm.settings.ocrLanguage
+            val options = com.fastkiwi.scan.ocr.OcrOptions(lang.toOcrLangs(), vm.settings.ocrMode)
+            val bmp = BitmapIO.decodeFile(f, options.maxSide) ?: return null
             return try {
-                val e = engine ?: com.fastkiwi.scan.ocr.OcrEngine(vm.getApplication<Application>()).also { engine = it }
-                val words = com.fastkiwi.scan.export.stopOnCancel(e::stop) { e.recognize(bmp, lang) }
+                val r = vm.ocrService.recognize(com.fastkiwi.scan.ocr.OcrInput.fromBitmap(bmp, options.maxSide), options)
                 kotlinx.coroutines.currentCoroutineContext().ensureActive()
-                store.saveOcr(doc.id, page, words, lang.code, bmp.width, bmp.height)
-                words
+                store.saveOcr(doc.id, page, r, lang.code, options.maxSide)
+                store.loadOcr(doc.id, page, lang.code)
             } catch (e: Throwable) {
                 if (e is OutOfMemoryError || e is CancellationException) throw e
                 unavailable = true
-                runCatching { engine?.close() }
-                engine = null
                 null
             } finally {
                 bmp.recycle()
             }
         }
 
-        fun close() { runCatching { engine?.close() } }
+        fun close() {}
     }
 
     /** Runs OCR on one page now (Text screen). */
@@ -1017,6 +1030,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     // ===================================================================== end 2.0-docs
 
     override fun onCleared() {
+        ocrService.close() // 2.0-ocr: release native OCR memory
         cancelIdCard()
         super.onCleared()
     }

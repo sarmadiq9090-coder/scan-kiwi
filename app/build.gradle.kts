@@ -21,6 +21,8 @@ android {
     namespace = "com.fastkiwi.scan"
     compileSdk = 36
     buildToolsVersion = "36.0.0"
+    // 2.0-ocr: the NDK GitHub's ubuntu-24.04 runner ships as its default (CI builds the MNN JNI glue).
+    ndkVersion = "27.3.13750724"
 
     defaultConfig {
         applicationId = "com.fastkiwi.scan"
@@ -31,8 +33,15 @@ android {
         // Arabic is the default (values/), English in values-en/.
         resourceConfigurations += listOf("ar", "en")
         ndk {
-            // Real phones (arm64 / armv7) plus x86_64 for emulators and Chromebooks.
-            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
+            // 2.0-ocr: real phones only (arm64 / armv7). x86_64 was dropped in the 1.5 plan: MNN has no
+            // official x86_64 Android build and it would add ~3.4 MB.
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a")
+        }
+        // 2.0-ocr: JNI glue for MNN (Accurate OCR). libc++_shared because the official libMNN.so needs it.
+        externalNativeBuild {
+            cmake {
+                arguments += listOf("-DANDROID_STL=c++_shared")
+            }
         }
     }
 
@@ -61,6 +70,14 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    // 2.0-ocr: builds app/src/main/cpp (kiwi_mnn) against the pinned libMNN.so.
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.31.5"
+        }
+    }
+
     buildFeatures {
         compose = true
         buildConfig = true
@@ -68,7 +85,11 @@ android {
 
     packaging {
         // Compressed native libs keep the APK small enough to send in chat.
-        jniLibs { useLegacyPackaging = true }
+        jniLibs {
+            useLegacyPackaging = true
+            // 2.0-ocr: ship MNN's official libMNN.so byte for byte (pinned sha256 in THIRD_PARTY.md / SBOM).
+            keepDebugSymbols += "**/libMNN.so"
+        }
         resources {
             excludes += setOf(
                 "/META-INF/{AL2.0,LGPL2.1}",
@@ -183,6 +204,25 @@ tasks.register("releaseSbom") {
         )
         components += data("tessdata/ara.traineddata", "tessdata_fast ara.traineddata", "Apache-2.0", "https://github.com/tesseract-ocr/tessdata_fast")
         components += data("tessdata/eng.traineddata", "tessdata_fast eng.traineddata", "Apache-2.0", "https://github.com/tesseract-ocr/tessdata_fast")
+        // 2.0-ocr: Accurate-mode models and the MNN runtime (not Maven artifacts).
+        components += data("ocr/PP-OCRv6_det_tiny.fp16.mnn", "PP-OCRv6 tiny text detector (PaddlePaddle), MNN fp16", "Apache-2.0", "https://huggingface.co/PaddlePaddle/PP-OCRv6_tiny_det")
+        components += data("ocr/arabic_PP-OCRv5_rec_mobile.fp16.mnn", "PP-OCRv5 Arabic mobile recogniser (PaddlePaddle), MNN fp16", "Apache-2.0", "https://huggingface.co/PaddlePaddle/arabic_PP-OCRv5_mobile_rec")
+        components += data("ocr/ppocrv5_arabic_dict.txt", "PP-OCRv5 Arabic recogniser dictionary", "Apache-2.0", "https://huggingface.co/PaddlePaddle/arabic_PP-OCRv5_mobile_rec")
+        val jni = file("src/main/jniLibs")
+        for (abi in listOf("arm64-v8a", "armeabi-v7a")) {
+            components += mapOf(
+                "type" to "library", "bom-ref" to "native:MNN:$abi", "name" to "MNN libMNN.so ($abi)", "version" to "3.6.2",
+                "description" to "Official MNN Android release, CPU runtime (tools/mnn/README.md)",
+                "hashes" to listOf(mapOf("alg" to "SHA-256", "content" to sha256(File(jni, "$abi/libMNN.so")))),
+                "licenses" to listOf(mapOf("license" to mapOf("id" to "Apache-2.0"))),
+                "externalReferences" to listOf(mapOf("type" to "distribution", "url" to "https://github.com/alibaba/MNN/releases/tag/3.6.2")),
+            )
+        }
+        components += mapOf(
+            "type" to "library", "bom-ref" to "native:libc++_shared", "name" to "LLVM libc++ (libc++_shared.so)", "version" to "Android NDK 27.3.13750724",
+            "licenses" to listOf(mapOf("expression" to "Apache-2.0 WITH LLVM-exception")),
+            "externalReferences" to listOf(mapOf("type" to "website", "url" to "https://developer.android.com/ndk")),
+        )
         components += data("fonts/glyphless.ttf", "Tesseract pdf.ttf (GlyphLessFont)", "Apache-2.0", "https://github.com/tesseract-ocr/tesseract/tree/main/tessdata")
         components += data("icc/sRGB-v2-micro.icc", "sRGB-v2-micro.icc", "CC0-1.0", "https://github.com/saucecontrol/Compact-ICC-Profiles")
         // Bundled UI font (res/font) and icons (res/drawable), which Maven does not list either.

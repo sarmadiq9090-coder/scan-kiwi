@@ -102,7 +102,6 @@
     <string name="ocr_ara_eng">عربي + إنجليزي</string>
     <string name="ocr_eng">إنجليزي</string>
     <string name="ocr_ara">عربي</string>
-    <string name="ocr_quality_note">دقة الإنجليزية جيدة على الصفحات الواضحة. دقة العربية أقل وقد تحتاج تصحيحًا؛ وهي أفضل مع «أبيض وأسود» أو «إزالة الظلال».</string>
     <string name="password_title">حماية بكلمة مرور</string>
     <string name="password_hint">تشفير ⁨AES-256⁩؛ لا يُفتح الملف إلا بكلمة المرور.</string>
     <string name="password">كلمة المرور</string>

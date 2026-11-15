@@ -7,6 +7,7 @@ import com.fastkiwi.scan.core.Filter
 import com.fastkiwi.scan.core.PageSize
 import com.fastkiwi.scan.export.Quality
 import com.fastkiwi.scan.ocr.OcrLanguage
+import com.fastkiwi.scan.ocr.OcrMode
 
 /** Small preference store (SharedPreferences, private to the app). */
 class Settings(ctx: Context) {
@@ -55,6 +56,17 @@ class Settings(ctx: Context) {
     var ocrLanguage: OcrLanguage
         get() = enumOr(p.getString("ocr_language", null), OcrLanguage.ARABIC_ENGLISH)
         set(v) = p.edit().putString("ocr_language", v.name).apply()
+
+    // 2.0-ocr
+    /** «دقيق» Accurate (fused, default) or «سريع» Fast (Tesseract only). */
+    var ocrMode: OcrMode
+        get() = enumOr(p.getString("ocr_mode", null), OcrMode.ACCURATE)
+        set(v) = p.edit().putString("ocr_mode", v.name).apply()
+
+    /** Read each page's text in the background right after capture (cached per page revision). */
+    var ocrAfterCapture: Boolean
+        get() = p.getBoolean("ocr_after_capture", true)
+        set(v) = p.edit().putBoolean("ocr_after_capture", v).apply()
 
     companion object {
         inline fun <reified T : Enum<T>> enumOr(name: String?, default: T): T =
