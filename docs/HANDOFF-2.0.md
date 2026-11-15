@@ -94,3 +94,9 @@ export PATH="/e/fast kiwi pro neq/kiwi-scan/.tools/jdk-21.0.13+9/bin:/e/fast kiw
 
 At most 2 subagents at a time; `model: sonnet` for mechanical work (test runs, torture, blind tester, screenshots);
 Opus only for the bug hunter and QC. No long logs in context (tail/grep, summaries ≤ 30 lines); don't read big files whole.
+
+Owner (via manager): «اختصر غير الضروري وحافظ على جودة المنتج النهائي».
+- QC screenshots by sample: each screen once; dark mode, 200% font and English only for a few key screens;
+  no mass screenshot sweeps, never read every image into context.
+- Unchanged: the independent bug hunter (Opus), the torture suite (run in the shell, read only its summary),
+  the code-blind tester with three personas (sonnet), and QC against the specs.
