@@ -49,6 +49,13 @@
             </intent-filter>
         </activity>
 
+        <!-- 2.0-pdf: PDFs from other apps are parsed only here, in a separate process (":pdf"),
+             so a broken or hostile file cannot crash or hang the app. Not exported. -->
+        <service
+            android:name=".pdf.PdfService"
+            android:process=":pdf"
+            android:exported="false" />
+
         <!-- Exports are shared from the cache through content:// URIs only. -->
         <provider
             android:name="androidx.core.content.FileProvider"

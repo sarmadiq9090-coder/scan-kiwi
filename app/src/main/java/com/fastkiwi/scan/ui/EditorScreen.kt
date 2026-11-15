@@ -4,7 +4,9 @@ package com.fastkiwi.scan.ui
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,9 +20,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -30,64 +35,89 @@ import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
-import androidx.compose.material3.BottomAppBar
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import com.fastkiwi.scan.ui.theme.Dimens
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.toggleableState
-import androidx.compose.ui.state.ToggleableState
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.fastkiwi.scan.R
+import com.fastkiwi.scan.core.Filter
 import com.fastkiwi.scan.core.PageSize
 import com.fastkiwi.scan.export.ExportOptions
 import com.fastkiwi.scan.export.Quality
 import com.fastkiwi.scan.ocr.OcrLanguage
+import com.fastkiwi.scan.pdf.ExportPreview
+import com.fastkiwi.scan.pdf.NumberPosition
+import com.fastkiwi.scan.pdf.PageDecor
+import com.fastkiwi.scan.pdf.PageNumbering
+import com.fastkiwi.scan.pdf.PagePlans
+import com.fastkiwi.scan.pdf.RangeException
+import com.fastkiwi.scan.pdf.Watermark
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
-/** Document page grid (design spec §3.4): «إضافة صفحات» and the primary «تصدير» at the bottom. */
+/**
+ * Document page grid (design spec §3.4): «إضافة صفحات» and the primary «تصدير» at the bottom.
+ * 2.0-pdf: Redo next to Undo, drag-and-drop reorder (long-press a page; the menu and TalkBack
+ * actions stay), page selection (extract, rotate, delete), split, blank pages and copy text.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EditorScreen(vm: AppViewModel, docId: String, snackbar: SnackbarHostState) {
@@ -96,9 +126,13 @@ fun EditorScreen(vm: AppViewModel, docId: String, snackbar: SnackbarHostState) {
     var rename by remember { mutableStateOf(false) }
     var showExport by remember { mutableStateOf(false) }
     var showAdd by remember { mutableStateOf(false) }
+    var showSplit by remember { mutableStateOf(false) }
     var menu by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
+    var selection by remember(docId) { mutableStateOf<Set<String>?>(null) } // null = not selecting
+    var confirmDeleteSelected by remember { mutableStateOf(false) }
     val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
 
     val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         vm.importUris(docId, uris) {}
@@ -108,6 +142,8 @@ fun EditorScreen(vm: AppViewModel, docId: String, snackbar: SnackbarHostState) {
         Text(stringResource(R.string.doc_missing), Modifier.padding(32.dp))
         return
     }
+    // Pages that no longer exist drop out of the selection.
+    val sel = selection?.let { s -> s.filter { id -> doc.pages.any { it.id == id } }.toSet() }
     val subtitle = pluralStringResource(R.plurals.page_count, doc.pages.size, doc.pages.size) +
         LocalFormat.metaSep(androidx.compose.ui.platform.LocalConfiguration.current.locales[0]) +
         stringResource(R.string.modified_at, LocalFormat.docDate(ctx, doc.modified))
@@ -115,25 +151,66 @@ fun EditorScreen(vm: AppViewModel, docId: String, snackbar: SnackbarHostState) {
     Scaffold(
         snackbarHost = { SnackbarHost(snackbar) },
         topBar = {
-            KiwiTopBar(
-                doc.name, NavIcon.BACK, { vm.back() }, subtitle = subtitle,
-                titleModifier = Modifier.clickable(onClickLabel = stringResource(R.string.rename)) { rename = true },
-            ) {
-                TooltipIconButton(KiwiIcons.undo(), stringResource(R.string.undo), { vm.undo(docId) }, enabled = (vm.undoCounts[docId] ?: 0) > 0)
-                Box {
-                    TooltipIconButton(KiwiIcons.more(), stringResource(R.string.more_options), { menu = true })
-                    DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                        DropdownMenuItem(text = { Text(stringResource(R.string.rename)) }, onClick = { menu = false; rename = true })
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.delete_document), color = MaterialTheme.colorScheme.error) },
-                            onClick = { menu = false; confirmDelete = true },
-                        )
+            if (sel != null) {
+                // Selection mode: contextual bar (as on Home), destructive action in the menu.
+                var selMenu by remember { mutableStateOf(false) }
+                TopAppBar(
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
+                    navigationIcon = { TooltipIconButton(KiwiIcons.close(), stringResource(R.string.clear_selection), { selection = null }) },
+                    title = { Text(pluralStringResource(R.plurals.pdf_selected_pages, sel.size, sel.size), style = MaterialTheme.typography.titleLarge) },
+                    actions = {
+                        val ordered = doc.pages.mapIndexedNotNull { i, p -> if (p.id in sel) i else null }
+                        TooltipIconButton(KiwiIcons.rotateRight(), stringResource(R.string.rotate_right), { vm.rotatePages(docId, sel, 90) }, enabled = sel.isNotEmpty())
+                        TooltipIconButton(KiwiIcons.import(), stringResource(R.string.pdf_extract), {
+                            vm.extractPages(docId, ordered) { id -> selection = null; vm.open(Screen.Editor(id)) }
+                        }, enabled = sel.isNotEmpty())
+                        Box {
+                            TooltipIconButton(KiwiIcons.more(), stringResource(R.string.more_options), { selMenu = true })
+                            DropdownMenu(expanded = selMenu, onDismissRequest = { selMenu = false }) {
+                                DropdownMenuItem(text = { Text(stringResource(R.string.pdf_select_all)) }, onClick = { selMenu = false; selection = doc.pages.map { it.id }.toSet() })
+                                DropdownMenuItem(text = { Text(stringResource(R.string.rotate_left)) }, enabled = sel.isNotEmpty(), onClick = { selMenu = false; vm.rotatePages(docId, sel, 270) })
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error) }, enabled = sel.isNotEmpty(),
+                                    onClick = { selMenu = false; confirmDeleteSelected = true },
+                                )
+                            }
+                        }
+                    },
+                )
+            } else {
+                KiwiTopBar(
+                    doc.name, NavIcon.BACK, { vm.back() }, subtitle = subtitle,
+                    titleModifier = Modifier.clickable(onClickLabel = stringResource(R.string.rename)) { rename = true },
+                ) {
+                    TooltipIconButton(KiwiIcons.undo(), stringResource(R.string.undo), { vm.undo(docId) }, enabled = (vm.undoCounts[docId] ?: 0) > 0)
+                    // 2.0-pdf: Redo (the undo arrow mirrored).
+                    TooltipIconButton(ImageVector.vectorResource(R.drawable.ic_sym_redo), stringResource(R.string.redo), { vm.redo(docId) }, enabled = (vm.redoCounts[docId] ?: 0) > 0)
+                    Box {
+                        TooltipIconButton(KiwiIcons.more(), stringResource(R.string.more_options), { menu = true })
+                        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                            DropdownMenuItem(text = { Text(stringResource(R.string.rename)) }, onClick = { menu = false; rename = true })
+                            DropdownMenuItem(text = { Text(stringResource(R.string.pdf_select_pages)) }, enabled = doc.pages.isNotEmpty(), onClick = { menu = false; selection = emptySet() })
+                            DropdownMenuItem(text = { Text(stringResource(R.string.pdf_split)) }, enabled = doc.pages.size > 1, onClick = { menu = false; showSplit = true })
+                            DropdownMenuItem(text = { Text(stringResource(R.string.pdf_add_blank_end)) }, onClick = { menu = false; vm.insertBlankPage(docId, doc.pages.size) })
+                            DropdownMenuItem(text = { Text(stringResource(R.string.pdf_copy_text)) }, enabled = doc.pages.isNotEmpty(), onClick = {
+                                menu = false
+                                scope.launch {
+                                    val t = vm.documentText(docId)
+                                    if (t != null) { copyText(ctx, t); snackbar.showSnackbar(ctx.getString(R.string.pdf_msg_text_copied)) }
+                                    else snackbar.showSnackbar(ctx.getString(R.string.pdf_msg_no_text))
+                                }
+                            })
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.delete_document), color = MaterialTheme.colorScheme.error) },
+                                onClick = { menu = false; confirmDelete = true },
+                            )
+                        }
                     }
                 }
             }
         },
         bottomBar = {
-            BottomActionBar {
+            if (sel == null) BottomActionBar {
                 ButtonPair(
                     secondary = { m ->
                         FilledTonalButton(onClick = { showAdd = true }, modifier = m) {
@@ -154,22 +231,15 @@ fun EditorScreen(vm: AppViewModel, docId: String, snackbar: SnackbarHostState) {
                 Text(stringResource(R.string.no_pages), style = MaterialTheme.typography.bodyLarge)
             }
         } else {
-            LazyVerticalGrid(
-                columns = GridCells.Adaptive(160.dp),
-                modifier = Modifier.padding(padding).fillMaxSize(),
-                contentPadding = PaddingValues(Dimens.screen),
-                horizontalArrangement = Arrangement.spacedBy(Dimens.l),
-                verticalArrangement = Arrangement.spacedBy(Dimens.s),
-            ) {
-                itemsIndexed(doc.pages, key = { _, p -> p.id }) { i, p ->
-                    PageTile(vm, docId, i, doc.pages.size, p)
-                }
+            PageGrid(vm, docId, doc.pages, sel, Modifier.padding(padding)) { id ->
+                selection = sel?.let { if (id in it) it - id else it + id }
             }
         }
     }
 
     if (rename) RenameDialog(doc.name, suggestion = vm.suggestName(docId), onDismiss = { rename = false }) { vm.rename(docId, it) }
     if (showExport) ExportSheet(vm, docId, onDismiss = { showExport = false })
+    if (showSplit) SplitDialog(doc.pages.size, onDismiss = { showSplit = false }) { groups -> showSplit = false; vm.splitDocument(docId, groups) }
     if (showAdd) AddPagesSheet(
         onDismiss = { showAdd = false },
         onCamera = { showAdd = false; vm.open(Screen.Camera(docId)) },
@@ -185,6 +255,98 @@ fun EditorScreen(vm: AppViewModel, docId: String, snackbar: SnackbarHostState) {
         ) {
             vm.deleteDocs(setOf(docId))
             vm.back()
+        }
+    }
+    if (confirmDeleteSelected && sel != null) {
+        ConfirmDialog(
+            title = pluralStringResource(R.plurals.pdf_selected_pages, sel.size, sel.size),
+            body = stringResource(R.string.delete_page_body),
+            confirm = stringResource(R.string.delete),
+            onDismiss = { confirmDeleteSelected = false },
+        ) {
+            vm.deletePages(docId, sel)
+            selection = null
+        }
+    }
+}
+
+/**
+ * The page grid with drag-and-drop (PDF-04): long-press a page and drag it; the others make
+ * room live and the move is saved (one Undo step) on release. In selection mode a tap toggles.
+ */
+@Composable
+private fun PageGrid(
+    vm: AppViewModel,
+    docId: String,
+    pages: List<com.fastkiwi.scan.data.ScanPage>,
+    selection: Set<String>?,
+    modifier: Modifier,
+    onToggle: (String) -> Unit,
+) {
+    val gridState = rememberLazyGridState()
+    val reorder = remember(pages.map { it.id }) { ReorderState(pages.size) }
+    val currentPages by androidx.compose.runtime.rememberUpdatedState(pages)
+    // Everything in root (physical) coordinates, so RTL mirroring never matters: the pointer,
+    // where the finger grabbed the tile, and each tile's untransformed bounds.
+    var pointer by remember { mutableStateOf(Offset.Zero) }
+    var grab by remember { mutableStateOf(Offset.Zero) }
+    val bounds = remember { HashMap<String, androidx.compose.ui.geometry.Rect>() }
+    val shown = reorder.order().map { pages[it] }
+    val draggedId = if (reorder.dragging) pages[reorder.from].id else null
+    val shownNow by androidx.compose.runtime.rememberUpdatedState(shown)
+
+    fun hoverAt(p: Offset) {
+        val key = bounds.entries.firstOrNull { (k, r) -> k != draggedId && r.contains(p) && shownNow.any { it.id == k } }?.key ?: return
+        reorder.hover(shownNow.indexOfFirst { it.id == key })
+    }
+
+    LazyVerticalGrid(
+        columns = GridCells.Adaptive(160.dp),
+        state = gridState,
+        modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(Dimens.screen),
+        horizontalArrangement = Arrangement.spacedBy(Dimens.l),
+        verticalArrangement = Arrangement.spacedBy(Dimens.s),
+    ) {
+        itemsIndexed(shown, key = { _, p -> p.id }) { i, p ->
+            val dragging = p.id == draggedId
+            val originalIndex = pages.indexOfFirst { it.id == p.id }
+            val dragModifier = if (selection != null) Modifier else Modifier.pointerInput(p.id) {
+                detectDragGesturesAfterLongPress(
+                    onDragStart = { local ->
+                        val r = bounds[p.id] ?: return@detectDragGesturesAfterLongPress
+                        val idx = currentPages.indexOfFirst { it.id == p.id }
+                        if (idx < 0) return@detectDragGesturesAfterLongPress
+                        grab = local
+                        pointer = Offset(r.left + local.x, r.top + local.y)
+                        reorder.start(idx)
+                    },
+                    onDrag = { change, amount ->
+                        change.consume()
+                        pointer += amount
+                        hoverAt(pointer)
+                    },
+                    onDragEnd = { reorder.drop()?.let { (from, to) -> vm.movePage(docId, from, to) } },
+                    onDragCancel = { reorder.cancel() },
+                )
+            }
+            val rect = bounds[p.id]
+            val lift = if (dragging && rect != null) {
+                Modifier.zIndex(1f).graphicsLayer {
+                    translationX = pointer.x - grab.x - rect.left
+                    translationY = pointer.y - grab.y - rect.top
+                    scaleX = 1.04f; scaleY = 1.04f
+                }.shadow(8.dp, RoundedCornerShape(12.dp))
+            } else Modifier
+            Box(
+                Modifier
+                    .then(if (dragging) Modifier else Modifier.animateItem())
+                    .onGloballyPositioned { bounds[p.id] = it.boundsInRoot() } // before the lift layer
+                    .then(lift)
+                    .then(dragModifier),
+            ) {
+                PageTile(vm, docId, if (reorder.dragging) i else originalIndex, pages.size, p, selection, onToggle, movingTo = if (dragging) i else null)
+            }
         }
     }
 }
@@ -208,34 +370,64 @@ private fun AddPagesSheet(onDismiss: () -> Unit, onCamera: () -> Unit, onImport:
 }
 
 @Composable
-private fun PageTile(vm: AppViewModel, docId: String, index: Int, count: Int, page: com.fastkiwi.scan.data.ScanPage) {
+private fun PageTile(
+    vm: AppViewModel,
+    docId: String,
+    index: Int,
+    count: Int,
+    page: com.fastkiwi.scan.data.ScanPage,
+    selection: Set<String>? = null,
+    onToggle: (String) -> Unit = {},
+    movingTo: Int? = null,
+) {
     var menu by remember { mutableStateOf(false) }
     val label = stringResource(R.string.page_n_of, index + 1, count)
     // TalkBack: the page menu's actions are also offered as accessibility actions.
     val aMoveEarlier = stringResource(R.string.move_earlier)
     val aMoveLater = stringResource(R.string.move_later)
+    val aMoveFirst = stringResource(R.string.move_first)
+    val aMoveLast = stringResource(R.string.move_last)
     val aCrop = stringResource(R.string.crop)
     val aRotate = stringResource(R.string.rotate_right)
     val aDelete = stringResource(R.string.delete)
+    val selecting = selection != null
+    val isSelected = selection?.contains(page.id) == true
+    val selState = stringResource(if (isSelected) R.string.pdf_page_selected else R.string.pdf_page_not_selected)
+    val moving = movingTo?.let { stringResource(R.string.pdf_drag_moving, LocalFormat.count(index + 1), LocalFormat.count(it + 1)) }
     Column(Modifier.fillMaxWidth()) {
-        PageThumbnail(
-            vm.store.thumbFile(docId, page.id), page.revision,
-            Modifier
-                .fillMaxWidth()
-                .aspectRatio(1f / 1.414f)
-                .clickable(onClickLabel = stringResource(R.string.edit_page)) { vm.open(Screen.Page(docId, index)) }
-                .semantics {
-                    contentDescription = label
-                    customActions = buildList {
-                        if (index > 0) add(CustomAccessibilityAction(aMoveEarlier) { vm.movePage(docId, index, index - 1); true })
-                        if (index < count - 1) add(CustomAccessibilityAction(aMoveLater) { vm.movePage(docId, index, index + 1); true })
-                        add(CustomAccessibilityAction(aCrop) { vm.open(Screen.Crop(docId, page.id)); true })
-                        add(CustomAccessibilityAction(aRotate) { vm.editPage(docId, page.id) { it.copy(rotation = (it.rotation + 90) % 360) }; true })
-                        add(CustomAccessibilityAction(aDelete) { vm.deletePage(docId, index); true })
-                    }
-                },
-            radius = 12,
-        )
+        Box {
+            PageThumbnail(
+                vm.store.thumbFile(docId, page.id), page.revision,
+                Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1f / 1.414f)
+                    .then(
+                        if (selecting) Modifier.clickable(onClickLabel = selState) { onToggle(page.id) }
+                        else Modifier.clickable(onClickLabel = stringResource(R.string.edit_page)) { vm.open(Screen.Page(docId, index)) },
+                    )
+                    .semantics {
+                        contentDescription = label
+                        if (selecting) { selected = isSelected; stateDescription = selState }
+                        if (moving != null) { stateDescription = moving; liveRegion = androidx.compose.ui.semantics.LiveRegionMode.Polite }
+                        if (!selecting) customActions = buildList {
+                            if (index > 0) add(CustomAccessibilityAction(aMoveEarlier) { vm.movePage(docId, index, index - 1); true })
+                            if (index < count - 1) add(CustomAccessibilityAction(aMoveLater) { vm.movePage(docId, index, index + 1); true })
+                            if (index > 0) add(CustomAccessibilityAction(aMoveFirst) { vm.movePage(docId, index, 0); true })
+                            if (index < count - 1) add(CustomAccessibilityAction(aMoveLast) { vm.movePage(docId, index, count - 1); true })
+                            add(CustomAccessibilityAction(aCrop) { vm.open(Screen.Crop(docId, page.id)); true })
+                            add(CustomAccessibilityAction(aRotate) { vm.editPage(docId, page.id) { it.copy(rotation = (it.rotation + 90) % 360) }; true })
+                            add(CustomAccessibilityAction(aDelete) { vm.deletePage(docId, index); true })
+                        }
+                    },
+                radius = 12,
+            )
+            if (selecting) {
+                Checkbox(
+                    checked = isSelected, onCheckedChange = null,
+                    modifier = Modifier.align(Alignment.TopEnd).padding(Dimens.xs).clip(CircleShape).background(MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)),
+                )
+            }
+        }
         Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
             Surface(color = MaterialTheme.colorScheme.surfaceContainerHigh, shape = CircleShape, modifier = Modifier.padding(start = Dimens.xs)) {
                 Text(
@@ -245,7 +437,7 @@ private fun PageTile(vm: AppViewModel, docId: String, index: Int, count: Int, pa
             }
             QualityBadge(page.quality, Modifier.padding(start = Dimens.xs)) // 2.0-cam: quality badge
             Spacer(Modifier.weight(1f))
-            Box {
+            if (!selecting) Box {
                 TooltipIconButton(KiwiIcons.more(), stringResource(R.string.page_actions, index + 1), { menu = true })
                 DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                     DropdownMenuItem(text = { Text(stringResource(R.string.move_earlier)) }, enabled = index > 0, onClick = { menu = false; vm.movePage(docId, index, index - 1) })
@@ -257,6 +449,9 @@ private fun PageTile(vm: AppViewModel, docId: String, index: Int, count: Int, pa
                     DropdownMenuItem(text = { Text(stringResource(R.string.signature)) }, onClick = { menu = false; vm.open(Screen.Sign(docId, page.id)) })
                     DropdownMenuItem(text = { Text(stringResource(R.string.docs_text)) }, onClick = { menu = false; vm.open(Screen.Text(docId, page.id)) }) // 2.0-docs: view / copy / correct text
                     DropdownMenuItem(text = { Text(stringResource(R.string.retake)) }, onClick = { menu = false; vm.open(Screen.Camera(docId, retakePageId = page.id)) })
+                    // 2.0-pdf: PDF-11 blank pages.
+                    DropdownMenuItem(text = { Text(stringResource(R.string.pdf_insert_blank_before)) }, onClick = { menu = false; vm.insertBlankPage(docId, index) })
+                    DropdownMenuItem(text = { Text(stringResource(R.string.pdf_insert_blank_after)) }, onClick = { menu = false; vm.insertBlankPage(docId, index + 1) })
                     DropdownMenuItem(
                         text = { Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error) },
                         onClick = { menu = false; vm.deletePage(docId, index) },
@@ -267,10 +462,53 @@ private fun PageTile(vm: AppViewModel, docId: String, index: Int, count: Int, pa
     }
 }
 
+/** PDF-02: split by typed ranges (each comma part a document) or every N pages. */
+@Composable
+private fun SplitDialog(pageCount: Int, onDismiss: () -> Unit, onSplit: (List<List<Int>>) -> Unit) {
+    var everyN by remember { mutableStateOf(false) }
+    var ranges by remember { mutableStateOf("") }
+    var n by remember { mutableStateOf("1") }
+    val groups: List<List<Int>>? = remember(everyN, ranges, n) {
+        try {
+            if (everyN) PagePlans.normalizeDigits(n).trim().toIntOrNull()?.takeIf { it >= 1 }?.let { PagePlans.everyN(pageCount, it) }
+            else PagePlans.parseGroups(ranges, pageCount)
+        } catch (e: RangeException) { null }
+    }
+    val err: Int? = if (everyN || ranges.isBlank()) null else try { PagePlans.parseGroups(ranges, pageCount); null } catch (e: RangeException) { PdfToolsViewModel.rangeError(e) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.pdf_split)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(Dimens.m)) {
+                ChoiceSegmentedRow(listOf(stringResource(R.string.pdf_split_by_ranges), stringResource(R.string.pdf_split_every_n)), if (everyN) 1 else 0, { everyN = it == 1 })
+                if (everyN) {
+                    OutlinedTextField(n, { n = it.take(5) }, singleLine = true, label = { Text(stringResource(R.string.pdf_every_n_label)) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth())
+                } else {
+                    OutlinedTextField(ranges, { ranges = it }, singleLine = true, label = { Text(stringResource(R.string.pdf_ranges_label)) },
+                        isError = err != null,
+                        supportingText = { Text(err?.let { stringResource(it, LocalFormat.count(pageCount)) } ?: stringResource(R.string.pdf_ranges_split_hint)) },
+                        modifier = Modifier.fillMaxWidth())
+                }
+                val parts = groups?.size ?: 0
+                Text(
+                    pluralStringResource(R.plurals.pdf_split_result, parts, parts), style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.semantics { liveRegion = androidx.compose.ui.semantics.LiveRegionMode.Polite },
+                )
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.cancel)) } },
+        confirmButton = {
+            TextButton(onClick = { groups?.let(onSplit) }, enabled = !groups.isNullOrEmpty(), modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.pdf_split)) }
+        },
+    )
+}
+
 /**
- * Export sheet (design spec §3.6): segmented format and quality, a page-size
- * dropdown, grouped option rows (OCR, PDF/A, password; PDF/A and password
- * exclude each other), live page count and size, and Save / Share at the bottom.
+ * Export sheet (design spec §3.6, PRD §7.4): segmented format and quality (with «حجم محدد»,
+ * a target size), a page-size dropdown, grouped option rows (OCR, PDF/A, password; PDF/A and
+ * password exclude each other; page numbers and watermark), a live page count and size, the
+ * final document preview, and Save / Share at the bottom.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -287,11 +525,29 @@ fun ExportSheet(vm: AppViewModel, docId: String, onDismiss: () -> Unit) {
     var password by remember { mutableStateOf("") }
     var showPw by remember { mutableStateOf(false) }
     var sizeMenu by remember { mutableStateOf(false) }
+    // 2.0-pdf: target size, page numbers, watermark.
+    var targetMode by remember { mutableStateOf(false) }
+    var targetText by remember { mutableStateOf("500") }
+    var targetMb by remember { mutableStateOf(false) }
+    var numbersOn by remember { mutableStateOf(false) }
+    var numbers by remember { mutableStateOf(PageNumbering()) }
+    var startText by remember { mutableStateOf("1") }
+    var posMenu by remember { mutableStateOf(false) }
+    var watermarkOn by remember { mutableStateOf(false) }
+    var watermark by remember { mutableStateOf(Watermark("", 0.25f, true)) }
     val busy by vm.busy
+
+    val targetBytes: Long? = if (!targetMode || asJpeg) null else
+        PagePlans.normalizeDigits(targetText).replace(',', '.').trim().toDoubleOrNull()?.takeIf { it > 0 }?.let { (it * if (targetMb) 1_000_000 else 1_000).toLong() }
+    val numbering = if (numbersOn) numbers.copy(start = PagePlans.normalizeDigits(startText).trim().toIntOrNull()?.coerceIn(0, 99_999) ?: 1) else null
+    val mark = if (watermarkOn && watermark.text.isNotBlank()) watermark else null
 
     fun options(): ExportOptions {
         s.pageSize = pageSize; s.quality = quality; s.ocr = ocr; s.ocrLanguage = ocrLang
-        return ExportOptions(pageSize, quality, ocr && !asJpeg, ocrLang, if (protect && !asJpeg) password else null, archival = archival && !protect && !asJpeg)
+        return ExportOptions(
+            pageSize, quality, ocr && !asJpeg, ocrLang, if (protect && !asJpeg) password else null, archival = archival && !protect && !asJpeg,
+            targetBytes = targetBytes, pageNumbers = numbering, watermark = mark,
+        )
     }
 
     val saveLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/pdf")) { uri ->
@@ -312,18 +568,40 @@ fun ExportSheet(vm: AppViewModel, docId: String, onDismiss: () -> Unit) {
             Column(Modifier.fillMaxWidth().weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(horizontal = Dimens.sheet).padding(bottom = Dimens.l)) {
                 // Header: title, then what will be shared (live).
                 Text(stringResource(R.string.export), style = MaterialTheme.typography.titleLarge)
-                val pageCount = vm.doc(docId)?.pages?.size ?: 0
+                val doc = vm.doc(docId)
+                val pageCount = doc?.pages?.size ?: 0
                 val estimate by produceState<Long?>(null, quality, asJpeg) {
                     value = null
                     value = vm.estimateSize(docId, ExportOptions(pageSize, quality))
                 }
                 val pagesText = pluralStringResource(R.plurals.page_count, pageCount, pageCount)
-                val sizeText = estimate?.let { stringResource(R.string.estimated_size, formatSize(it)) } ?: stringResource(R.string.estimating_size)
+                val sizeText = if (targetBytes != null) stringResource(R.string.pdf_target_estimate, formatSize(targetBytes))
+                else estimate?.let { stringResource(R.string.estimated_size, formatSize(it)) } ?: stringResource(R.string.estimating_size)
                 Text(
                     pagesText + LocalFormat.metaSep(androidx.compose.ui.platform.LocalConfiguration.current.locales[0]) + sizeText,
                     style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.semantics { liveRegion = androidx.compose.ui.semantics.LiveRegionMode.Polite },
                 )
+
+                // 2.0-pdf: final document preview (first pages, as they will be in the file).
+                if (doc != null && doc.pages.isNotEmpty()) {
+                    Label(R.string.pdf_preview)
+                    val decor = remember { PageDecor.load(ctx) }
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(Dimens.m)) {
+                        itemsIndexed(doc.pages.take(3), key = { _, p -> p.id }) { i, p ->
+                            val bmp by produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, p.revision, pageSize, numbering, mark, asJpeg) {
+                                value = withContext(Dispatchers.Default) {
+                                    ExportPreview.render(vm.store.thumbFile(docId, p.id), if (asJpeg) PageSize.FIT else pageSize, decor, i, doc.pages.size, numbering, mark, p.filter == Filter.BW)?.asImageBitmap()
+                                }
+                            }
+                            val desc = stringResource(R.string.pdf_preview_page, LocalFormat.count(i + 1))
+                            Surface(shape = RoundedCornerShape(8.dp), color = androidx.compose.ui.graphics.Color.White, shadowElevation = 1.dp, modifier = Modifier.height(168.dp).semantics { contentDescription = desc }) {
+                                bmp?.let { androidx.compose.foundation.Image(it, null, Modifier.height(168.dp)) }
+                                    ?: Box(Modifier.size(119.dp, 168.dp))
+                            }
+                        }
+                    }
+                }
 
                 Label(R.string.format)
                 ChoiceSegmentedRow(listOf("PDF", stringResource(R.string.format_jpg_images)), if (asJpeg) 1 else 0, { asJpeg = it == 1 })
@@ -348,14 +626,31 @@ fun ExportSheet(vm: AppViewModel, docId: String, onDismiss: () -> Unit) {
                 }
 
                 Label(R.string.quality)
+                val qualityLabels = listOf(stringResource(R.string.quality_small), stringResource(R.string.quality_balanced), stringResource(R.string.quality_high))
                 ChoiceSegmentedRow(
-                    listOf(stringResource(R.string.quality_small), stringResource(R.string.quality_balanced), stringResource(R.string.quality_high)),
-                    quality.ordinal, { quality = Quality.entries[it] },
+                    if (asJpeg) qualityLabels else qualityLabels + stringResource(R.string.pdf_quality_target),
+                    if (targetMode && !asJpeg) 3 else quality.ordinal,
+                    { if (it == 3) targetMode = true else { targetMode = false; quality = Quality.entries[it] } },
                 )
                 Text(
-                    stringResource(when (quality) { Quality.SMALL -> R.string.quality_small_hint; Quality.BALANCED -> R.string.quality_balanced_hint; Quality.HIGH -> R.string.quality_high_hint }),
+                    stringResource(
+                        if (targetMode && !asJpeg) R.string.pdf_quality_target_hint
+                        else when (quality) { Quality.SMALL -> R.string.quality_small_hint; Quality.BALANCED -> R.string.quality_balanced_hint; Quality.HIGH -> R.string.quality_high_hint },
+                    ),
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = Dimens.xs),
                 )
+                if (targetMode && !asJpeg) {
+                    Spacer(Modifier.height(Dimens.m))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        OutlinedTextField(
+                            value = targetText, onValueChange = { targetText = it.take(7) }, singleLine = true,
+                            label = { Text(stringResource(R.string.pdf_target_label)) }, isError = targetBytes == null,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.weight(1f),
+                        )
+                        Spacer(Modifier.width(Dimens.m))
+                        ChoiceSegmentedRow(listOf(stringResource(R.string.pdf_unit_kb), stringResource(R.string.pdf_unit_mb)), if (targetMb) 1 else 0, { targetMb = it == 1 }, Modifier.width(150.dp))
+                    }
+                }
 
                 if (!asJpeg) {
                     Spacer(Modifier.height(Dimens.l))
@@ -405,13 +700,70 @@ fun ExportSheet(vm: AppViewModel, docId: String, onDismiss: () -> Unit) {
                 }
                 TxtExportRow(vm, docId) // 2.0-docs: OCR-08 TXT export
 
+                // 2.0-pdf: page numbers (PDF-09) and watermark (PDF-10), for PDF and JPG.
+                Spacer(Modifier.height(Dimens.l))
+                val groupColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                SettingsGroup(2) { i, shape ->
+                    if (i == 0) SettingsSwitchRow(null, stringResource(R.string.pdf_numbers_title), stringResource(R.string.pdf_numbers_hint), numbersOn, shape, color = groupColor) { numbersOn = it }
+                    else SettingsSwitchRow(null, stringResource(R.string.pdf_watermark_title), stringResource(R.string.pdf_watermark_hint), watermarkOn, shape, color = groupColor) { watermarkOn = it }
+                }
+                if (numbersOn) {
+                    Spacer(Modifier.height(Dimens.m))
+                    ChoiceSegmentedRow(listOf(stringResource(R.string.pdf_digits_arabic), stringResource(R.string.pdf_digits_western)), if (numbers.arabicDigits) 0 else 1, { numbers = numbers.copy(arabicDigits = it == 0) })
+                    Spacer(Modifier.height(Dimens.m))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        ExposedDropdownMenuBox(expanded = posMenu, onExpandedChange = { posMenu = it }, modifier = Modifier.weight(1f)) {
+                            OutlinedTextField(
+                                value = positionLabel(numbers.position), onValueChange = {}, readOnly = true,
+                                label = { Text(stringResource(R.string.pdf_number_position)) },
+                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = posMenu) },
+                                modifier = Modifier.fillMaxWidth().menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
+                            )
+                            ExposedDropdownMenu(expanded = posMenu, onDismissRequest = { posMenu = false }) {
+                                NumberPosition.entries.forEach { p -> DropdownMenuItem(text = { Text(positionLabel(p)) }, onClick = { numbers = numbers.copy(position = p); posMenu = false }) }
+                            }
+                        }
+                        Spacer(Modifier.width(Dimens.m))
+                        OutlinedTextField(
+                            value = startText, onValueChange = { startText = it.take(5) }, singleLine = true,
+                            label = { Text(stringResource(R.string.pdf_number_start)) },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.width(110.dp),
+                        )
+                    }
+                    Row(
+                        Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(role = androidx.compose.ui.semantics.Role.Checkbox) { numbers = numbers.copy(withTotal = !numbers.withTotal) },
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Checkbox(checked = numbers.withTotal, onCheckedChange = null)
+                        Spacer(Modifier.width(Dimens.m))
+                        Text(stringResource(R.string.pdf_number_with_total), style = MaterialTheme.typography.bodyLarge)
+                    }
+                }
+                if (watermarkOn) {
+                    Spacer(Modifier.height(Dimens.m))
+                    OutlinedTextField(
+                        value = watermark.text, onValueChange = { watermark = watermark.copy(text = it.take(60)) }, singleLine = true,
+                        label = { Text(stringResource(R.string.pdf_watermark_text)) }, modifier = Modifier.fillMaxWidth(),
+                    )
+                    val pct = java.text.NumberFormat.getPercentInstance(androidx.compose.ui.platform.LocalConfiguration.current.locales[0]).format(watermark.opacity.toDouble())
+                    Text(stringResource(R.string.pdf_watermark_opacity, pct), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = Dimens.s))
+                    Slider(value = watermark.opacity, onValueChange = { watermark = watermark.copy(opacity = it) }, valueRange = 0.1f..0.6f, steps = 4, modifier = Modifier.fillMaxWidth().semantics { stateDescription = pct })
+                    Row(
+                        Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(role = androidx.compose.ui.semantics.Role.Checkbox) { watermark = watermark.copy(diagonal = !watermark.diagonal) },
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Checkbox(checked = watermark.diagonal, onCheckedChange = null)
+                        Spacer(Modifier.width(Dimens.m))
+                        Text(stringResource(R.string.pdf_watermark_diagonal), style = MaterialTheme.typography.bodyLarge)
+                    }
+                }
             }
             Column(Modifier.fillMaxWidth().padding(horizontal = Dimens.sheet).padding(top = Dimens.s, bottom = Dimens.xl)) {
                 // Footer: progress with a real Cancel while exporting, otherwise Save / Share.
                 val ex = vm.exportState.value
                 if (ex != null) {
                     Column(Modifier.semantics { liveRegion = androidx.compose.ui.semantics.LiveRegionMode.Polite }) {
-                        if (ex.total > 0) {
+                        if (ex.total > 0 && !ex.fitting) {
                             LinearProgressIndicator(progress = { ex.page.toFloat() / ex.total }, modifier = Modifier.fillMaxWidth())
                             val page = (ex.page + 1).coerceAtMost(ex.total)
                             Text(
@@ -420,14 +772,14 @@ fun ExportSheet(vm: AppViewModel, docId: String, onDismiss: () -> Unit) {
                             )
                         } else {
                             LinearProgressIndicator(Modifier.fillMaxWidth())
-                            Text(stringResource(R.string.export_starting), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = Dimens.s))
+                            Text(stringResource(if (ex.fitting) R.string.pdf_export_fitting else R.string.export_starting), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = Dimens.s))
                         }
                         TextButton(onClick = { vm.cancelExport() }, modifier = Modifier.align(Alignment.End).heightIn(min = 48.dp)) {
                             Text(stringResource(R.string.cancel))
                         }
                     }
                 } else {
-                    val canGo = busy == 0 && (!protect || asJpeg || password.isNotEmpty())
+                    val canGo = busy == 0 && (!protect || asJpeg || password.isNotEmpty()) && (!targetMode || asJpeg || targetBytes != null)
                     ButtonPair(
                         secondary = { m ->
                             OutlinedButton(onClick = {
@@ -447,6 +799,18 @@ fun ExportSheet(vm: AppViewModel, docId: String, onDismiss: () -> Unit) {
         }
     }
 }
+
+@Composable
+private fun positionLabel(p: NumberPosition): String = stringResource(
+    when (p) {
+        NumberPosition.BOTTOM_CENTER -> R.string.pdf_pos_bottom_center
+        NumberPosition.BOTTOM_LEFT -> R.string.pdf_pos_bottom_left
+        NumberPosition.BOTTOM_RIGHT -> R.string.pdf_pos_bottom_right
+        NumberPosition.TOP_CENTER -> R.string.pdf_pos_top_center
+        NumberPosition.TOP_LEFT -> R.string.pdf_pos_top_left
+        NumberPosition.TOP_RIGHT -> R.string.pdf_pos_top_right
+    },
+)
 
 /** «A4 (٢١ × ٢٩٫٧ سم)»: name plus size in the locale's digits. */
 @Composable

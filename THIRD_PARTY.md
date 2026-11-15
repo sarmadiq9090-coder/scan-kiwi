@@ -30,6 +30,8 @@ contacts a server at run time. The app ships the full notices in
 | `sRGB-v2-micro.icc` (Compact-ICC-Profiles by Clinton Ingram) | master, 2026-11-14 | CC0-1.0 | sRGB output intent for PDF/A-2b ("أرشيفي") exports |
 | Noto Sans Arabic Regular / Medium / Bold (unhinted static TTF) | 2.013 (notofonts/arabic release) | OFL-1.1 | Bundled UI font (`res/font/`) |
 | Material Symbols Rounded (vector drawables, weight 400, grade 0, 24 dp) | google/material-design-icons, master 2026-11-14 | Apache-2.0 | UI icons (`res/drawable/ic_*.xml`) |
+| com.tom-roush:pdfbox-android (2.0-pdf) | 2.0.27.0 (Maven Central, aar sha256 `30277f879cfd571db2a137582c95516a0d4ea6778e945519bc58ca93d57d88c7`) | Apache-2.0 | Lossless merge/split/extract/rotate, text and unlock of PDF files from other apps; runs only in the isolated `:pdf` process. BouncyCastle is excluded; CJK CMaps and `Scripts.txt` are not packaged |
+| ↳ Adobe Core 14 AFM metrics, Adobe Glyph List + Zapf Dingbats list, Unicode `BidiMirroring.txt`, Liberation Sans Regular 2.1.5 (`LiberationSans-Regular.ttf` sha256 `76d04c18ea243f426b7de1f3ad208e927008f961dc5945e5aad352d0dfde8ee8`) | bundled assets of PdfBox-Android | APAFML; BSD-3-Clause; Unicode-DFS-2015; OFL-1.1 | Text extraction (font widths, glyph names, bidi mirroring) and PdfBox's last-resort font. Note: APAFML and the Unicode data licence are permissive but not on the ROADMAP §0 list; recorded for the lead/council |
 | Other transitive libraries (more AndroidX modules, `com.google.guava:listenablefuture`, `com.google.auto.value:auto-value-annotations`, `org.jspecify:jspecify`) | see the SBOM | Apache-2.0 | Pulled in by the libraries above; the full list with versions is in the release SBOM (`ScanKiwi-<version>.cdx.json`) |
 
 Model checksums (SHA-256):

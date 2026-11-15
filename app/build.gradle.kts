@@ -101,6 +101,18 @@ android {
         }
     }
 
+    // 2.0-pdf: PdfBox-Android ships 4.8 MB of assets. Left out: the CJK CMaps (only Identity-H/V
+    // stay) and Unicode Scripts.txt (font shaping, unused). Kept: AFM metrics of the 14 standard
+    // fonts, the Adobe glyph lists, BidiMirroring.txt (text extraction needs them) and the
+    // LiberationSans last-resort font (OFL-1.1), which PdfBox's font mapper always loads.
+    androidResources {
+        ignoreAssetsPatterns += listOf(
+            "!*-RKSJ-*", "!Adobe-CNS1-*", "!Adobe-GB1-*", "!Adobe-Japan*", "!Adobe-Korea1-*", "!B5pc-*",
+            "!CNS-EUC-*", "!ETen*", "!EUC-H", "!EUC-V", "!GB*", "!HKscs-*", "!KSC*", "!Uni*", "!H", "!V",
+            "!Scripts.txt",
+        )
+    }
+
     // No dependency-metadata blob in the APK (privacy, size).
     dependenciesInfo {
         includeInApk = false
@@ -142,6 +154,11 @@ dependencies {
 
     // On-device OCR (Apache-2.0), Arabic + English models bundled in assets.
     implementation("cz.adaptech.tesseract4android:tesseract4android:4.9.0")
+
+    // 2.0-pdf: PdfBox-Android (Apache-2.0) for lossless merge/split/rotate/text of external PDFs.
+    // Runs only inside the isolated ":pdf" service process. BouncyCastle (public-key
+    // encryption only) is left out; password-protected files use javax.crypto.
+    implementation("com.tom-roush:pdfbox-android:2.0.27.0") { exclude(group = "org.bouncycastle") }
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20250517")

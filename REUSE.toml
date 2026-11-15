@@ -27,7 +27,7 @@ SPDX-License-Identifier = "CC0-1.0"
 path = "app/src/main/assets/THIRD_PARTY_NOTICES.txt"
 precedence = "override"
 SPDX-FileCopyrightText = "2026 FastKiwi and the third parties named in the file"
-SPDX-License-Identifier = "Apache-2.0 AND BSD-2-Clause AND IJG AND BSD-3-Clause AND Zlib AND Libpng AND OFL-1.1"
+SPDX-License-Identifier = "Apache-2.0 AND BSD-2-Clause AND IJG AND BSD-3-Clause AND Zlib AND Libpng AND OFL-1.1 AND APAFML AND Unicode-DFS-2015"
 
 [[annotations]]
 path = "app/src/main/res/font/noto_sans_arabic_*.ttf"

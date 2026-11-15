@@ -69,6 +69,8 @@ sealed interface Screen {
     data object Search : Screen
     data class Text(val docId: String, val pageId: String, val query: String? = null) : Screen
     data class FolderDocs(val folderId: String) : Screen
+    // 2.0-pdf: tools for PDF files from other apps (merge, split, extract, rotate, unlock, text, JPG).
+    data object PdfTools : Screen
 }
 
 /** [bytes]: size on disk, for "sort by size" (2.0-docs). */
@@ -124,7 +126,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     val progress = mutableStateOf<Pair<Int, Int>?>(null)
 
     /** A running export (Share / Save): which page, and whether it is reading text (OCR). */
-    data class ExportProgress(val page: Int, val total: Int, val readingText: Boolean)
+    data class ExportProgress(val page: Int, val total: Int, val readingText: Boolean, val fitting: Boolean = false /* 2.0-pdf: target size search */)
 
     val exportState = mutableStateOf<ExportProgress?>(null)
     private var exportJob: kotlinx.coroutines.Job? = null
@@ -167,9 +169,27 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun setThemeMode(m: com.fastkiwi.scan.ui.theme.ThemeMode) { settings.themeMode = m; themeMode.value = m }
     fun setDynamicColor(on: Boolean) { settings.dynamicColor = on; dynamicColor.value = on }
 
-    /** Per-document undo history (in memory, last 20 states). */
-    private val undoStacks = HashMap<String, ArrayDeque<ScanDocument>>()
+    // 2.0-pdf: per-document Undo and Redo history (in memory, last 20 states each way).
+    private val histories = HashMap<String, EditHistory<ScanDocument>>()
     val undoCounts = mutableStateMapOf<String, Int>()
+    val redoCounts = mutableStateMapOf<String, Int>()
+
+    private fun history(docId: String) = synchronized(histories) { histories.getOrPut(docId) { EditHistory() } }
+
+    private fun publishHistory(docId: String) {
+        val h = history(docId)
+        val u = h.undoCount
+        val r = h.redoCount
+        viewModelScope.launch { undoCounts[docId] = u; redoCounts[docId] = r }
+    }
+
+    // 2.0-pdf: the PDF engine for our documents (external files: PdfToolsViewModel, :pdf process).
+    private val kiwiPdf by lazy { com.fastkiwi.scan.pdf.KiwiPdfEngine(store) }
+
+    /** 2.0-pdf: an imported PDF is password-protected; the UI asks for the password (PDF-14). */
+    data class PasswordRequest(val docId: String?, val uri: Uri, val wrong: Boolean = false)
+
+    val passwordRequest = mutableStateOf<PasswordRequest?>(null)
 
     /**
      * Every load-modify-save of a document runs under this lock. Jobs run in
@@ -190,29 +210,36 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch(Dispatchers.IO) {
             runCatching { store.collectGarbage(olderThan = startedAt - 2_000) }
             runCatching { exporter.clearOldExports(before = startedAt - 60 * 60 * 1000L) }
+            // 2.0-pdf: temp files of exports and PDF tools killed in an earlier session.
+            runCatching {
+                com.fastkiwi.scan.pdf.SafeOutput.sweep(listOf(java.io.File(app.cacheDir, "exports")), before = startedAt - 2_000)
+                java.io.File(app.cacheDir, "pdftools").listFiles()?.forEach { if (it.lastModified() < startedAt - 2_000) it.deleteRecursively() }
+                java.io.File(app.cacheDir, "pdfwork").listFiles()?.forEach { if (it.lastModified() < startedAt - 2_000) it.deleteRecursively() }
+            }
         }
     }
 
     private fun pushUndo(prev: ScanDocument) {
-        val st = synchronized(undoStacks) { undoStacks.getOrPut(prev.id) { ArrayDeque() } }
-        synchronized(st) {
-            st.addLast(prev)
-            while (st.size > 20) st.removeFirst()
-            viewModelScope.launch { undoCounts[prev.id] = st.size }
-        }
+        history(prev.id).record(prev)
+        publishHistory(prev.id)
     }
 
     /** Restores the document as it was before the last page edit. */
-    fun undo(docId: String) {
+    fun undo(docId: String) = stepHistory(docId, redo = false)
+
+    /** 2.0-pdf: re-applies the edit that the last Undo took back. */
+    fun redo(docId: String) = stepHistory(docId, redo = true)
+
+    private fun stepHistory(docId: String, redo: Boolean) {
         viewModelScope.launch {
-            job {
+            val done = job {
                 docLock.withLock {
-                    val st = synchronized(undoStacks) { undoStacks[docId] } ?: return@job
-                    val prev = synchronized(st) { st.removeLastOrNull() } ?: return@job
-                    viewModelScope.launch { undoCounts[docId] = st.size }
-                    val cur = store.load(docId) ?: return@job
+                    val cur = store.load(docId) ?: return@job false
+                    val h = history(docId)
+                    val target = (if (redo) h.redo(cur) else h.undo(cur)) ?: return@job false
+                    publishHistory(docId)
                     val curById = cur.pages.associateBy { it.id }
-                    val pages = prev.pages.map { p ->
+                    val pages = target.pages.map { p ->
                         val now = curById[p.id]
                         val changed = now == null || now.corners != p.corners || now.rotation != p.rotation ||
                             now.filter != p.filter || now.stamps != p.stamps
@@ -225,9 +252,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     }
                     // Renames are not undo steps: keep the current name.
                     saveAndPublish(cur.copy(pages = pages))
+                    true
                 }
-                _messages.send(UiMessage(R.string.msg_undone))
             }
+            if (done == true) _messages.send(UiMessage(if (redo) R.string.pdf_msg_redone else R.string.msg_undone))
         }
     }
 
@@ -285,6 +313,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             _messages.send(UiMessage(R.string.msg_out_of_memory, report = code to "OutOfMemoryError")); null
         } catch (e: PdfImporter.ProtectedPdfException) {
             _messages.send(UiMessage(R.string.msg_pdf_protected)); null
+        } catch (e: com.fastkiwi.scan.pdf.NoSpaceException) {
+            // 2.0-pdf: the free-space check (needed x 1.2) failed before anything was written.
+            val ctx = getApplication<Application>()
+            _messages.send(UiMessage(R.string.pdf_msg_no_space, LocalFormat.size(ctx, e.needed))); null
+        } catch (e: com.fastkiwi.scan.pdf.PdfOpException) {
+            _messages.send(UiMessage(pdfErrorMessage(e.error))); null
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -535,10 +569,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      * A file that cannot be read is skipped without stopping the others; when nothing
      * could be imported, no empty document is left behind.
      */
-    fun importUris(docId: String?, uris: List<Uri>, onDone: (String) -> Unit) {
+    fun importUris(docId: String?, uris: List<Uri>, onDone: (String) -> Unit) = importUris(docId, uris, {}, onDone)
+
+    private fun importUris(docId: String?, uris: List<Uri>, cleanup: () -> Unit, onDone: (String) -> Unit) {
         if (uris.isEmpty()) return
         viewModelScope.launch {
-            val id = job("IMPORT") {
+            val id = try { job("IMPORT") {
                 val ctx = getApplication<Application>()
                 val existing = docId?.let { store.load(it) }
                 val doc = existing ?: newDocument() // 2.0-docs: in the open folder
@@ -555,6 +591,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 }
                 var okFiles = 0
                 var protectedPdf = false
+                var locked: Uri? = null // 2.0-pdf
                 var failure: Exception? = null
                 for ((n, uri) in uris.withIndex()) {
                     progress.value = n to uris.size
@@ -582,6 +619,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                         throw e
                     } catch (e: PdfImporter.ProtectedPdfException) {
                         protectedPdf = true
+                        if (locked == null) locked = uri
                     } catch (e: Exception) {
                         // Unreadable, corrupt, or no permission: skip this file, keep the rest
                         // (and the pages a damaged PDF gave before it failed).
@@ -591,6 +629,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     }
                     if (added > before) okFiles++
                 }
+                // 2.0-pdf: a protected PDF is not a dead end: ask for its password.
+                locked?.let { passwordRequest.value = PasswordRequest(if (added > 0 || existing != null) doc.id else null, it) }
                 if (added == 0) {
                     if (existing == null) docLock.withLock {
                         store.load(doc.id)?.takeIf { it.pages.isEmpty() }?.let {
@@ -598,7 +638,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                             _docs.value = _docs.value.filter { e -> e.doc.id != it.id }
                         }
                     }
-                    _messages.send(
+                    if (!protectedPdf) _messages.send(
                         when {
                             protectedPdf -> UiMessage(R.string.msg_pdf_protected)
                             failure != null -> UiMessage(R.string.msg_error, (failure!!.message ?: failure!!.javaClass.simpleName).take(120))
@@ -610,9 +650,52 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 val count = if (okFiles == uris.size) "$okFiles" else "$okFiles/${uris.size}"
                 _messages.send(UiMessage(R.string.msg_imported, count))
                 doc.id
-            }
+            } } finally { cleanup() }
             if (id != null) onDone(id)
         }
+    }
+
+    /**
+     * 2.0-pdf (PDF-14): opens a protected PDF with the password the user typed. The `:pdf` process
+     * writes an unprotected copy into app storage, which is imported like any PDF and deleted
+     * right after. A wrong password asks again; nothing is ever guessed.
+     */
+    fun importProtected(req: PasswordRequest, password: String, onDone: (String) -> Unit) {
+        passwordRequest.value = null
+        viewModelScope.launch {
+            val ctx = getApplication<Application>()
+            val work = java.io.File(ctx.cacheDir, "pdftools/unlock-${DocumentStore.newId()}").apply { mkdirs() }
+            val open = job("IMPORT") {
+                val src = java.io.File(work, "locked.pdf")
+                ctx.contentResolver.openInputStream(req.uri)?.use { input -> src.outputStream().use { input.copyTo(it) } } ?: throw IOException("cannot read the file")
+                try {
+                    com.fastkiwi.scan.pdf.ExternalPdfEngine(com.fastkiwi.scan.pdf.IsolatedPdfEngine(ctx), work)
+                        .unlock(com.fastkiwi.scan.pdf.PdfFile(src), password, "open.pdf").file
+                } catch (e: com.fastkiwi.scan.pdf.PdfOpException) {
+                    if (e.error == com.fastkiwi.scan.pdf.PdfError.BAD_PASSWORD || e.error == com.fastkiwi.scan.pdf.PdfError.NEEDS_PASSWORD) {
+                        passwordRequest.value = req.copy(wrong = true)
+                        null
+                    } else throw e
+                } finally {
+                    src.delete()
+                }
+            }
+            if (open == null) { work.deleteRecursively(); return@launch }
+            importUris(req.docId, listOf(Uri.fromFile(open)), { work.deleteRecursively() }, onDone)
+        }
+    }
+
+    fun dismissPasswordRequest() { passwordRequest.value = null }
+
+    /** 2.0-pdf: the message for an error from the PDF engine. */
+    fun pdfErrorMessage(e: com.fastkiwi.scan.pdf.PdfError): Int = when (e) {
+        com.fastkiwi.scan.pdf.PdfError.NEEDS_PASSWORD -> R.string.pdf_err_needs_password
+        com.fastkiwi.scan.pdf.PdfError.BAD_PASSWORD -> R.string.pdf_err_bad_password
+        com.fastkiwi.scan.pdf.PdfError.UNSUPPORTED -> R.string.pdf_err_unsupported
+        com.fastkiwi.scan.pdf.PdfError.NO_SPACE -> R.string.pdf_err_no_space
+        com.fastkiwi.scan.pdf.PdfError.TIMEOUT -> R.string.pdf_err_timeout
+        com.fastkiwi.scan.pdf.PdfError.CANCELLED -> R.string.msg_export_cancelled
+        else -> R.string.pdf_err_malformed
     }
 
     private fun mutatePages(docId: String, message: UiMessage? = null, f: (MutableList<ScanPage>) -> Unit) {
@@ -634,6 +717,86 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun movePage(docId: String, from: Int, to: Int) = mutatePages(docId) { p ->
         if (from in p.indices && to in p.indices) p.add(to, p.removeAt(from))
+    }
+
+    // ------------------------------------------------- 2.0-pdf: PDF tools for our documents
+
+    /** PDF-11: a white page before page [at] ([at] = page count appends), sized like its neighbour. */
+    fun insertBlankPage(docId: String, at: Int) {
+        viewModelScope.launch {
+            job {
+                val doc = store.load(docId) ?: return@job
+                val near = doc.pages.getOrNull(at) ?: doc.pages.getOrNull(at - 1)
+                val size = near?.let { BitmapIO.imageSize(store.outFile(docId, it.id)) }
+                    ?: (com.fastkiwi.scan.pdf.KiwiPdfEngine.BLANK_W to com.fastkiwi.scan.pdf.KiwiPdfEngine.BLANK_H)
+                val blank = kiwiPdf.blankPage(docId, size)
+                mutatePages(docId, UiMessage(R.string.pdf_msg_blank_added)) { p -> p.add(at.coerceIn(0, p.size), blank) }
+            }
+        }
+    }
+
+    /** PDF-05 for several pages at once, one Undo step. */
+    fun rotatePages(docId: String, pageIds: Set<String>, degrees: Int) {
+        if (pageIds.isEmpty()) return
+        viewModelScope.launch {
+            job {
+                docLock.withLock {
+                    val doc = store.load(docId) ?: return@job
+                    pushUndo(doc)
+                    val pages = doc.pages.map { p ->
+                        if (p.id !in pageIds) p else {
+                            val edited = keepStampsOnPaper(docId, p, p.copy(rotation = com.fastkiwi.scan.pdf.PagePlans.norm(p.rotation + degrees)))
+                            val np = edited.copy(revision = edited.revision + 1)
+                            PageRenderer.renderAndSave(store, docId, np)?.recycle()
+                            np
+                        }
+                    }
+                    saveAndPublish(doc.copy(pages = pages))
+                }
+            }
+        }
+    }
+
+    /** Removes several pages in one Undo step (files stay until restart, so Undo works). */
+    fun deletePages(docId: String, pageIds: Set<String>) =
+        mutatePages(docId, UiMessage(R.string.msg_page_deleted, undoDocId = docId)) { p -> p.removeAll { it.id in pageIds } }
+
+    /** PDF-03: the chosen pages (in the given order) as a new document; the original is kept. */
+    fun extractPages(docId: String, pages: List<Int>, onDone: (String) -> Unit) {
+        viewModelScope.launch {
+            val id = job("PDF_EXTRACT") {
+                val doc = store.load(docId) ?: return@job null
+                val name = getApplication<Application>().getString(R.string.pdf_extract_name, doc.name, com.fastkiwi.scan.pdf.PagePlans.format(pages.sorted()))
+                val nd = docLock.withLock { kiwiPdf.assemble(listOf(doc), com.fastkiwi.scan.pdf.PagePlans.select(pages), name) }
+                saveAndPublish(nd)
+                _messages.send(UiMessage(R.string.pdf_msg_extracted, nd.name))
+                nd.id
+            }
+            if (id != null) onDone(id)
+        }
+    }
+
+    /** PDF-02: one new document per group of pages; the original is kept. */
+    fun splitDocument(docId: String, groups: List<List<Int>>) {
+        viewModelScope.launch {
+            job("PDF_SPLIT") {
+                val doc = store.load(docId) ?: return@job
+                val ctx = getApplication<Application>()
+                docLock.withLock {
+                    for ((n, g) in groups.withIndex()) {
+                        val name = ctx.getString(R.string.pdf_part_name, doc.name, LocalFormat.count(n + 1))
+                        saveAndPublish(kiwiPdf.assemble(listOf(doc), com.fastkiwi.scan.pdf.PagePlans.select(g), name))
+                    }
+                }
+                _messages.send(UiMessage(R.string.pdf_msg_split, LocalFormat.count(groups.size)))
+            }
+        }
+    }
+
+    /** PDF-12: the recognised text of the document (cached OCR, logical order); null when none. */
+    suspend fun documentText(docId: String): String? = withContext(Dispatchers.IO) {
+        val doc = store.load(docId) ?: return@withContext null
+        com.fastkiwi.scan.pdf.DocumentText.plain(store, doc).takeIf { it.isNotBlank() }
     }
 
     /** Removes a page from the document; its files stay until restart so Undo works. */
@@ -731,16 +894,28 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private suspend fun exportPdf(doc: ScanDocument, opt: ExportOptions): File {
         var noOcr = false
         var reading = false
-        val file = exporter.exportPdf(
+        var fitting = false
+        // 2.0-pdf: exportPdfResult, so a target size reports its true outcome.
+        val result = exporter.exportPdfResult(
             doc, opt,
             onOcrUnavailable = { noOcr = true },
-            phase = { reading = it == Exporter.Phase.READING_TEXT; exportState.value = exportState.value?.copy(readingText = reading) },
+            phase = {
+                reading = it == Exporter.Phase.READING_TEXT
+                fitting = it == Exporter.Phase.FITTING
+                exportState.value = exportState.value?.copy(readingText = reading, fitting = fitting)
+            },
         ) { a, b ->
             progress.value = a to b
-            exportState.value = ExportProgress(a, b, reading)
+            exportState.value = ExportProgress(a, b, reading, fitting && a == 0)
         }
         if (noOcr) _messages.send(UiMessage(R.string.msg_ocr_unavailable, report = "OCR_INIT" to "OcrUnavailable"))
-        return file
+        result.targetBytes?.let { t ->
+            val ctx = getApplication<Application>()
+            val text = if (result.reached == true) ctx.getString(R.string.pdf_target_reached, LocalFormat.size(ctx, result.bytes), LocalFormat.size(ctx, t))
+            else ctx.getString(R.string.pdf_target_missed, LocalFormat.size(ctx, t), LocalFormat.size(ctx, result.bytes))
+            _messages.send(UiMessage(R.string.pdf_msg_plain, text))
+        }
+        return result.file
     }
 
     fun share(docId: String, opt: ExportOptions, asJpeg: Boolean) {
@@ -764,11 +939,16 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             val r = job("EXPORT") {
                 val doc = store.load(docId) ?: return@job null
                 val file = exportPdf(doc, opt)
+                val cr: ContentResolver = getApplication<Application>().contentResolver
                 try {
-                    val cr: ContentResolver = getApplication<Application>().contentResolver
                     val out = cr.openOutputStream(target, "wt") ?: throw IOException("cannot open the chosen file")
                     out.use { o -> file.inputStream().use { it.copyTo(o) } }
                     ExportResult.Saved(file.name, file.length())
+                } catch (e: Throwable) {
+                    // 2.0-pdf: never leave a half-copied file where the user saved (it is the new
+                    // file the user just created, never an original).
+                    runCatching { DocumentsContract.deleteDocument(cr, target) }
+                    throw e
                 } finally {
                     // The copy in the cache is no longer needed once saved.
                     file.delete()
