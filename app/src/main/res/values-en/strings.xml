@@ -101,7 +101,6 @@
     <string name="ocr_ara_eng">Arabic + English</string>
     <string name="ocr_eng">English</string>
     <string name="ocr_ara">Arabic</string>
-    <string name="ocr_quality_note">English accuracy is good on clear pages. Arabic accuracy is lower and may need correcting; it works best with Black &amp; white or Remove shadows.</string>
     <string name="password_title">Password protect</string>
     <string name="password_hint">AES-256 encryption; the file opens only with the password.</string>
     <string name="password">Password</string>

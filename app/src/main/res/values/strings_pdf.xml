@@ -1,4 +1,158 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- 2.0 strings: PDF tools, export integrity, redo, protection. Arabic (default). Keep keys identical in values/ and values-en/. -->
 <resources>
+    <!-- Editor: redo, drag and drop, selection -->
+    <string name="redo">إعادة</string>
+    <string name="pdf_msg_redone">أُعيد التعديل</string>
+    <string name="pdf_drag_hint">اضغط مطولًا واسحب لتغيير الترتيب</string>
+    <string name="pdf_drag_moving">الصفحة %1$s إلى الموضع %2$s</string>
+    <string name="pdf_select_pages">تحديد صفحات</string>
+    <string name="pdf_select_all">تحديد الكل</string>
+    <plurals name="pdf_selected_pages">
+        <item quantity="zero">لم تُحدد صفحة</item>
+        <item quantity="one">صفحة واحدة محددة</item>
+        <item quantity="two">صفحتان محددتان</item>
+        <item quantity="few">%d صفحات محددة</item>
+        <item quantity="many">%d صفحة محددة</item>
+        <item quantity="other">%d صفحة محددة</item>
+    </plurals>
+    <string name="pdf_extract">استخراج</string>
+    <string name="pdf_split">تقسيم المستند</string>
+    <string name="pdf_copy_text">نسخ النص</string>
+    <string name="pdf_add_blank_end">إضافة صفحة فارغة في النهاية</string>
+    <string name="pdf_insert_blank_before">صفحة فارغة قبلها</string>
+    <string name="pdf_insert_blank_after">صفحة فارغة بعدها</string>
+    <string name="pdf_page_selected">محددة</string>
+    <string name="pdf_page_not_selected">غير محددة</string>
+
+    <!-- Split / ranges -->
+    <string name="pdf_split_by_ranges">حسب النطاقات</string>
+    <string name="pdf_split_every_n">كل عدد من الصفحات</string>
+    <string name="pdf_ranges_label">الصفحات، مثل ١-٣، ٥، ٨-</string>
+    <string name="pdf_ranges_split_hint">كل جزء بين الفواصل يصبح ملفًا مستقلًا.</string>
+    <string name="pdf_every_n_label">عدد الصفحات في كل جزء</string>
+    <plurals name="pdf_split_result">
+        <item quantity="zero">لن يُنشأ شيء</item>
+        <item quantity="one">سيُنشأ جزء واحد</item>
+        <item quantity="two">سيُنشأ جزءان</item>
+        <item quantity="few">ستُنشأ %d أجزاء</item>
+        <item quantity="many">سيُنشأ %d جزءًا</item>
+        <item quantity="other">سيُنشأ %d جزء</item>
+    </plurals>
+    <string name="pdf_range_err_empty">اكتب أرقام الصفحات</string>
+    <string name="pdf_range_err_syntax">صيغة غير مفهومة. مثال: ١-٣، ٥</string>
+    <string name="pdf_range_err_range">رقم صفحة خارج المستند (من ١ إلى %1$s)</string>
+    <string name="pdf_range_err_reversed">بداية النطاق بعد نهايته</string>
+    <string name="pdf_extract_name">%1$s (صفحات %2$s)</string>
+    <string name="pdf_part_name">%1$s - جزء %2$s</string>
+
+    <!-- Messages -->
+    <string name="pdf_msg_plain">%1$s</string>
+    <string name="pdf_msg_blank_added">أُضيفت صفحة فارغة</string>
+    <string name="pdf_msg_extracted">أُنشئ مستند جديد: %1$s</string>
+    <string name="pdf_msg_split">عدد المستندات الجديدة: %1$s. بقي الأصل كما هو.</string>
+    <string name="pdf_msg_text_copied">نُسخ النص</string>
+    <string name="pdf_msg_no_text">لا يوجد نص مقروء بعد. صدّر الملف مرة مع «جعل النص قابلًا للبحث» ثم انسخ النص.</string>
+    <string name="pdf_msg_no_space">لا توجد مساحة كافية. يلزم نحو %1$s من المساحة الحرة.</string>
+    <string name="pdf_target_reached">حجم الملف %1$s (الحد %2$s)</string>
+    <string name="pdf_target_missed">تعذّر الوصول إلى %1$s. أصغر حجم أمكن: %2$s</string>
+    <string name="pdf_err_needs_password">الملف محمي بكلمة مرور.</string>
+    <string name="pdf_err_bad_password">كلمة المرور غير صحيحة.</string>
+    <string name="pdf_err_unsupported">هذا النوع من الحماية (بشهادة رقمية) غير مدعوم.</string>
+    <string name="pdf_err_no_space">لا توجد مساحة كافية على الهاتف.</string>
+    <string name="pdf_err_timeout">استغرقت معالجة الملف أكثر من دقيقة فأُوقفت. قد يكون الملف تالفًا.</string>
+    <string name="pdf_err_malformed">تعذّرت قراءة ملف PDF؛ قد يكون تالفًا.</string>
+
+    <!-- Export sheet: target size, page numbers, watermark, preview -->
+    <string name="pdf_quality_target">حجم محدد</string>
+    <string name="pdf_quality_target_hint">يجرّب الدقة والجودة حتى لا يتجاوز الملف الحجم المطلوب. إن تعذّر ذلك يخبرك بالحجم الحقيقي.</string>
+    <string name="pdf_target_label">الحد الأقصى للحجم</string>
+    <string name="pdf_unit_kb">ك.ب</string>
+    <string name="pdf_unit_mb">م.ب</string>
+    <string name="pdf_target_estimate">الحد %1$s</string>
+    <string name="pdf_numbers_title">ترقيم الصفحات</string>
+    <string name="pdf_numbers_hint">أرقام عربية أو غربية في أسفل الصفحة أو أعلاها</string>
+    <string name="pdf_digits_arabic">١٢٣</string>
+    <string name="pdf_digits_western">123</string>
+    <string name="pdf_number_position">موضع الرقم</string>
+    <string name="pdf_number_start">يبدأ من</string>
+    <string name="pdf_number_with_total">مع العدد الكلي (٣ / ١٠)</string>
+    <string name="pdf_pos_bottom_center">أسفل الوسط</string>
+    <string name="pdf_pos_bottom_left">أسفل اليسار</string>
+    <string name="pdf_pos_bottom_right">أسفل اليمين</string>
+    <string name="pdf_pos_top_center">أعلى الوسط</string>
+    <string name="pdf_pos_top_left">أعلى اليسار</string>
+    <string name="pdf_pos_top_right">أعلى اليمين</string>
+    <string name="pdf_watermark_title">علامة مائية</string>
+    <string name="pdf_watermark_hint">نص شفاف على كل صفحة</string>
+    <string name="pdf_watermark_text">نص العلامة</string>
+    <string name="pdf_watermark_opacity">الوضوح: %1$s</string>
+    <string name="pdf_watermark_diagonal">مائلة على قطر الصفحة</string>
+    <string name="pdf_preview">معاينة الملف</string>
+    <string name="pdf_preview_page">معاينة الصفحة %1$s</string>
+    <string name="pdf_export_fitting">يضبط الحجم…</string>
+
+    <!-- PDF tools (external files) -->
+    <string name="pdf_tools_title">أدوات PDF</string>
+    <string name="pdf_tools_open">فتح أدوات PDF</string>
+    <string name="pdf_tools_empty_title">أدوات لملفات PDF</string>
+    <string name="pdf_tools_empty_body">دمج وتقسيم واستخراج وتدوير ونسخ النص وإزالة الحماية. لا يُغيَّر الملف الأصلي أبدًا.</string>
+    <string name="pdf_tools_pick">اختيار ملفات PDF</string>
+    <string name="pdf_tools_add">إضافة ملفات</string>
+    <string name="pdf_tools_privacy">تُعالج الملفات داخل الهاتف في عملية منفصلة دون إنترنت، وتُحفظ النتيجة نسخة جديدة.</string>
+    <string name="pdf_tools_files">الملفات</string>
+    <string name="pdf_tools_tools">الأدوات</string>
+    <string name="pdf_tools_locked">محمي بكلمة مرور. اضغط لإدخالها.</string>
+    <string name="pdf_tools_reading">يقرأ الملف…</string>
+    <string name="pdf_tools_remove">إزالة من القائمة</string>
+    <string name="pdf_tools_move_up">تحريك للأعلى</string>
+    <string name="pdf_tools_move_down">تحريك للأسفل</string>
+    <string name="pdf_tool_merge">دمج الملفات</string>
+    <string name="pdf_tool_merge_hint">بالترتيب الظاهر، دون إعادة ضغط الصفحات</string>
+    <string name="pdf_tool_split">تقسيم</string>
+    <string name="pdf_tool_split_hint">حسب النطاقات أو كل عدد من الصفحات</string>
+    <string name="pdf_tool_extract">استخراج صفحات</string>
+    <string name="pdf_tool_extract_hint">ملف جديد بالصفحات المختارة</string>
+    <string name="pdf_tool_reorder">إعادة ترتيب الصفحات</string>
+    <string name="pdf_tool_reorder_hint">اكتب الترتيب الجديد، مثل ٣، ١، ٢</string>
+    <string name="pdf_tool_rotate">تدوير صفحات</string>
+    <string name="pdf_tool_rotate_hint">كل الصفحات أو المختارة منها، ويُحفظ الدوران</string>
+    <string name="pdf_tool_blank">إدراج صفحة فارغة</string>
+    <string name="pdf_tool_blank_hint">قبل صفحة تختارها</string>
+    <string name="pdf_tool_unlock">إزالة الحماية</string>
+    <string name="pdf_tool_unlock_hint">بكلمة مرور الملف فقط؛ لا يحاول التطبيق تخمينها</string>
+    <string name="pdf_tool_text">استخراج النص</string>
+    <string name="pdf_tool_text_hint">النص المكتوب في الملف، بترتيب القراءة</string>
+    <string name="pdf_tool_jpg">تحويل الصفحات إلى صور JPG</string>
+    <string name="pdf_tool_jpg_hint">صورة لكل صفحة</string>
+    <string name="pdf_tool_needs_one">اختر ملفًا واحدًا لهذه الأداة</string>
+    <string name="pdf_tool_needs_two">اختر ملفين على الأقل للدمج</string>
+    <string name="pdf_all_pages">كل الصفحات</string>
+    <string name="pdf_rotate_right">٩٠° يمينًا</string>
+    <string name="pdf_rotate_180">١٨٠°</string>
+    <string name="pdf_rotate_left">٩٠° يسارًا</string>
+    <string name="pdf_blank_before">قبل الصفحة رقم</string>
+    <string name="pdf_jpg_dpi">الدقة (نقطة لكل بوصة)</string>
+    <string name="pdf_run">تنفيذ</string>
+    <string name="pdf_working">يعالج الملف…</string>
+    <string name="pdf_result_ready">النتيجة جاهزة</string>
+    <plurals name="pdf_result_files">
+        <item quantity="zero">لا ملفات</item>
+        <item quantity="one">ملف واحد</item>
+        <item quantity="two">ملفان</item>
+        <item quantity="few">%d ملفات</item>
+        <item quantity="many">%d ملفًا</item>
+        <item quantity="other">%d ملف</item>
+    </plurals>
+    <string name="pdf_output_unprotected">النتيجة نسخة جديدة غير محمية بكلمة مرور؛ يبقى الأصل كما هو.</string>
+    <string name="pdf_copy">نسخ</string>
+    <string name="pdf_text_title">النص المستخرج</string>
+    <string name="pdf_text_empty">لا يوجد نص مكتوب في هذا الملف (قد يكون صورًا ممسوحة). افتحه في ماسح كيوي وصدّره مع OCR.</string>
+    <string name="pdf_import_to_app">فتح في ماسح كيوي</string>
+
+    <!-- Password prompt (import and tools) -->
+    <string name="pdf_password_title">ملف محمي بكلمة مرور</string>
+    <string name="pdf_password_body">أدخل كلمة مرور هذا الملف لفتحه. لا يحاول التطبيق تخمينها ولا تجاوزها.</string>
+    <string name="pdf_password_wrong">كلمة المرور غير صحيحة، جرّب مرة أخرى.</string>
+    <string name="pdf_open">فتح</string>
 </resources>

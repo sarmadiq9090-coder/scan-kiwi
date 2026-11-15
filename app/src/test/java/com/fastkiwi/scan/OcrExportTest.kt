@@ -16,8 +16,18 @@ import com.fastkiwi.scan.export.ExportOptions
 import com.fastkiwi.scan.export.Exporter
 import com.fastkiwi.scan.export.Quality
 import com.fastkiwi.scan.imaging.BitmapIO
+import com.fastkiwi.scan.ocr.OcrBox
+import com.fastkiwi.scan.ocr.OcrEngine
+import com.fastkiwi.scan.ocr.OcrEngineFactory
+import com.fastkiwi.scan.ocr.OcrInput
 import com.fastkiwi.scan.ocr.OcrLanguage
-import com.fastkiwi.scan.ocr.PageOcr
+import com.fastkiwi.scan.ocr.OcrOptions
+import com.fastkiwi.scan.ocr.OcrResult
+import com.fastkiwi.scan.ocr.OcrService
+import com.fastkiwi.scan.ocr.RecognizedLine
+import com.fastkiwi.scan.ocr.RecognizedWord
+import com.fastkiwi.scan.ocr.TextDirection
+import com.fastkiwi.scan.ocr.runStoppable
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -65,19 +75,29 @@ class OcrExportTest {
         "CENTRE" to floatArrayOf(0.40f, 0.48f, 0.60f, 0.52f),
     )
 
-    /** Like a real engine: boxes in the pixel coordinates of the bitmap it was given. */
-    private inner class FractionOcr : PageOcr {
+    /** One line holding [ws], in the page frame of [page], from a fake engine. */
+    private fun result(page: OcrInput, ws: List<RecognizedWord>) = OcrResult(
+        listOf(RecognizedLine(ws, ws.drop(1).fold(ws[0].box) { b, w -> b.union(w.box) }, 1f, TextDirection.LTR)),
+        page.pageWidth, page.pageHeight, "fake", 1,
+    )
+
+    /** Like a real engine: boxes in the pixel coordinates of the page it was given. */
+    private inner class FractionOcr : OcrEngine {
+        override val id = "fake"
+        override val version = 1
         var calls = 0
-        override fun recognize(page: Bitmap, lang: OcrLanguage): List<OcrWord> {
+        override suspend fun recognize(page: OcrInput, options: OcrOptions): OcrResult {
             calls++
-            return words.map { (t, f) ->
-                OcrWord(t, (f[0] * page.width).roundToInt(), (f[1] * page.height).roundToInt(),
-                    (f[2] * page.width).roundToInt(), (f[3] * page.height).roundToInt())
-            }
+            return result(page, words.map { (t, f) ->
+                RecognizedWord(t, OcrBox((f[0] * page.pageWidth).roundToInt(), (f[1] * page.pageHeight).roundToInt(),
+                    (f[2] * page.pageWidth).roundToInt(), (f[3] * page.pageHeight).roundToInt()), 1f)
+            })
         }
-        override fun stop() {}
         override fun close() {}
     }
+
+    /** The exporter with a fake engine behind the OcrEngine seam. */
+    private fun exporter(store: DocumentStore, engine: OcrEngine) = Exporter(ctx, store, OcrService(OcrEngineFactory.fixed(engine)))
 
     private var storeCount = 0
 
@@ -156,13 +176,13 @@ class OcrExportTest {
             val (store, doc) = seed()
             val ocr = FractionOcr()
             val opt = ExportOptions(PageSize.A4, first, ocr = true)
-            val fresh = Exporter(ctx, store) { ocr }.exportPdf(doc, opt) { _, _ -> }
+            val fresh = exporter(store, ocr).exportPdf(doc, opt) { _, _ -> }
             assertEquals("fresh OCR at $first reads both pages", 2, ocr.calls)
             assertWordsInPlace(fresh, "fresh $first")
             for (again in Quality.entries) {
                 val reuse = FractionOcr()
                 // A new exporter, as after reopening the app: no same-session file reuse.
-                val pdf = Exporter(ctx, store) { reuse }.exportPdf(doc, opt.copy(quality = again)) { _, _ -> }
+                val pdf = exporter(store, reuse).exportPdf(doc, opt.copy(quality = again)) { _, _ -> }
                 assertEquals("cache from $first reused at $again (no new OCR)", 0, reuse.calls)
                 assertWordsInPlace(pdf, "OCR at $first, reused at $again")
             }
@@ -175,7 +195,7 @@ class OcrExportTest {
         // A 1.1.x / early 1.2.0 cache: words but no frame size, so their coordinate frame is unknown.
         for (p in doc.pages) store.saveOcr(doc.id, p, listOf(OcrWord("OLD", 2200, 3000, 2390, 3100)), OcrLanguage.ARABIC_ENGLISH.code)
         val ocr = FractionOcr()
-        val pdf = Exporter(ctx, store) { ocr }.exportPdf(doc, ExportOptions(PageSize.A4, Quality.SMALL, ocr = true)) { _, _ -> }
+        val pdf = exporter(store, ocr).exportPdf(doc, ExportOptions(PageSize.A4, Quality.SMALL, ocr = true)) { _, _ -> }
         assertEquals("legacy cache is not trusted for placement: OCR runs again", 2, ocr.calls)
         assertWordsInPlace(pdf, "legacy cache")
         // Search still uses whatever text is cached.
@@ -183,15 +203,18 @@ class OcrExportTest {
     }
 
     /** Blocks like a long Tesseract page until stop() is called. */
-    private class BlockingOcr : PageOcr {
+    private inner class BlockingOcr : OcrEngine {
+        override val id = "fake"
+        override val version = 1
         val entered = CountDownLatch(1)
         val stopped = CountDownLatch(1)
-        override fun recognize(page: Bitmap, lang: OcrLanguage): List<OcrWord> {
-            entered.countDown()
-            stopped.await(20, TimeUnit.SECONDS) // a real page returns early once stop() is called
-            return listOf(OcrWord("PARTIAL", 10, 10, 100, 40))
-        }
-        override fun stop() = stopped.countDown()
+        override suspend fun recognize(page: OcrInput, options: OcrOptions): OcrResult =
+            // As the Tesseract engine does: the native call runs under runStoppable, which calls stop() on cancel.
+            runStoppable(stop = { stopped.countDown() }) {
+                entered.countDown()
+                stopped.await(20, TimeUnit.SECONDS) // a real page returns early once stop() is called
+                result(page, listOf(RecognizedWord("PARTIAL", OcrBox(10, 10, 100, 40), 1f)))
+            }
         override fun close() {}
     }
 
@@ -199,7 +222,7 @@ class OcrExportTest {
     fun cancelInterruptsThePageBeingRead() = runBlocking {
         val (store, doc) = seed()
         val ocr = BlockingOcr()
-        val exporter = Exporter(ctx, store) { ocr }
+        val exporter = exporter(store, ocr)
         val job = async(Dispatchers.Default, start = CoroutineStart.DEFAULT) {
             exporter.exportPdf(doc, ExportOptions(PageSize.A4, Quality.BALANCED, ocr = true)) { _, _ -> }
         }

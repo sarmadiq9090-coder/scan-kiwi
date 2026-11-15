@@ -160,7 +160,15 @@ private fun App(vm: AppViewModel) {
             is Screen.Feedback -> com.fastkiwi.scan.ui.FeedbackScreen(vm, s)
             Screen.Settings -> SettingsScreen(vm)
             Screen.Updates -> com.fastkiwi.scan.ui.UpdatesScreen(vm)
+            // 2.0-docs: search, page text, folder contents
+            Screen.Search -> com.fastkiwi.scan.ui.SearchScreen(vm, snackbar)
+            is Screen.Text -> com.fastkiwi.scan.ui.TextScreen(vm, s.docId, s.pageId, s.query, snackbar)
+            is Screen.FolderDocs -> HomeScreen(vm, snackbar, s.folderId)
+            // 2.0-pdf: PDF tools for files from other apps.
+            Screen.PdfTools -> com.fastkiwi.scan.ui.PdfToolsScreen(vm, snackbar)
         }
+        // 2.0-pdf: password prompt when an imported PDF is protected (PDF-14).
+        com.fastkiwi.scan.ui.ImportPasswordPrompt(vm)
     }
 }
 

@@ -1,4 +1,36 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- 2.0 strings: camera, image quality, book mode, glare. English. Keep keys identical in values/ and values-en/. -->
 <resources>
+    <string name="pq_incomplete">Part of the page is cut off</string>
+    <string name="pq_blurry">Blurry: hold the phone still</string>
+    <string name="pq_moving">Hold the phone still</string>
+    <string name="pq_glare">Glare on the page</string>
+    <string name="pq_dim">The light is dim</string>
+    <string name="pq_skewed">The text is slightly tilted</string>
+    <string name="pq_more">and %1$d more</string>
+    <string name="pq_retake">Retake</string>
+    <string name="pq_recrop">Re-crop</string>
+    <string name="pq_dismiss">Dismiss</string>
+    <string name="pq_badge">Quality warning: %1$s</string>
+    <string name="pq_note">A warning never stops you from keeping the page.</string>
+    <string name="glare_offer_action">Second shot</string>
+    <string name="glare_second_hint">Take the same page from another angle to remove the glare</string>
+    <string name="glare_skip">Skip</string>
+    <string name="glare_fused">Glare reduced by combining both shots</string>
+    <string name="glare_fuse_failed">The two shots did not match, so the second was added as a new page</string>
+    <string name="mode_book">Book</string>
+    <string name="book_hint">Photograph two facing pages; we split them at the spine</string>
+    <string name="book_title">Split the pages</string>
+    <string name="book_spine">Spine line</string>
+    <string name="book_spine_state">at %1$d%% of the width</string>
+    <string name="book_spine_left">Move the spine left</string>
+    <string name="book_spine_right">Move the spine right</string>
+    <string name="book_drag_hint">Drag the line onto the book\'s spine</string>
+    <string name="book_order">Page order</string>
+    <string name="book_order_rtl">Right first (Arabic)</string>
+    <string name="book_order_ltr">Left first (English)</string>
+    <string name="book_no_dewarp">Curved pages are not flattened: press the book gently flat near the spine.</string>
+    <string name="book_split_add">Split and add 2 pages</string>
+    <string name="book_retake">Retake</string>
+    <string name="book_added">2 pages added</string>
 </resources>

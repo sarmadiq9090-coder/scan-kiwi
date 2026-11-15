@@ -1,4 +1,146 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- 2.0 strings: PDF tools, export integrity, redo, protection. English. Keep keys identical in values/ and values-en/. -->
 <resources>
+    <!-- Editor: redo, drag and drop, selection -->
+    <string name="redo">Redo</string>
+    <string name="pdf_msg_redone">Redone</string>
+    <string name="pdf_drag_hint">Touch and hold, then drag to reorder</string>
+    <string name="pdf_drag_moving">Page %1$s to position %2$s</string>
+    <string name="pdf_select_pages">Select pages</string>
+    <string name="pdf_select_all">Select all</string>
+    <plurals name="pdf_selected_pages">
+        <item quantity="one">%d page selected</item>
+        <item quantity="other">%d pages selected</item>
+    </plurals>
+    <string name="pdf_extract">Extract</string>
+    <string name="pdf_split">Split document</string>
+    <string name="pdf_copy_text">Copy text</string>
+    <string name="pdf_add_blank_end">Add a blank page at the end</string>
+    <string name="pdf_insert_blank_before">Blank page before</string>
+    <string name="pdf_insert_blank_after">Blank page after</string>
+    <string name="pdf_page_selected">Selected</string>
+    <string name="pdf_page_not_selected">Not selected</string>
+
+    <!-- Split / ranges -->
+    <string name="pdf_split_by_ranges">By ranges</string>
+    <string name="pdf_split_every_n">Every N pages</string>
+    <string name="pdf_ranges_label">Pages, e.g. 1-3, 5, 8-</string>
+    <string name="pdf_ranges_split_hint">Each comma-separated part becomes its own file.</string>
+    <string name="pdf_every_n_label">Pages in each part</string>
+    <plurals name="pdf_split_result">
+        <item quantity="one">%d part will be made</item>
+        <item quantity="other">%d parts will be made</item>
+    </plurals>
+    <string name="pdf_range_err_empty">Type the page numbers</string>
+    <string name="pdf_range_err_syntax">Not understood. Example: 1-3, 5</string>
+    <string name="pdf_range_err_range">Page number outside the document (1 to %1$s)</string>
+    <string name="pdf_range_err_reversed">Range starts after it ends</string>
+    <string name="pdf_extract_name">%1$s (pages %2$s)</string>
+    <string name="pdf_part_name">%1$s - part %2$s</string>
+
+    <!-- Messages -->
+    <string name="pdf_msg_plain">%1$s</string>
+    <string name="pdf_msg_blank_added">Blank page added</string>
+    <string name="pdf_msg_extracted">New document: %1$s</string>
+    <string name="pdf_msg_split">New documents: %1$s. The original is unchanged.</string>
+    <string name="pdf_msg_text_copied">Text copied</string>
+    <string name="pdf_msg_no_text">No recognised text yet. Export once with “Make text searchable”, then copy the text.</string>
+    <string name="pdf_msg_no_space">Not enough storage. About %1$s of free space is needed.</string>
+    <string name="pdf_target_reached">File size %1$s (limit %2$s)</string>
+    <string name="pdf_target_missed">Could not reach %1$s. Smallest possible: %2$s</string>
+    <string name="pdf_err_needs_password">The file is password-protected.</string>
+    <string name="pdf_err_bad_password">Wrong password.</string>
+    <string name="pdf_err_unsupported">This kind of protection (digital certificate) is not supported.</string>
+    <string name="pdf_err_no_space">Not enough storage on the phone.</string>
+    <string name="pdf_err_timeout">Processing took more than a minute and was stopped. The file may be damaged.</string>
+    <string name="pdf_err_malformed">Could not read the PDF; it may be damaged.</string>
+
+    <!-- Export sheet: target size, page numbers, watermark, preview -->
+    <string name="pdf_quality_target">Exact size</string>
+    <string name="pdf_quality_target_hint">Tries resolution and quality until the file is within the size you set. If that is impossible, it tells you the real size.</string>
+    <string name="pdf_target_label">Maximum size</string>
+    <string name="pdf_unit_kb">KB</string>
+    <string name="pdf_unit_mb">MB</string>
+    <string name="pdf_target_estimate">limit %1$s</string>
+    <string name="pdf_numbers_title">Page numbers</string>
+    <string name="pdf_numbers_hint">Arabic or Western digits at the bottom or top</string>
+    <string name="pdf_digits_arabic">١٢٣</string>
+    <string name="pdf_digits_western">123</string>
+    <string name="pdf_number_position">Position</string>
+    <string name="pdf_number_start">Start at</string>
+    <string name="pdf_number_with_total">With the total (3 / 10)</string>
+    <string name="pdf_pos_bottom_center">Bottom centre</string>
+    <string name="pdf_pos_bottom_left">Bottom left</string>
+    <string name="pdf_pos_bottom_right">Bottom right</string>
+    <string name="pdf_pos_top_center">Top centre</string>
+    <string name="pdf_pos_top_left">Top left</string>
+    <string name="pdf_pos_top_right">Top right</string>
+    <string name="pdf_watermark_title">Watermark</string>
+    <string name="pdf_watermark_hint">See-through text on every page</string>
+    <string name="pdf_watermark_text">Watermark text</string>
+    <string name="pdf_watermark_opacity">Strength: %1$s</string>
+    <string name="pdf_watermark_diagonal">Diagonal across the page</string>
+    <string name="pdf_preview">File preview</string>
+    <string name="pdf_preview_page">Preview of page %1$s</string>
+    <string name="pdf_export_fitting">Fitting the size…</string>
+
+    <!-- PDF tools (external files) -->
+    <string name="pdf_tools_title">PDF tools</string>
+    <string name="pdf_tools_open">Open PDF tools</string>
+    <string name="pdf_tools_empty_title">Tools for PDF files</string>
+    <string name="pdf_tools_empty_body">Merge, split, extract, rotate, copy text and remove protection. The original file is never changed.</string>
+    <string name="pdf_tools_pick">Choose PDF files</string>
+    <string name="pdf_tools_add">Add files</string>
+    <string name="pdf_tools_privacy">Files are processed on the phone, offline, in a separate process; the result is saved as a new copy.</string>
+    <string name="pdf_tools_files">Files</string>
+    <string name="pdf_tools_tools">Tools</string>
+    <string name="pdf_tools_locked">Password-protected. Tap to enter it.</string>
+    <string name="pdf_tools_reading">Reading the file…</string>
+    <string name="pdf_tools_remove">Remove from the list</string>
+    <string name="pdf_tools_move_up">Move up</string>
+    <string name="pdf_tools_move_down">Move down</string>
+    <string name="pdf_tool_merge">Merge files</string>
+    <string name="pdf_tool_merge_hint">In the order shown, pages are not re-compressed</string>
+    <string name="pdf_tool_split">Split</string>
+    <string name="pdf_tool_split_hint">By ranges or every N pages</string>
+    <string name="pdf_tool_extract">Extract pages</string>
+    <string name="pdf_tool_extract_hint">A new file with the chosen pages</string>
+    <string name="pdf_tool_reorder">Reorder pages</string>
+    <string name="pdf_tool_reorder_hint">Type the new order, e.g. 3, 1, 2</string>
+    <string name="pdf_tool_rotate">Rotate pages</string>
+    <string name="pdf_tool_rotate_hint">All or chosen pages; the rotation is saved</string>
+    <string name="pdf_tool_blank">Insert a blank page</string>
+    <string name="pdf_tool_blank_hint">Before a page you choose</string>
+    <string name="pdf_tool_unlock">Remove protection</string>
+    <string name="pdf_tool_unlock_hint">Only with the file’s password; the app never guesses it</string>
+    <string name="pdf_tool_text">Extract text</string>
+    <string name="pdf_tool_text_hint">The text written in the file, in reading order</string>
+    <string name="pdf_tool_jpg">Convert pages to JPG images</string>
+    <string name="pdf_tool_jpg_hint">One image per page</string>
+    <string name="pdf_tool_needs_one">Choose one file for this tool</string>
+    <string name="pdf_tool_needs_two">Choose at least two files to merge</string>
+    <string name="pdf_all_pages">All pages</string>
+    <string name="pdf_rotate_right">90° right</string>
+    <string name="pdf_rotate_180">180°</string>
+    <string name="pdf_rotate_left">90° left</string>
+    <string name="pdf_blank_before">Before page number</string>
+    <string name="pdf_jpg_dpi">Resolution (dots per inch)</string>
+    <string name="pdf_run">Run</string>
+    <string name="pdf_working">Processing the file…</string>
+    <string name="pdf_result_ready">The result is ready</string>
+    <plurals name="pdf_result_files">
+        <item quantity="one">%d file</item>
+        <item quantity="other">%d files</item>
+    </plurals>
+    <string name="pdf_output_unprotected">The result is a new copy without a password; the original is unchanged.</string>
+    <string name="pdf_copy">Copy</string>
+    <string name="pdf_text_title">Extracted text</string>
+    <string name="pdf_text_empty">There is no written text in this file (it may be scanned images). Open it in Scan Kiwi and export it with OCR.</string>
+    <string name="pdf_import_to_app">Open in Scan Kiwi</string>
+
+    <!-- Password prompt (import and tools) -->
+    <string name="pdf_password_title">Password-protected file</string>
+    <string name="pdf_password_body">Enter this file’s password to open it. The app never tries to guess or bypass it.</string>
+    <string name="pdf_password_wrong">Wrong password, try again.</string>
+    <string name="pdf_open">Open</string>
 </resources>

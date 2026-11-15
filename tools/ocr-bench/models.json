@@ -1,0 +1,16 @@
+{
+ "note": "Fetched by run.py into work/models and checked by sha256; never committed. The MNN files and tessdata_fast are the app's own assets.",
+ "download": [
+  {"file": "PP-OCRv6_det_tiny.onnx", "url": "https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.10.0/onnx/PP-OCRv6/det/PP-OCRv6_det_tiny.onnx", "sha256": "f42c0fbd294d95eac1a550e131b277dac97462c8025fa4b6c3cec1b7894bd3d5", "licence": "Apache-2.0"},
+  {"file": "arabic_PP-OCRv5_rec_mobile.onnx", "url": "https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.10.0/onnx/PP-OCRv5/rec/arabic_PP-OCRv5_rec_mobile.onnx", "sha256": "c1192e632d0baa9146ae5b756a0e635e3dc63c1733737ebfd1629e87144e9295", "licence": "Apache-2.0"},
+  {"file": "tessdata_best/ara.traineddata", "url": "https://raw.githubusercontent.com/tesseract-ocr/tessdata_best/4.1.0/ara.traineddata", "sha256": "ab9d157d8e38ca00e7e39c7d5363a5239e053f5b0dbdb3167dde9d8124335896", "licence": "Apache-2.0"},
+  {"file": "tessdata_best/eng.traineddata", "url": "https://raw.githubusercontent.com/tesseract-ocr/tessdata_best/4.1.0/eng.traineddata", "sha256": "8280aed0782fe27257a68ea10fe7ef324ca0f8d85bd2fd145d1c2b560bcb66ba", "licence": "Apache-2.0"}
+ ],
+ "from_app": [
+  {"file": "PP-OCRv6_det_tiny.fp16.mnn", "asset": "ocr/PP-OCRv6_det_tiny.fp16.mnn"},
+  {"file": "arabic_PP-OCRv5_rec_mobile.fp16.mnn", "asset": "ocr/arabic_PP-OCRv5_rec_mobile.fp16.mnn"},
+  {"file": "ppocrv5_arabic_dict.txt", "asset": "ocr/ppocrv5_arabic_dict.txt"},
+  {"file": "tessdata_fast/ara.traineddata", "asset": "tessdata/ara.traineddata"},
+  {"file": "tessdata_fast/eng.traineddata", "asset": "tessdata/eng.traineddata"}
+ ]
+}

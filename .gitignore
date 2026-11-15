@@ -16,3 +16,7 @@ keystore/
 keystore.properties
 # Deliverables are produced locally and handed over privately
 dist/
+# OCR benchmark: generated sets, models, results, venv (tools/ocr-bench/run.py)
+tools/ocr-bench/work/
+__pycache__/
+app/.cxx/

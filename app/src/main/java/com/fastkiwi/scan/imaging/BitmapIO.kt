@@ -75,11 +75,20 @@ object BitmapIO {
         return applyExif(fit(bmp, maxSide), ExifOrientation.transform(orientation))
     }
 
-    private fun sampleSize(w: Int, h: Int, maxSide: Int): Int {
+    /**
+     * Power-of-two sampling for the decode. 2.0 (A8): the decoded intermediate also stays within
+     * [MAX_DECODE_PIXELS], so 48-200 MP photos never allocate a full-size bitmap.
+     */
+    internal fun sampleSize(w: Int, h: Int, maxSide: Int): Int {
         var s = 1
         while (max(w, h) / (s * 2) >= maxSide) s *= 2
+        // 2.0-cam: high-resolution processing within the memory budget (A8).
+        while ((w.toLong() / s) * (h.toLong() / s) > MAX_DECODE_PIXELS) s *= 2
         return s
     }
+
+    /** Largest bitmap a decode may allocate before scaling: 13 MP (a 12.5 MP sensor still decodes whole). */
+    const val MAX_DECODE_PIXELS = 13_000_000L
 
     fun fit(bmp: Bitmap, maxSide: Int): Bitmap {
         val m = max(bmp.width, bmp.height)
