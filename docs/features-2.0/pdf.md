@@ -1,6 +1,6 @@
 # ميزات PDF في الإصدار 2.0.0 — PDF features in 2.0.0
 
-Owner: PDF agent, branch `feat/2.0-pdf`. Roadmap: ROADMAP-2.0 §5 "1.4.0", §5 "1.6.0" item 4 (§7.4), §5 "2.0.0"
+Owner: PDF agent, branch `feat/2.0-pdf`. Unit suite: 130 tests, 0 failures (95 before this branch). Roadmap: ROADMAP-2.0 §5 "1.4.0", §5 "1.6.0" item 4 (§7.4), §5 "2.0.0"
 item 2 (PDF-14). All tests are JVM/Robolectric on this PC; nothing here was measured on a phone.
 
 ## ملخص بالعربية
@@ -42,7 +42,7 @@ item 2 (PDF-14). All tests are JVM/Robolectric on this PC; nothing here was meas
 | المهلة والانهيار | Timeout / crash of the worker | 1.4 #3 | done | — | hung worker → TIMEOUT after the limit, worker killed; unbindable service → CRASHED; real service protocol end to end | `IsolatedPdfEngineTest` |
 | تراجع وإعادة | Undo and Redo | PRD §7.3, 1.4 #8 | done | Redo tests | redo after undo both ways; a new edit clears Redo; button state follows the history; 20 steps each way | `EditHistoryTest`, `PdfEditorTest.redo*` |
 | لوحة التصدير كاملة | Export panel complete | §7.4 (1.6 #4) | done | format, page size, quality, OCR, password, estimated size, final preview | all in the existing sheet design + «حجم محدد», numbers, watermark, preview of the first 3 pages (paper size, numbers, watermark drawn by the export code) | `PdfEditorTest.exportSheetShowsTheNewOptionsAndHomeHasPdfTools` |
-| أدوات PDF | PDF tools screen (external files) | split doc | done | — | Home entry; merge, split, extract, reorder, rotate, blank, unlock, text, JPG; results shared or saved via the system picker | `PdfEditorTest.pdfToolsScreenOpens` (render); operations via `ExternalPdfEngine` tests |
+| أدوات PDF | PDF tools screen (external files) | split doc | done | — | Home entry; merge, split, extract, reorder, rotate, blank, unlock, text, JPG; results shared or saved via the system picker; pick 2 files (one protected), wrong then right password, merge, split «١، ٢-٣», originals' sha256 unchanged | `PdfToolsFlowTest`, `PdfEditorTest.pdfToolsScreenOpens` |
 
 ## PdfBox-Android decision (measured)
 
@@ -52,6 +52,10 @@ Release APK (unsigned, same build settings), `size_gate.py --version 1.4.0`:
 |---|---|---|---|
 | before (branch base) | 14.55 MB | 1.74 MB | — |
 | PdfBox-Android used from `PdfService` | 15.19 MB | 1.95 MB | 0.41 MB |
+| whole PDF branch (final, `0b66dbe`+) | 15.31 MB | 2.05 MB | 0.41 MB |
+
+Whole branch: +0.76 MB over the base (PdfBox 0.63 MB, our PDF/UI code and strings 0.13 MB); 1.4.0 gate
+PASS (target 16.5 MB). Permissions in the built APK: CAMERA only.
 
 PdfBox cost **0.63 MB** ≤ 2.0 MB → adopted. BouncyCastle excluded (certificate-encrypted PDFs report
 "unsupported"); CJK CMaps and `Scripts.txt` not packaged (`ignoreAssetsPatterns`). The LiberationSans

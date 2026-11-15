@@ -75,7 +75,7 @@ object SyntheticPdfs {
                 list[i].annotations.add(link)
             }
             if (password != null) {
-                val policy = StandardProtectionPolicy("owner-$password", password, AccessPermission())
+                val policy = StandardProtectionPolicy(password + password, password, AccessPermission())
                 policy.encryptionKeyLength = 256
                 doc.protect(policy)
             }
