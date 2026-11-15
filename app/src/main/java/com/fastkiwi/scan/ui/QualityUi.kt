@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 package com.fastkiwi.scan.ui
 
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -97,7 +98,7 @@ fun QualityChip(quality: PageQuality?, onRetake: () -> Unit, onRecrop: () -> Uni
     val warnings = quality?.warnings().orEmpty()
     if (warnings.isEmpty()) return
     val first = stringResource(qualityLabel(warnings.first()))
-    val title = if (warnings.size > 1) first + " " + stringResource(R.string.pq_more, warnings.size - 1) else first
+    val title = if (warnings.size > 1) first + " " + pluralStringResource(R.plurals.pq_more, warnings.size - 1, warnings.size - 1) else first
     Surface(
         color = MaterialTheme.colorScheme.tertiaryContainer,
         contentColor = MaterialTheme.colorScheme.onTertiaryContainer,

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 package com.fastkiwi.scan.ui
 
+import androidx.core.content.edit
 import android.app.Application
 import android.content.ContentResolver
 import android.graphics.Bitmap
@@ -147,7 +148,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     val docs: StateFlow<List<DocEntry>> = _docs
 
     /** Number of long-running jobs; > 0 shows a progress indicator. */
-    val busy = mutableStateOf(0)
+    val busy = androidx.compose.runtime.mutableIntStateOf(0)
     val progress = mutableStateOf<Pair<Int, Int>?>(null)
 
     /** A running export (Share / Save): which page, and whether it is reading text (OCR). */
@@ -331,7 +332,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      * failures into messages. [code] names the operation for problem reports.
      */
     private suspend fun <T> job(code: String = "GENERAL", block: suspend () -> T): T? {
-        busy.value++
+        busy.intValue++
         return try {
             withContext(Dispatchers.Default) { block() }
         } catch (e: OutOfMemoryError) {
@@ -352,7 +353,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             if (BuildConfig.DEBUG) android.util.Log.w("ScanKiwi", "job failed", e)
             _messages.send(UiMessage(R.string.msg_error, (e.message ?: e.javaClass.simpleName).take(120), report = code to e.javaClass.simpleName)); null
         } finally {
-            busy.value--
+            busy.intValue--
             progress.value = null
         }
     }
@@ -1045,7 +1046,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Home order, remembered. */
     val docSort = mutableStateOf(runCatching { DocSort.valueOf(docsPrefs.getString("sort", null) ?: "") }.getOrDefault(DocSort.DATE))
-    fun setDocSort(s: DocSort) { docSort.value = s; docsPrefs.edit().putString("sort", s.name).apply() }
+    fun setDocSort(s: DocSort) { docSort.value = s; docsPrefs.edit { putString("sort", s.name) } }
 
     /** Home filter: favorites only. */
     val favoritesOnly = mutableStateOf(false)

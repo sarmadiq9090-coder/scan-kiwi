@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 package com.fastkiwi.scan.pdf
 
+import androidx.core.graphics.createBitmap
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.pdf.PdfRenderer
@@ -35,7 +36,7 @@ object PdfImages {
                             var k = dpi / 72f
                             val longest = max(page.width, page.height) * k
                             if (longest > MAX_SIDE) k *= MAX_SIDE / longest
-                            val bmp = Bitmap.createBitmap(max(1, (page.width * k).toInt()), max(1, (page.height * k).toInt()), Bitmap.Config.ARGB_8888)
+                            val bmp = createBitmap(max(1, (page.width * k).toInt()), max(1, (page.height * k).toInt()))
                             bmp.eraseColor(Color.WHITE)
                             page.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_PRINT)
                             val safe = SafeOutput(File(outDir.apply { mkdirs() }, if (n == 1) "$baseName.jpg" else "${baseName}_${i + 1}.jpg"))

@@ -182,7 +182,7 @@ fun HomeScreen(vm: AppViewModel, snackbar: SnackbarHostState, folderId: String? 
                     title = { Text(stringResource(R.string.app_name), style = MaterialTheme.typography.titleLarge, maxLines = 1) },
                     actions = {
                         // 2.0-pdf: entry to the PDF tools (files from other apps).
-                        TooltipIconButton(PdfToolsIcon(), stringResource(R.string.pdf_tools_open), { vm.open(Screen.PdfTools) })
+                        TooltipIconButton(pdfToolsHomeIcon(), stringResource(R.string.pdf_tools_open), { vm.open(Screen.PdfTools) })
                         TooltipIconButton(KiwiIcons.import(), stringResource(R.string.import_files), importFiles)
                         TooltipIconButton(KiwiIcons.settings(), stringResource(R.string.settings), { vm.open(Screen.Settings) })
                     },

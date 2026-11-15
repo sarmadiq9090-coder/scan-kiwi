@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 package com.fastkiwi.scan.imaging
 
+import androidx.core.graphics.scale
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -90,7 +91,7 @@ object BitmapIO {
             ?: return null
         if (max(bmp.width, bmp.height) <= maxSide) return bmp
         val k = maxSide.toFloat() / max(bmp.width, bmp.height)
-        val out = Bitmap.createScaledBitmap(bmp, max(1, (bmp.width * k).toInt()), max(1, (bmp.height * k).toInt()), true)
+        val out = bmp.scale(max(1, (bmp.width * k).toInt()), max(1, (bmp.height * k).toInt()))
         pool.give(bmp)
         return out
     }
@@ -153,7 +154,7 @@ object BitmapIO {
         val m = max(bmp.width, bmp.height)
         if (m <= maxSide) return bmp
         val k = maxSide.toFloat() / m
-        val out = Bitmap.createScaledBitmap(bmp, max(1, (bmp.width * k).toInt()), max(1, (bmp.height * k).toInt()), true)
+        val out = bmp.scale(max(1, (bmp.width * k).toInt()), max(1, (bmp.height * k).toInt()))
         if (out !== bmp) bmp.recycle()
         return out
     }
@@ -199,7 +200,7 @@ object BitmapIO {
     /** Page outline (normalised 0..1 corners) with its confidence, or null. */
     fun detectPage(bmp: Bitmap): Detection? {
         val k = 480f / max(bmp.width, bmp.height)
-        val small = if (k < 1f) Bitmap.createScaledBitmap(bmp, max(1, (bmp.width * k).toInt()), max(1, (bmp.height * k).toInt()), true) else bmp
+        val small = if (k < 1f) bmp.scale(max(1, (bmp.width * k).toInt()), max(1, (bmp.height * k).toInt())) else bmp
         val px = IntArray(small.width * small.height)
         small.getPixels(px, 0, small.width, 0, 0, small.width, small.height)
         val sw = small.width

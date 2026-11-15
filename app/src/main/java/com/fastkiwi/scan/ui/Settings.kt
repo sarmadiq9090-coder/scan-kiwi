@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 package com.fastkiwi.scan.ui
 
+import androidx.core.content.edit
 import android.content.Context
 import com.fastkiwi.scan.core.Filter
 import com.fastkiwi.scan.core.PageSize
@@ -16,84 +17,84 @@ class Settings(ctx: Context) {
     /** «السمة»: system (default), light or dark. */
     var themeMode: com.fastkiwi.scan.ui.theme.ThemeMode
         get() = enumOr(p.getString("theme_mode", null), com.fastkiwi.scan.ui.theme.ThemeMode.SYSTEM)
-        set(v) = p.edit().putString("theme_mode", v.name).apply()
+        set(v) = p.edit { putString("theme_mode", v.name) }
 
     /** «ألوان خلفية الهاتف» (Material You, Android 12+); off by default to keep the brand. */
     var dynamicColor: Boolean
         get() = p.getBoolean("dynamic_color", false)
-        set(v) = p.edit().putBoolean("dynamic_color", v).apply()
+        set(v) = p.edit { putBoolean("dynamic_color", v) }
 
     var autoCapture: Boolean
         get() = p.getBoolean("auto_capture", true)
-        set(v) = p.edit().putBoolean("auto_capture", v).apply()
+        set(v) = p.edit { putBoolean("auto_capture", v) }
 
     /** The crop screen's drag hint was dismissed (shown once per install). */
     var cropHintSeen: Boolean
         get() = p.getBoolean("crop_hint_seen", false)
-        set(v) = p.edit().putBoolean("crop_hint_seen", v).apply()
+        set(v) = p.edit { putBoolean("crop_hint_seen", v) }
 
     /** Open the outline editor after each manual shot (auto-captured batches skip it). */
     var reviewAfterCapture: Boolean
         get() = p.getBoolean("review_after_capture", true)
-        set(v) = p.edit().putBoolean("review_after_capture", v).apply()
+        set(v) = p.edit { putBoolean("review_after_capture", v) }
 
     var defaultFilter: Filter
         get() = enumOr(p.getString("default_filter", null), Filter.ENHANCED)
-        set(v) = p.edit().putString("default_filter", v.name).apply()
+        set(v) = p.edit { putString("default_filter", v.name) }
 
     var pageSize: PageSize
         get() = enumOr(p.getString("page_size", null), PageSize.A4)
-        set(v) = p.edit().putString("page_size", v.name).apply()
+        set(v) = p.edit { putString("page_size", v.name) }
 
     var quality: Quality
         get() = enumOr(p.getString("quality", null), Quality.BALANCED)
-        set(v) = p.edit().putString("quality", v.name).apply()
+        set(v) = p.edit { putString("quality", v.name) }
 
     var ocr: Boolean
         get() = p.getBoolean("ocr", false)
-        set(v) = p.edit().putBoolean("ocr", v).apply()
+        set(v) = p.edit { putBoolean("ocr", v) }
 
     var ocrLanguage: OcrLanguage
         get() = enumOr(p.getString("ocr_language", null), OcrLanguage.ARABIC_ENGLISH)
-        set(v) = p.edit().putString("ocr_language", v.name).apply()
+        set(v) = p.edit { putString("ocr_language", v.name) }
 
     // 2.0-ocr
     /** «دقيق» Accurate (fused, default) or «سريع» Fast (Tesseract only). */
     var ocrMode: OcrMode
         get() = enumOr(p.getString("ocr_mode", null), OcrMode.ACCURATE)
-        set(v) = p.edit().putString("ocr_mode", v.name).apply()
+        set(v) = p.edit { putString("ocr_mode", v.name) }
 
     /** Read each page's text in the background right after capture (cached per page revision). */
     var ocrAfterCapture: Boolean
         get() = p.getBoolean("ocr_after_capture", true)
-        set(v) = p.edit().putBoolean("ocr_after_capture", v).apply()
+        set(v) = p.edit { putBoolean("ocr_after_capture", v) }
 
     // 2.0-perf
     /** «وضع الذاكرة المنخفضة»: automatic (the phone decides, default), always on, or off. */
     var lowMemoryMode: com.fastkiwi.scan.perf.MemoryBudget.Mode
         get() = enumOr(p.getString("low_memory_mode", null), com.fastkiwi.scan.perf.MemoryBudget.Mode.AUTO)
-        set(v) = p.edit().putString("low_memory_mode", v.name).apply()
+        set(v) = p.edit { putString("low_memory_mode", v.name) }
 
     // 2.0-update (owner's order 2026-11-15)
     /** «التحقق التلقائي من التحديثات»: on by default; when the app is opened, at most once every 7 days. */
     var autoUpdateCheck: Boolean
         get() = p.getBoolean("auto_update_check", true)
-        set(v) = p.edit().putBoolean("auto_update_check", v).apply()
+        set(v) = p.edit { putBoolean("auto_update_check", v) }
 
     /** «التنزيل عبر Wi-Fi فقط»: on by default. */
     var updateWifiOnly: Boolean
         get() = p.getBoolean("update_wifi_only", true)
-        set(v) = p.edit().putBoolean("update_wifi_only", v).apply()
+        set(v) = p.edit { putBoolean("update_wifi_only", v) }
 
     /** When the last automatic check ran (ms since the epoch; 0 = never). */
     var lastUpdateCheck: Long
         get() = p.getLong("last_update_check", 0L)
-        set(v) = p.edit().putLong("last_update_check", v).apply()
+        set(v) = p.edit { putLong("last_update_check", v) }
 
     /** The one-time notice about the update connection was shown. */
     var updateNoticeShown: Boolean
         get() = p.getBoolean("update_notice_shown", false)
-        set(v) = p.edit().putBoolean("update_notice_shown", v).apply()
+        set(v) = p.edit { putBoolean("update_notice_shown", v) }
 
     companion object {
         inline fun <reified T : Enum<T>> enumOr(name: String?, default: T): T =
@@ -104,7 +105,8 @@ class Settings(ctx: Context) {
             ctx.getSharedPreferences("settings", Context.MODE_PRIVATE).getString("language", "") ?: ""
 
         fun setLanguageTag(ctx: Context, tag: String) {
-            ctx.getSharedPreferences("settings", Context.MODE_PRIVATE).edit().putString("language", tag).commit()
+            // commit: the language must be on disk before the activity is recreated.
+            ctx.getSharedPreferences("settings", Context.MODE_PRIVATE).edit(commit = true) { putString("language", tag) }
         }
     }
 }

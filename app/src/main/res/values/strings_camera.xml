@@ -8,7 +8,14 @@
     <string name="pq_glare">لمعان على الصفحة</string>
     <string name="pq_dim">الإضاءة خافتة</string>
     <string name="pq_skewed">النص مائل قليلًا</string>
-    <string name="pq_more">و%1$d تنبيه آخر</string>
+    <plurals name="pq_more">
+        <item quantity="zero">و%1$d تنبيه آخر</item>
+        <item quantity="one">وتنبيه آخر</item>
+        <item quantity="two">وتنبيهان آخران</item>
+        <item quantity="few">و%1$d تنبيهات أخرى</item>
+        <item quantity="many">و%1$d تنبيهًا آخر</item>
+        <item quantity="other">و%1$d تنبيه آخر</item>
+    </plurals>
     <string name="pq_retake">إعادة الالتقاط</string>
     <string name="pq_recrop">إعادة القص</string>
     <string name="pq_dismiss">تجاهل</string>

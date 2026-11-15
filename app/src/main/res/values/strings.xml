@@ -1,12 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Default language: Arabic. English lives in values-en/. -->
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
     <string name="app_name">ماسح كيوي</string>
     <string name="default_doc_name">مسح %1$s</string>
     <string name="scan">مسح</string>
     <string name="settings">الإعدادات</string>
     <string name="import_files">استيراد صور أو PDF</string>
-    <string name="search_hint">ابحث في الاسم أو النص</string>
     <string name="clear_search">مسح البحث</string>
     <string name="clear_selection">إلغاء التحديد</string>
     <string name="no_results">لا توجد نتائج</string>
@@ -17,8 +16,8 @@
     <string name="delete">حذف</string>
     <string name="rename">إعادة تسمية</string>
     <string name="select">تحديد</string>
-    <string name="selected">محدد</string>
-    <string name="not_selected">غير محدد</string>
+    <string name="selected" tools:override="true">محدد</string>
+    <string name="not_selected" tools:override="true">غير محدد</string>
     <string name="share_pdf">مشاركة PDF</string>
     <string name="more_options_for">خيارات أخرى لـ ⁨%1$s⁩</string>
     <string name="document_name">اسم المستند</string>
@@ -41,8 +40,6 @@
     <string name="id_back_hint">الآن صوّر الوجه الخلفي</string>
     <string name="id_now_back">تم الوجه الأمامي. اقلب البطاقة.</string>
     <string name="msg_id_added">أُضيفت البطاقة بوجهيها في صفحة واحدة</string>
-    <string name="torch_on">تشغيل الفلاش</string>
-    <string name="torch_off">إطفاء الفلاش</string>
     <string name="take_photo">التقاط صورة</string>
     <string name="done_with_count">تم، عدد الصفحات %1$d</string>
     <string name="status_searching">وجّه الكاميرا نحو الورقة</string>
@@ -55,7 +52,6 @@
     <string name="status_next_page">صُوّرت هذه الصفحة. اقلب إلى التالية</string>
 
     <string name="export">تصدير</string>
-    <string name="add_page_camera">إضافة صفحة بالكاميرا</string>
     <string name="no_pages">لا توجد صفحات</string>
     <string name="page_n_of">الصفحة %1$d من %2$d</string>
     <string name="edit_page">تعديل الصفحة</string>
@@ -70,25 +66,16 @@
     <string name="retake">إعادة التصوير</string>
     <string name="delete_page">حذف الصفحة</string>
     <string name="delete_page_body">ستُحذف هذه الصفحة نهائيًا.</string>
-    <string name="previous_page">الصفحة السابقة</string>
-    <string name="next_page">الصفحة التالية</string>
-    <string name="filter">المظهر</string>
     <string name="filter_original">الأصلي</string>
     <string name="filter_enhanced">ألوان محسّنة</string>
     <string name="filter_whiten">إزالة الظلال</string>
     <string name="filter_gray">رمادي</string>
     <string name="filter_bw">أبيض وأسود</string>
 
-    <string name="crop_hint">اسحب الزوايا أو منتصف الأضلاع إلى حواف الورقة. تلتصق بالحواف المكتشفة عند الاقتراب.</string>
     <string name="crop_area_desc">منطقة القص. استخدم أزرار «الكل» أو «إعادة الكشف» أو التدوير.</string>
-    <string name="auto_detect">كشف تلقائي</string>
-    <string name="whole_image">الصورة كاملة</string>
-    <string name="apply">تطبيق</string>
 
     <string name="format">الصيغة</string>
     <string name="page_size">حجم الصفحة</string>
-    <string name="size_a4">A4</string>
-    <string name="size_letter">Letter</string>
     <string name="size_fit">بحجم الصورة</string>
     <string name="quality">الجودة والحجم</string>
     <string name="quality_small">صغير</string>
@@ -108,7 +95,6 @@
     <string name="password_ascii_hint">حروف إنجليزية وأرقام ورموز فقط، ليفتح الملف في كل البرامج.</string>
     <string name="show_password">إظهار كلمة المرور</string>
     <string name="hide_password">إخفاء كلمة المرور</string>
-    <string name="processing_page">معالجة الصفحة %1$d من %2$d</string>
     <string name="share">مشاركة</string>
     <string name="save_to_device">حفظ في الجهاز</string>
     <string name="share_via">مشاركة عبر</string>
@@ -138,7 +124,6 @@
     <string name="crop_problem_concave">الشكل منبعج للداخل: اسحب الزاوية إلى الخارج.</string>
     <string name="crop_problem_small">المنطقة صغيرة جدًا.</string>
     <string name="crop_fix">إصلاح</string>
-    <string name="adjust_last_page">تعديل قص آخر صفحة</string>
     <string name="review_after_capture">مراجعة القص بعد كل لقطة</string>
     <string name="review_after_capture_hint">يفتح شاشة القص بعد التصوير اليدوي. في الالتقاط التلقائي تُراجَع فقط الصفحات غير الواضحة.</string>
     <string name="undo">تراجع</string>
@@ -155,8 +140,6 @@
     <string name="signature_size">حجم التوقيع</string>
     <string name="signature_redraw">رسم من جديد</string>
     <string name="signature_remove">إزالة التواقيع</string>
-    <string name="size_legal">Legal</string>
-    <string name="size_a5">A5</string>
     <string name="estimated_size">الحجم المتوقع نحو %1$s</string>
     <string name="estimating_size">جارٍ تقدير الحجم…</string>
     <string name="name_suggestion">اقتراح: %1$s</string>
@@ -165,7 +148,6 @@
 
     <!-- v1.2 -->
     <string name="feedback_title">أبلغنا عن مشكلة أو اقتراح</string>
-    <string name="feedback_short">أبلغنا</string>
     <string name="feedback_settings_hint">اكتب لنا مشكلة أو فكرة. يفتح بريدك أو المتصفح، وأنت من يرسل.</string>
     <string name="feedback_report_this">أبلغ عن هذه المشكلة</string>
     <string name="feedback_privacy">لن يُرسل أي مستند أو صورة. أنت ترى كل ما يُرسل قبل الإرسال.</string>
@@ -182,7 +164,6 @@
     <string name="feedback_no_mail_app">لا يوجد تطبيق بريد على الهاتف. جرّب «عبر GitHub».</string>
     <string name="feedback_no_browser">لا يوجد متصفح على الهاتف. جرّب «عبر البريد».</string>
     <string name="updates_title">التحديثات</string>
-    <string name="updates_body">التحديث يدوياً: نزّل ملف APK من صفحة الإصدارات وثبّته فوق الحالي؛ تبقى مستنداتك كما هي. لا يقبل أندرويد إلا تحديثاً موقّعاً بالمفتاح نفسه.</string>
     <string name="pdfa_title">أرشيفي (⁨PDF/A⁩)</string>
     <string name="pdfa_hint">صيغة ⁨PDF/A-2b⁩ للحفظ الطويل. لا تجتمع مع كلمة المرور.</string>
 
@@ -250,8 +231,8 @@
     <string name="auto_short">تلقائي</string>
     <string name="edit_edges_action">تعديل</string>
     <string name="flash">الفلاش</string>
-    <string name="state_on">يعمل</string>
-    <string name="state_off">متوقف</string>
+    <string name="state_on" tools:override="true">يعمل</string>
+    <string name="state_off" tools:override="true">متوقف</string>
     <string name="size_kb">%1$s ك.ب</string>
     <string name="size_mb">%1$s م.ب</string>
     <string name="whats_new_line">جديد في هذا الإصدار: تصميم أوضح بأزرار ثابتة المواضع، خط عربي موحّد، سمة داكنة، «أبلغنا عن مشكلة»، مشاركة أسرع مع إلغاء، وخيار أرشيفي PDF/A.</string>

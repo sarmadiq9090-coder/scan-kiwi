@@ -85,6 +85,7 @@ enum class NavIcon { BACK, CLOSE, NONE }
 
 /** Small top app bar with an optional subtitle; titles never clip Arabic descenders. */
 @OptIn(ExperimentalMaterial3Api::class)
+@android.annotation.SuppressLint("ModifierParameter") // titleModifier styles the title only; the bar takes no modifier
 @Composable
 fun KiwiTopBar(
     title: String,

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 package com.fastkiwi.scan.ui
 
+import androidx.compose.runtime.mutableIntStateOf
 import android.app.Application
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -290,7 +291,7 @@ private fun pdfToolsIcon(): ImageVector = ImageVector.vectorResource(R.drawable.
 
 /** Icon for the Home entry. */
 @Composable
-fun PdfToolsIcon(): ImageVector = pdfToolsIcon()
+fun pdfToolsHomeIcon(): ImageVector = pdfToolsIcon()
 
 /** «أدوات PDF»: files from other apps; one primary action (pick files) until files are chosen. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -301,7 +302,8 @@ fun PdfToolsScreen(appVm: AppViewModel, snackbar: SnackbarHostState, vm: PdfTool
     var unlockFor by remember { mutableStateOf<String?>(null) }
     val pick = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { vm.add(it) }
     val pickPdf = { pick.launch(arrayOf("application/pdf")) }
-    LaunchedEffect(Unit) { vm.messages.collect { snackbar.showSnackbar(ctx.getString(it, LocalFormat.count(vm.current()?.pages ?: 0))) } }
+    val res = androidx.compose.ui.platform.LocalResources.current
+    LaunchedEffect(Unit) { vm.messages.collect { snackbar.showSnackbar(res.getString(it, LocalFormat.count(vm.current()?.pages ?: 0))) } }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbar) },
@@ -425,7 +427,7 @@ private fun ToolDialog(t: PdfTool, e: PdfToolsViewModel.Entry?, onDismiss: () ->
     val count = e?.pages ?: 0
     var ranges by remember { mutableStateOf("") }
     var n by remember { mutableStateOf(if (t == PdfTool.JPG) "200" else if (t == PdfTool.BLANK) "1" else "1") }
-    var deg by remember { mutableStateOf(0) }
+    var deg by remember { mutableIntStateOf(0) }
     var pw by remember { mutableStateOf("") }
     var everyN by remember { mutableStateOf(false) }
     val needsRanges = t == PdfTool.EXTRACT || t == PdfTool.REORDER || (t == PdfTool.SPLIT && !everyN)

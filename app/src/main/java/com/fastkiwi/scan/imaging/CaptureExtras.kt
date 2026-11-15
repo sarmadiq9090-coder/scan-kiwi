@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 package com.fastkiwi.scan.imaging
 
+import androidx.core.graphics.scale
 import android.content.Context
 import android.graphics.Bitmap
 import com.fastkiwi.scan.core.BookSplit
@@ -30,7 +31,7 @@ object CaptureQuality {
     /** [corners] normalised (0..1), null = the whole photo; [cut] from the detector. */
     fun assess(bmp: Bitmap, corners: Quad?, cut: Boolean): PageQuality {
         val k = min(1f, SIDE.toFloat() / max(bmp.width, bmp.height))
-        val small = if (k < 1f) Bitmap.createScaledBitmap(bmp, max(1, (bmp.width * k).toInt()), max(1, (bmp.height * k).toInt()), true) else bmp
+        val small = if (k < 1f) bmp.scale(max(1, (bmp.width * k).toInt()), max(1, (bmp.height * k).toInt())) else bmp
         val w = small.width
         val h = small.height
         val px = IntArray(w * h)
@@ -69,7 +70,7 @@ object BookCapture {
         val warped = PageRenderer.warp(bmp, quad)
         val preview = BitmapIO.fit(warped, 1400)
         val k = min(1f, 800f / preview.width)
-        val g = if (k < 1f) Bitmap.createScaledBitmap(preview, max(1, (preview.width * k).toInt()), max(1, (preview.height * k).toInt()), true) else preview
+        val g = if (k < 1f) preview.scale(max(1, (preview.width * k).toInt()), max(1, (preview.height * k).toInt())) else preview
         val px = IntArray(g.width * g.height)
         g.getPixels(px, 0, g.width, 0, 0, g.width, g.height)
         val gray = ImageFilters.toGray(px, g.width, g.height)

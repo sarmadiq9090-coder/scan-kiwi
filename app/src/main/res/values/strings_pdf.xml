@@ -4,7 +4,6 @@
     <!-- Editor: redo, drag and drop, selection -->
     <string name="redo">إعادة</string>
     <string name="pdf_msg_redone">أُعيد التعديل</string>
-    <string name="pdf_drag_hint">اضغط مطولًا واسحب لتغيير الترتيب</string>
     <string name="pdf_drag_moving">الصفحة %1$s إلى الموضع %2$s</string>
     <string name="pdf_select_pages">تحديد صفحات</string>
     <string name="pdf_select_all">تحديد الكل</string>
@@ -125,7 +124,6 @@
     <string name="pdf_tool_text_hint">النص المكتوب في الملف، بترتيب القراءة</string>
     <string name="pdf_tool_jpg">تحويل الصفحات إلى صور JPG</string>
     <string name="pdf_tool_jpg_hint">صورة لكل صفحة</string>
-    <string name="pdf_tool_needs_one">اختر ملفًا واحدًا لهذه الأداة</string>
     <string name="pdf_tool_needs_two">اختر ملفين على الأقل للدمج</string>
     <string name="pdf_all_pages">كل الصفحات</string>
     <string name="pdf_rotate_right">٩٠° يمينًا</string>

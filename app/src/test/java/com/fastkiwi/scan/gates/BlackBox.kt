@@ -667,7 +667,7 @@ class BlackBox(private val rule: ComposeTestRule, val dir: File) {
         harvest()
         while (true) {
             val vm = vm()
-            val busy = vm != null && (vm.busy.value > 0 || vm.exportState.value != null)
+            val busy = vm != null && (vm.busy.intValue > 0 || vm.exportState.value != null)
             quiet = if (busy) 0 else quiet + 1
             if (quiet >= quietTicks) break
             if (System.currentTimeMillis() > end) {

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 package com.fastkiwi.scan.imaging
 
+import androidx.core.graphics.createBitmap
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
@@ -88,7 +89,7 @@ object PageRenderer {
             val k = BitmapIO.MAX_SOURCE_SIDE.toFloat() / m
             w = (w * k).toInt(); h = (h * k).toInt()
         }
-        val out = Bitmap.createBitmap(max(1, w), max(1, h), Bitmap.Config.ARGB_8888)
+        val out = createBitmap(max(1, w), max(1, h))
         val matrix = Matrix()
         // Map the outline slightly outside the output so the page edge (often a
         // dark line or a sliver of desk) is trimmed: ~0.4% on each side.

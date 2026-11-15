@@ -10,7 +10,6 @@
     <string name="docs_sort_date">Newest first</string>
     <string name="docs_sort_name">By name</string>
     <string name="docs_sort_size">Largest first</string>
-    <string name="docs_sort_by">Sort: %1$s</string>
     <string name="docs_favorite_add">Add “%1$s” to favorites</string>
     <string name="docs_favorite_remove">Remove “%1$s” from favorites</string>
     <string name="docs_favorite">Favorite</string>

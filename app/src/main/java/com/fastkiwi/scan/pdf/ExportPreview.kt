@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 package com.fastkiwi.scan.pdf
 
+import androidx.core.graphics.createBitmap
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
@@ -31,7 +32,7 @@ object ExportPreview {
         val ph = if (landscape) pageSize.widthPt else pageSize.heightPt
         val h = height
         val w = max(1, (h * pw / ph).roundToInt())
-        val out = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        val out = createBitmap(w, h)
         val c = Canvas(out)
         c.drawColor(Color.WHITE)
         val s = minOf(w.toFloat() / img.width, h.toFloat() / img.height)

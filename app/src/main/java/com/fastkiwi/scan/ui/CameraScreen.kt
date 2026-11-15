@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 package com.fastkiwi.scan.ui
 
+import androidx.core.graphics.scale
+import androidx.compose.runtime.mutableLongStateOf
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -241,7 +243,7 @@ private fun CameraContent(vm: AppViewModel, initial: Screen.Camera, onClose: () 
     var torch by remember { mutableStateOf(false) }
     var auto by remember { mutableStateOf(vm.settings.autoCapture) }
     var capturing by remember { mutableStateOf(false) }
-    var cooldownUntil by remember { mutableStateOf(0L) }
+    var cooldownUntil by remember { mutableLongStateOf(0L) }
     var status by remember { mutableIntStateOf(R.string.status_searching) }
     val idFront by vm.idFrontCaptured
     val haptics = androidx.compose.ui.platform.LocalHapticFeedback.current
@@ -316,7 +318,7 @@ private fun CameraContent(vm: AppViewModel, initial: Screen.Camera, onClose: () 
                     runCatching {
                         // Not BitmapIO.fit: that recycles its source, and the frame belongs to the test.
                         val k = minOf(1f, 320f / maxOf(frame.width, frame.height))
-                        val small = android.graphics.Bitmap.createScaledBitmap(frame, maxOf(1, (frame.width * k).toInt()), maxOf(1, (frame.height * k).toInt()), true)
+                        val small = frame.scale(maxOf(1, (frame.width * k).toInt()), maxOf(1, (frame.height * k).toInt()))
                         val px = IntArray(small.width * small.height)
                         small.getPixels(px, 0, small.width, 0, 0, small.width, small.height)
                         if (small !== frame) small.recycle()
@@ -423,7 +425,7 @@ private fun CameraContent(vm: AppViewModel, initial: Screen.Camera, onClose: () 
         if (captured > 0 && !reducedMotion) { flash = true; kotlinx.coroutines.delay(120); flash = false }
     }
     // «تعديل» on the status pill for a few seconds after each capture (accessibility-aware timeout).
-    var editUntil by remember { mutableStateOf(0L) }
+    var editUntil by remember { mutableLongStateOf(0L) }
     val a11y = remember { ctx.getSystemService(android.view.accessibility.AccessibilityManager::class.java) }
     val editMillis = remember {
         if (Build.VERSION.SDK_INT >= 29) a11y?.getRecommendedTimeoutMillis(4000, android.view.accessibility.AccessibilityManager.FLAG_CONTENT_CONTROLS or android.view.accessibility.AccessibilityManager.FLAG_CONTENT_TEXT)?.toLong() ?: 4000L

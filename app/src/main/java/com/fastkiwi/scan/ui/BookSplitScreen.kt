@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 package com.fastkiwi.scan.ui
 
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
@@ -88,7 +89,7 @@ fun BookSplitScreen(p: BookPending, onConfirm: (Spine, ReadingOrder) -> Unit, on
             val hPx = with(density) { maxHeight.toPx() }
             // The image is never mirrored in RTL, so the drag works in image (left-to-right) space.
             Image(image, null, Modifier.fillMaxSize(), contentScale = ContentScale.FillBounds)
-            var grab by remember { mutableStateOf(0) } // 1 top end, 2 bottom end, 3 whole line
+            var grab by remember { mutableIntStateOf(0) } // 1 top end, 2 bottom end, 3 whole line
             Canvas(
                 Modifier
                     .fillMaxSize()

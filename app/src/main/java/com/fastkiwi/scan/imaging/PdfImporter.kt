@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 package com.fastkiwi.scan.imaging
 
+import androidx.core.graphics.createBitmap
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Color
@@ -86,7 +87,7 @@ object PdfImporter {
                         if (longest > 2800f) k *= 2800f / longest
                         val w = max(1, (page.width * k).toInt())
                         val h = max(1, (page.height * k).toInt())
-                        val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+                        val bmp = createBitmap(w, h)
                         bmp.eraseColor(Color.WHITE)
                         page.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_PRINT)
                         onPage(bmp)

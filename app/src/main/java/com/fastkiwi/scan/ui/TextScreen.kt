@@ -87,6 +87,8 @@ fun TextScreen(vm: AppViewModel, docId: String, pageId: String, query: String?, 
     val undoKey = "$docId/$pageId"
     val copiedMsg = stringResource(R.string.docs_text_copied)
     val label = stringResource(R.string.docs_text_field)
+    // System back while correcting leaves the correction (like the top bar's back), not the screen.
+    androidx.activity.compose.BackHandler(enabled = editing) { editing = false }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbar) },
@@ -202,7 +204,7 @@ private fun PageWithHighlights(vm: AppViewModel, docId: String, s: AppViewModel.
  */
 @Composable
 fun TxtExportRow(vm: AppViewModel, docId: String) {
-    val busy = vm.exportState.value != null || vm.busy.value > 0
+    val busy = vm.exportState.value != null || vm.busy.intValue > 0
     val saveLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri ->
         if (uri != null) vm.saveTxtTo(docId, uri)
     }

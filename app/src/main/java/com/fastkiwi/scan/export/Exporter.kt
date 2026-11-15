@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 package com.fastkiwi.scan.export
 
+import androidx.core.graphics.scale
 import android.content.Context
 import android.graphics.Bitmap
 import com.fastkiwi.scan.core.Filter
@@ -337,7 +338,7 @@ class Exporter(
         val side = if (bitonal) quality.bitonalLongSide else quality.longSide
         var img = if (max(full.width, full.height) <= side) full else {
             val kk = side.toFloat() / max(full.width, full.height)
-            Bitmap.createScaledBitmap(full, max(1, (full.width * kk).toInt()), max(1, (full.height * kk).toInt()), true)
+            full.scale(max(1, (full.width * kk).toInt()), max(1, (full.height * kk).toInt()))
                 .also { if (it !== full) release(full) }
         }
         val k = img.width.toFloat() / fullW

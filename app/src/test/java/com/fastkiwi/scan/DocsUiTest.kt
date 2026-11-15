@@ -75,7 +75,7 @@ private fun idle(rule: Rule2) {
     rule.waitForIdle()
     rule.waitUntil(30_000) {
         shadowOf(Looper.getMainLooper()).idle()
-        vm.busy.value == 0
+        vm.busy.intValue == 0
     }
     rule.waitForIdle()
 }

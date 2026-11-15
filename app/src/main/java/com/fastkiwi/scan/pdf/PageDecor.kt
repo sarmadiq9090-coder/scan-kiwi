@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 package com.fastkiwi.scan.pdf
 
+import androidx.core.graphics.withTranslation
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
@@ -113,12 +114,11 @@ class PageDecor(private val typeface: Typeface) {
         } else {
             p.color = Color.argb((wm.opacity.coerceIn(0.05f, 1f) * 255).toInt(), 128, 128, 128)
         }
-        canvas.save()
-        canvas.translate(w / 2, h / 2)
-        if (wm.diagonal) canvas.rotate(-Math.toDegrees(atan2(h.toDouble(), w.toDouble())).toFloat())
-        val fm = p.fontMetrics
-        canvas.drawText(text, 0f, -(fm.ascent + fm.descent) / 2, p)
-        canvas.restore()
+        canvas.withTranslation(w / 2, h / 2) {
+            if (wm.diagonal) rotate(-Math.toDegrees(atan2(h.toDouble(), w.toDouble())).toFloat())
+            val fm = p.fontMetrics
+            drawText(text, 0f, -(fm.ascent + fm.descent) / 2, p)
+        }
     }
 
     companion object {

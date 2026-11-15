@@ -10,7 +10,6 @@
     <string name="docs_sort_date">الأحدث أولاً</string>
     <string name="docs_sort_name">حسب الاسم</string>
     <string name="docs_sort_size">الأكبر حجماً</string>
-    <string name="docs_sort_by">الترتيب: %1$s</string>
     <string name="docs_favorite_add">إضافة «%1$s» إلى المفضلة</string>
     <string name="docs_favorite_remove">إزالة «%1$s» من المفضلة</string>
     <string name="docs_favorite">مفضّل</string>

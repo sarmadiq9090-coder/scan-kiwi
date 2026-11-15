@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 package com.fastkiwi.scan.search
 
+import androidx.core.database.sqlite.transaction
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteException
 import com.fastkiwi.scan.data.DocumentStore
@@ -43,16 +44,12 @@ class SearchIndex(private val file: File) {
         val d = SQLiteDatabase.openOrCreateDatabase(file, null)
         try {
             if (d.version != VERSION) {
-                d.beginTransaction()
-                try {
-                    d.execSQL("DROP TABLE IF EXISTS pages")
-                    d.execSQL("DROP TABLE IF EXISTS page_fts")
-                    d.execSQL("CREATE TABLE pages(id INTEGER PRIMARY KEY, doc_id TEXT NOT NULL, page_id TEXT NOT NULL, stamp TEXT NOT NULL, UNIQUE(doc_id, page_id))")
-                    d.execSQL("CREATE VIRTUAL TABLE page_fts USING fts4(body, tokenize=simple)")
-                    d.version = VERSION
-                    d.setTransactionSuccessful()
-                } finally {
-                    d.endTransaction()
+                d.transaction {
+                    execSQL("DROP TABLE IF EXISTS pages")
+                    execSQL("DROP TABLE IF EXISTS page_fts")
+                    execSQL("CREATE TABLE pages(id INTEGER PRIMARY KEY, doc_id TEXT NOT NULL, page_id TEXT NOT NULL, stamp TEXT NOT NULL, UNIQUE(doc_id, page_id))")
+                    execSQL("CREATE VIRTUAL TABLE page_fts USING fts4(body, tokenize=simple)")
+                    version = VERSION
                 }
             }
             return d
@@ -75,8 +72,7 @@ class SearchIndex(private val file: File) {
             while (c.moveToNext()) rows[c.getString(0)] = c.getLong(1) to c.getString(2)
         }
         var changed = 0
-        d.beginTransaction()
-        try {
+        d.transaction {
             val live = HashSet<String>()
             for (p in doc.pages) {
                 live.add(p.id)
@@ -99,9 +95,6 @@ class SearchIndex(private val file: File) {
                 d.execSQL("DELETE FROM page_fts WHERE docid = ?", arrayOf<Any>(row.first))
                 d.execSQL("DELETE FROM pages WHERE id = ?", arrayOf<Any>(row.first))
             }
-            d.setTransactionSuccessful()
-        } finally {
-            d.endTransaction()
         }
         return changed
     }
@@ -120,13 +113,9 @@ class SearchIndex(private val file: File) {
     @Synchronized
     fun removeDoc(docId: String) {
         val d = db()
-        d.beginTransaction()
-        try {
-            d.execSQL("DELETE FROM page_fts WHERE docid IN (SELECT id FROM pages WHERE doc_id = ?)", arrayOf(docId))
-            d.execSQL("DELETE FROM pages WHERE doc_id = ?", arrayOf(docId))
-            d.setTransactionSuccessful()
-        } finally {
-            d.endTransaction()
+        d.transaction {
+            execSQL("DELETE FROM page_fts WHERE docid IN (SELECT id FROM pages WHERE doc_id = ?)", arrayOf(docId))
+            execSQL("DELETE FROM pages WHERE doc_id = ?", arrayOf(docId))
         }
     }
 

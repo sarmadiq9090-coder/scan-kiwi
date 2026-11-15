@@ -1,10 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- 2.0 strings: PDF tools, export integrity, redo, protection. English. Keep keys identical in values/ and values-en/. -->
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
     <!-- Editor: redo, drag and drop, selection -->
     <string name="redo">Redo</string>
     <string name="pdf_msg_redone">Redone</string>
-    <string name="pdf_drag_hint">Touch and hold, then drag to reorder</string>
     <string name="pdf_drag_moving">Page %1$s to position %2$s</string>
     <string name="pdf_select_pages">Select pages</string>
     <string name="pdf_select_all">Select all</string>
@@ -24,7 +23,7 @@
     <!-- Split / ranges -->
     <string name="pdf_split_by_ranges">By ranges</string>
     <string name="pdf_split_every_n">Every N pages</string>
-    <string name="pdf_ranges_label">Pages, e.g. 1-3, 5, 8-</string>
+    <string name="pdf_ranges_label" tools:ignore="TypographyDashes">Pages, e.g. 1-3, 5, 8-</string>
     <string name="pdf_ranges_split_hint">Each comma-separated part becomes its own file.</string>
     <string name="pdf_every_n_label">Pages in each part</string>
     <plurals name="pdf_split_result">
@@ -32,7 +31,7 @@
         <item quantity="other">%d parts will be made</item>
     </plurals>
     <string name="pdf_range_err_empty">Type the page numbers</string>
-    <string name="pdf_range_err_syntax">Not understood. Example: 1-3, 5</string>
+    <string name="pdf_range_err_syntax" tools:ignore="TypographyDashes">Not understood. Example: 1-3, 5</string>
     <string name="pdf_range_err_range">Page number outside the document (1 to %1$s)</string>
     <string name="pdf_range_err_reversed">Range starts after it ends</string>
     <string name="pdf_extract_name">%1$s (pages %2$s)</string>
@@ -117,7 +116,6 @@
     <string name="pdf_tool_text_hint">The text written in the file, in reading order</string>
     <string name="pdf_tool_jpg">Convert pages to JPG images</string>
     <string name="pdf_tool_jpg_hint">One image per page</string>
-    <string name="pdf_tool_needs_one">Choose one file for this tool</string>
     <string name="pdf_tool_needs_two">Choose at least two files to merge</string>
     <string name="pdf_all_pages">All pages</string>
     <string name="pdf_rotate_right">90° right</string>

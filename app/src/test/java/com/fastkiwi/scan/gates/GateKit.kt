@@ -50,7 +50,7 @@ object Gates {
     /** Waits until no background job of [vm] runs. */
     fun awaitIdle(vm: AppViewModel, ms: Long = 60_000): Boolean {
         idleMain()
-        return pump(ms) { vm.busy.value == 0 && vm.exportState.value == null }.also { idleMain() }
+        return pump(ms) { vm.busy.intValue == 0 && vm.exportState.value == null }.also { idleMain() }
     }
 
     /** The next export result (only for a view model without UI collecting its results). */

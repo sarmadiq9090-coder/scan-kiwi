@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 package com.fastkiwi.scan.ocr
 
+import androidx.core.content.edit
 import android.content.Context
 
 /**
@@ -25,13 +26,13 @@ class OcrDiagnostics(ctx: Context) {
 
     fun record(sel: OcrSelection, millis: Long, peakHeapBytes: Long) {
         val recent = (listOf(millis) + snapshot().recentMillis).take(5)
-        p.edit()
-            .putLong("last_ms", millis)
-            .putString("recent_ms", recent.joinToString(","))
-            .putLong("peak_heap", maxOf(peakHeapBytes, 0L))
-            .putString("effective", sel.effective.name)
-            .putString("fallback", sel.fallback?.name ?: "")
-            .apply()
+        p.edit {
+            putLong("last_ms", millis)
+            putString("recent_ms", recent.joinToString(","))
+            putLong("peak_heap", maxOf(peakHeapBytes, 0L))
+            putString("effective", sel.effective.name)
+            putString("fallback", sel.fallback?.name ?: "")
+        }
     }
 
     fun snapshot() = Snapshot(

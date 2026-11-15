@@ -215,8 +215,9 @@ private fun lowMemorySummary(m: com.fastkiwi.scan.perf.MemoryBudget.Mode) =
 private fun ocrModeLabel(m: OcrMode) = if (m == OcrMode.ACCURATE) R.string.ocr_mode_accurate else R.string.ocr_mode_fast
 private fun ocrModeHint(m: OcrMode) = if (m == OcrMode.ACCURATE) R.string.ocr_mode_accurate_hint else R.string.ocr_mode_fast_hint
 
-private fun seconds(ms: Long) = String.format(java.util.Locale.ROOT, "%.1f", ms / 1000.0)
-private fun megabytes(bytes: Long) = (bytes / (1024 * 1024)).toString()
+// The app's own digits (Arabic-Indic in Arabic), like every other number on screen.
+private fun seconds(ms: Long) = String.format(java.util.Locale.getDefault(), "%.1f", ms / 1000.0)
+private fun megabytes(bytes: Long) = LocalFormat.count((bytes / (1024 * 1024)).toInt())
 
 @Composable
 private fun ocrDiagSummary(d: OcrDiagnostics.Snapshot): String =

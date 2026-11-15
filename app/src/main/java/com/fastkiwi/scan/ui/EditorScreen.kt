@@ -132,6 +132,7 @@ fun EditorScreen(vm: AppViewModel, docId: String, snackbar: SnackbarHostState) {
     var selection by remember(docId) { mutableStateOf<Set<String>?>(null) } // null = not selecting
     var confirmDeleteSelected by remember { mutableStateOf(false) }
     val ctx = LocalContext.current
+    val res = androidx.compose.ui.platform.LocalResources.current
     val scope = rememberCoroutineScope()
 
     val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
@@ -196,8 +197,8 @@ fun EditorScreen(vm: AppViewModel, docId: String, snackbar: SnackbarHostState) {
                                 menu = false
                                 scope.launch {
                                     val t = vm.documentText(docId)
-                                    if (t != null) { copyText(ctx, t); snackbar.showSnackbar(ctx.getString(R.string.pdf_msg_text_copied)) }
-                                    else snackbar.showSnackbar(ctx.getString(R.string.pdf_msg_no_text))
+                                    if (t != null) { copyText(ctx, t); snackbar.showSnackbar(res.getString(R.string.pdf_msg_text_copied)) }
+                                    else snackbar.showSnackbar(res.getString(R.string.pdf_msg_no_text))
                                 }
                             })
                             DropdownMenuItem(

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 package com.fastkiwi.scan.pdf
 
+import androidx.core.graphics.createBitmap
 import android.graphics.Bitmap
 import android.graphics.Color
 import com.fastkiwi.scan.core.Filter
@@ -72,7 +73,7 @@ class KiwiPdfEngine(private val store: DocumentStore) : PdfEngine<ScanDocument> 
     fun blankPage(docId: String, size: Pair<Int, Int>): ScanPage {
         val (w, h) = size
         val k = minOf(1f, BLANK_MAX_SIDE.toFloat() / maxOf(w, h))
-        val bmp = Bitmap.createBitmap(maxOf(1, (w * k).toInt()), maxOf(1, (h * k).toInt()), Bitmap.Config.ARGB_8888)
+        val bmp = createBitmap(maxOf(1, (w * k).toInt()), maxOf(1, (h * k).toInt()))
         bmp.eraseColor(Color.WHITE)
         val id = DocumentStore.newId()
         BitmapIO.saveJpeg(bmp, store.srcFile(docId, id), 92)

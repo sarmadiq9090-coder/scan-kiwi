@@ -1,11 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
     <string name="app_name">Scan Kiwi</string>
     <string name="default_doc_name">Scan %1$s</string>
     <string name="scan">Scan</string>
     <string name="settings">Settings</string>
     <string name="import_files">Import images or PDF</string>
-    <string name="search_hint">Search names or text</string>
     <string name="clear_search">Clear search</string>
     <string name="clear_selection">Clear selection</string>
     <string name="no_results">No results</string>
@@ -16,8 +15,8 @@
     <string name="delete">Delete</string>
     <string name="rename">Rename</string>
     <string name="select">Select</string>
-    <string name="selected">Selected</string>
-    <string name="not_selected">Not selected</string>
+    <string name="selected" tools:override="true">Selected</string>
+    <string name="not_selected" tools:override="true">Not selected</string>
     <string name="share_pdf">Share PDF</string>
     <string name="more_options_for">More options for %1$s</string>
     <string name="document_name">Document name</string>
@@ -40,21 +39,18 @@
     <string name="id_back_hint">Now capture the back</string>
     <string name="id_now_back">Front done. Turn the card over.</string>
     <string name="msg_id_added">Both sides of the card were added on one page</string>
-    <string name="torch_on">Turn flash on</string>
-    <string name="torch_off">Turn flash off</string>
     <string name="take_photo">Take photo</string>
-    <string name="done_with_count">Done, %1$d pages</string>
+    <string name="done_with_count">Done, pages: %1$d</string>
     <string name="status_searching">Point the camera at a page</string>
     <string name="status_move_closer">Move closer</string>
     <string name="status_found">Page found</string>
     <string name="status_hold">Hold steady…</string>
     <string name="status_capturing">Capturing…</string>
-    <string name="status_added">Page %1$d added</string>
+    <string name="status_added" tools:ignore="PluralsCandidate">Page %1$d added</string>
     <string name="status_error">Camera unavailable</string>
     <string name="status_next_page">Page captured. Turn to the next one</string>
 
     <string name="export">Export</string>
-    <string name="add_page_camera">Add page with camera</string>
     <string name="no_pages">No pages</string>
     <string name="page_n_of">Page %1$d of %2$d</string>
     <string name="edit_page">Edit page</string>
@@ -69,25 +65,16 @@
     <string name="retake">Retake</string>
     <string name="delete_page">Delete page</string>
     <string name="delete_page_body">This page will be permanently deleted.</string>
-    <string name="previous_page">Previous page</string>
-    <string name="next_page">Next page</string>
-    <string name="filter">Look</string>
     <string name="filter_original">Original</string>
     <string name="filter_enhanced">Enhanced colour</string>
     <string name="filter_whiten">Remove shadows</string>
     <string name="filter_gray">Grayscale</string>
     <string name="filter_bw">Black &amp; white</string>
 
-    <string name="crop_hint">Drag the corners or side midpoints to the page edges. They snap to detected edges when close.</string>
     <string name="crop_area_desc">Crop area. Use the All, Re-detect or Rotate buttons.</string>
-    <string name="auto_detect">Auto detect</string>
-    <string name="whole_image">Whole image</string>
-    <string name="apply">Apply</string>
 
     <string name="format">Format</string>
     <string name="page_size">Page size</string>
-    <string name="size_a4">A4</string>
-    <string name="size_letter">Letter</string>
     <string name="size_fit">Fit to image</string>
     <string name="quality">Quality and size</string>
     <string name="quality_small">Small</string>
@@ -107,7 +94,6 @@
     <string name="password_ascii_hint">Latin letters, digits and symbols only, so every PDF reader can open it.</string>
     <string name="show_password">Show password</string>
     <string name="hide_password">Hide password</string>
-    <string name="processing_page">Processing page %1$d of %2$d</string>
     <string name="share">Share</string>
     <string name="save_to_device">Save to device</string>
     <string name="share_via">Share via</string>
@@ -137,7 +123,6 @@
     <string name="crop_problem_concave">The shape bends inwards: drag the corner outwards.</string>
     <string name="crop_problem_small">The area is too small.</string>
     <string name="crop_fix">Fix</string>
-    <string name="adjust_last_page">Adjust the crop of the last page</string>
     <string name="review_after_capture">Review crop after each shot</string>
     <string name="review_after_capture_hint">Opens the crop screen after a manual photo. With auto capture, only unclear pages are reviewed.</string>
     <string name="undo">Undo</string>
@@ -154,8 +139,6 @@
     <string name="signature_size">Signature size</string>
     <string name="signature_redraw">Draw again</string>
     <string name="signature_remove">Remove signatures</string>
-    <string name="size_legal">Legal</string>
-    <string name="size_a5">A5</string>
     <string name="estimated_size">Estimated size about %1$s</string>
     <string name="estimating_size">Estimating size…</string>
     <string name="name_suggestion">Suggestion: %1$s</string>
@@ -164,7 +147,6 @@
 
     <!-- v1.2 -->
     <string name="feedback_title">Report a problem or suggestion</string>
-    <string name="feedback_short">Report</string>
     <string name="feedback_settings_hint">Tell us about a problem or an idea. It opens your mail app or browser, and you send it.</string>
     <string name="feedback_report_this">Report this problem</string>
     <string name="feedback_privacy">No document or image is sent. You see everything before it is sent.</string>
@@ -181,7 +163,6 @@
     <string name="feedback_no_mail_app">No e-mail app on this phone. Try "On GitHub".</string>
     <string name="feedback_no_browser">No browser on this phone. Try "By e-mail".</string>
     <string name="updates_title">Updates</string>
-    <string name="updates_body">Updating by hand: download the APK from the releases page and install it over this one; your documents stay. Android only accepts an update signed with the same key.</string>
     <string name="pdfa_title">Archival (PDF/A)</string>
     <string name="pdfa_hint">PDF/A-2b for long-term keeping. Cannot be combined with a password.</string>
 
@@ -245,8 +226,8 @@
     <string name="auto_short">Auto</string>
     <string name="edit_edges_action">Edit</string>
     <string name="flash">Flash</string>
-    <string name="state_on">On</string>
-    <string name="state_off">Off</string>
+    <string name="state_on" tools:override="true">On</string>
+    <string name="state_off" tools:override="true">Off</string>
     <string name="size_kb">%1$s KB</string>
     <string name="size_mb">%1$s MB</string>
     <string name="whats_new_line">New in this version: a clearer design with buttons in fixed places, one Arabic UI font, dark theme, "Report a problem", faster sharing with Cancel, and an archival PDF/A option.</string>

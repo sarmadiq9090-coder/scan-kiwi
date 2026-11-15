@@ -24,7 +24,7 @@ object ArabicNormalizer {
     /** Normalises one character; returns 0 for characters to drop entirely, ' ' for separators. */
     fun fold(c: Char): Char = when (c) {
         in 'ً'..'ٟ', 'ٰ', in 'ۖ'..'ۭ', in 'ؐ'..'ؚ', 'ـ' -> DROP
-        '​', '‌', '‍', '‎', '‏', '؜', '﻿', in '‪'..'‮', in '⁦'..'⁩' -> DROP
+        '\u200B', '\u200C', '\u200D', '\u200E', '\u200F', '\u061C', '\uFEFF', in '\u202A'..'\u202E', in '\u2066'..'\u2069' -> DROP
         'أ', 'إ', 'آ', 'ٱ' -> 'ا'
         'ى', 'ی' -> 'ي'
         'ة' -> 'ه'

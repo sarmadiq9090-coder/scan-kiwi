@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 package com.fastkiwi.scan.imaging
 
+import androidx.core.graphics.createBitmap
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
@@ -20,7 +21,7 @@ object IdCardComposer {
     fun compose(front: Bitmap, back: Bitmap): Bitmap {
         val pageW = mm(210f).toInt()
         val pageH = mm(297f).toInt()
-        val out = Bitmap.createBitmap(pageW, pageH, Bitmap.Config.ARGB_8888)
+        val out = createBitmap(pageW, pageH)
         val c = Canvas(out)
         c.drawColor(Color.WHITE)
         val paint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)

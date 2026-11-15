@@ -94,6 +94,7 @@ class SafeOutput(
         const val PART = ".part"
         const val SPACE_FACTOR = 1.2
 
+        @android.annotation.SuppressLint("UsableSpace") // conservative on purpose: never count clearable caches as free
         fun usable(dir: File?): Long {
             var d = dir
             while (d != null && !d.exists()) d = d.parentFile

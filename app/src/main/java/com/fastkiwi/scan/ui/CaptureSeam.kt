@@ -3,7 +3,6 @@
 package com.fastkiwi.scan.ui
 
 import android.graphics.Bitmap
-import androidx.annotation.VisibleForTesting
 
 /**
  * 2.0-gates: test seam for the camera. Robolectric (and an emulator without a camera)
@@ -22,7 +21,7 @@ object CaptureSeam {
         fun takePicture(): Pair<ByteArray, Int>?
     }
 
-    @VisibleForTesting
+    /** Set by tests only (black-box driver, UI tests); production code only reads it. */
     @Volatile
     var camera: FakeCamera? = null
 }
