@@ -21,6 +21,8 @@ android {
     namespace = "com.fastkiwi.scan"
     compileSdk = 36
     buildToolsVersion = "36.0.0"
+    // 2.0-ocr: the NDK GitHub's ubuntu-24.04 runner ships as its default (CI builds the MNN JNI glue).
+    ndkVersion = "27.3.13750724"
 
     defaultConfig {
         applicationId = "com.fastkiwi.scan"
@@ -31,8 +33,15 @@ android {
         // Arabic is the default (values/), English in values-en/.
         resourceConfigurations += listOf("ar", "en")
         ndk {
-            // Real phones (arm64 / armv7) plus x86_64 for emulators and Chromebooks.
-            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
+            // 2.0-ocr: real phones only (arm64 / armv7). x86_64 was dropped in the 1.5 plan: MNN has no
+            // official x86_64 Android build and it would add ~3.4 MB.
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a")
+        }
+        // 2.0-ocr: JNI glue for MNN (Accurate OCR). libc++_shared because the official libMNN.so needs it.
+        externalNativeBuild {
+            cmake {
+                arguments += listOf("-DANDROID_STL=c++_shared")
+            }
         }
     }
 
@@ -59,6 +68,14 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    // 2.0-ocr: builds app/src/main/cpp (kiwi_mnn) against the pinned libMNN.so.
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.31.5"
+        }
     }
 
     buildFeatures {

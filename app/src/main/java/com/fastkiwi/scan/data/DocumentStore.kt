@@ -3,6 +3,9 @@
 package com.fastkiwi.scan.data
 
 import com.fastkiwi.scan.core.OcrWord
+import com.fastkiwi.scan.ocr.OcrEngineKey
+import com.fastkiwi.scan.ocr.OcrResult
+import com.fastkiwi.scan.ocr.OcrResultCodec
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -106,9 +109,10 @@ class DocumentStore(root: File) {
     val signatureFile = File(root, "signature/signature.png")
 
     // --------------------------------------------------------------- OCR cache
+    // 2.0-ocr: format 2 (engine id/version, lines, confidences) via OcrResultCodec; 1.2 files stay readable.
 
     /**
-     * Caches recognised words. [frameWidth] x [frameHeight] is the size of the image the
+     * Caches recognised words (1.2 format). [frameWidth] x [frameHeight] is the size of the image the
      * boxes are measured in; without it a later export cannot place them (see [loadOcrFrame]).
      */
     fun saveOcr(docId: String, page: ScanPage, words: List<OcrWord>, lang: String? = null, frameWidth: Int = 0, frameHeight: Int = 0) {
@@ -120,47 +124,48 @@ class DocumentStore(root: File) {
         writeAtomically(ocrFile(docId, page.id)) { it.write(o.toString().toByteArray(Charsets.UTF_8)) }
     }
 
+    /** Caches a whole OCR result (format 2: engine, lines, confidences; boxes in the result's frame). */
+    fun saveOcr(docId: String, page: ScanPage, result: OcrResult, lang: String, maxSide: Int) {
+        val json = OcrResultCodec.encode(page.revision, result, lang, maxSide)
+        writeAtomically(ocrFile(docId, page.id)) { it.write(json.toByteArray(Charsets.UTF_8)) }
+    }
+
+    /** The cache file as stored, or null (missing, unreadable, or another revision of the page). */
+    private fun readOcr(docId: String, page: ScanPage): OcrResultCodec.Decoded? {
+        val f = ocrFile(docId, page.id)
+        if (!f.exists()) return null
+        val d = runCatching { OcrResultCodec.decode(f.readText()) }.getOrNull() ?: return null
+        return d.takeIf { it.revision == page.revision }
+    }
+
     /** Cached words with the size of the image their boxes are measured in. */
     class FramedOcr(val words: List<OcrWord>, val frameWidth: Int, val frameHeight: Int)
 
     /**
-     * Cached OCR for an export: as [loadOcr] with a language, and only if the cache recorded
+     * Cached OCR for an export: as [loadOcr] with a language (and engine), and only if the cache recorded
      * its coordinate frame. Caches from 1.1.x and early 1.2.0 builds did not, and their boxes
      * could be in any frame from 1700 to 3200 px, so an export reads such a page again
      * rather than misplace the text layer.
      */
-    fun loadOcrFrame(docId: String, page: ScanPage, lang: String): FramedOcr? {
-        val f = ocrFile(docId, page.id)
-        if (!f.exists()) return null
-        val words = loadOcr(docId, page, lang) ?: return null
-        return runCatching {
-            val frame = JSONObject(f.readText()).optJSONArray("frame") ?: return null
-            val w = frame.getInt(0)
-            val h = frame.getInt(1)
-            if (w <= 0 || h <= 0) return null
-            FramedOcr(words, w, h)
-        }.getOrNull()
+    fun loadOcrFrame(docId: String, page: ScanPage, lang: String, engine: OcrEngineKey? = null): FramedOcr? {
+        val words = loadOcr(docId, page, lang, engine) ?: return null
+        val d = readOcr(docId, page) ?: return null
+        if (d.frameWidth <= 0 || d.frameHeight <= 0) return null
+        return FramedOcr(words, d.frameWidth, d.frameHeight)
     }
 
     /**
-     * Cached OCR words if they match the page's current revision and, when [lang] is
-     * given (an export), the OCR language too: words read as English only must not
-     * stand in for an Arabic + English export. Search passes no language and uses any
-     * cached text, including 1.1.x caches that did not record one.
+     * Cached OCR words in reading order, if they match the page's current revision and, when [lang] is
+     * given (an export), the OCR language too: words read as English only must not stand in for an
+     * Arabic + English export. When [engine] is given, only that engine's words (an Accurate export
+     * does not reuse Fast words). Search passes neither and uses any cached text, including 1.1.x caches.
+     * This is the one place cached words are read.
      */
-    fun loadOcr(docId: String, page: ScanPage, lang: String? = null): List<OcrWord>? {
-        val f = ocrFile(docId, page.id)
-        if (!f.exists()) return null
-        return runCatching {
-            val o = JSONObject(f.readText())
-            if (o.optInt("revision", -1) != page.revision) return null
-            if (lang != null && o.optString("lang") != lang) return null
-            val arr = o.getJSONArray("words")
-            List(arr.length()) {
-                val a = arr.getJSONArray(it)
-                OcrWord(a.getString(0), a.getInt(1), a.getInt(2), a.getInt(3), a.getInt(4))
-            }
-        }.getOrNull()
+    fun loadOcr(docId: String, page: ScanPage, lang: String? = null, engine: OcrEngineKey? = null): List<OcrWord>? {
+        val d = readOcr(docId, page) ?: return null
+        if (lang != null && d.lang != lang) return null
+        if (engine != null && d.engine != engine) return null
+        return d.words
     }
 
     /** Plain recognised text of a document, for in-app search. */
