@@ -97,6 +97,12 @@ fun PageScreen(vm: AppViewModel, docId: String, startIndex: Int, snackbar: Snack
                             leadingIcon = { Icon(KiwiIcons.rotateLeft(), null) },
                             onClick = { menu = false; vm.editPage(docId, page.id) { it.copy(rotation = (it.rotation + 270) % 360) } },
                         )
+                        // 2.0-cam2: automatic alignment on demand (PRD §4.2).
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.straighten)) },
+                            leadingIcon = { Icon(KiwiIcons.crop(), null) },
+                            onClick = { menu = false; vm.straightenPage(docId, page.id) },
+                        )
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.delete_page), color = MaterialTheme.colorScheme.error) },
                             leadingIcon = { Icon(KiwiIcons.delete(), null, tint = MaterialTheme.colorScheme.error) },

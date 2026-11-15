@@ -318,8 +318,10 @@ private fun CameraContent(vm: AppViewModel, initial: Screen.Camera, onClose: () 
                     // 2.0: quality on the same frame; auto-capture waits for a whole, sharp, steady page.
                     val (warning, sharp) = liveWarning(gray, det, norm)
                     val confident = det?.confident == true && warning != QualityWarning.INCOMPLETE
+                    // 2.0-cam2 (CAM-06): the page's content decides re-arming, not only its outline.
+                    val content = if (det != null && autoFlag.get()) runCatching { QualityMetrics.contentSignature(gray, det.quad) }.getOrNull() else null
                     val u = synchronized(gate) {
-                        gate.feed(norm, confident, android.os.SystemClock.uptimeMillis(), autoFlag.get(), sharp)
+                        gate.feed(norm, confident, android.os.SystemClock.uptimeMillis(), autoFlag.get(), sharp, content)
                     }
                     ContextCompat.getMainExecutor(ctx).execute { live = Live(u.quad, upright, u.state, u.progress, warning) }
                 } catch (_: Throwable) {

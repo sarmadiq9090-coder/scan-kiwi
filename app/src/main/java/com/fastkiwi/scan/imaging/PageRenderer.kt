@@ -8,12 +8,27 @@ import android.graphics.Color
 import android.graphics.Matrix
 import android.graphics.Paint
 import com.fastkiwi.scan.core.ImageFilters
+import com.fastkiwi.scan.core.PixelStore
 import com.fastkiwi.scan.core.Quad
 import com.fastkiwi.scan.data.DocumentStore
 import com.fastkiwi.scan.data.ScanPage
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlin.math.max
+
+/** 2.0-cam2: a mutable ARGB bitmap as a strip store for [ImageFilters] (getPixels/setPixels per strip). */
+class BitmapPixels(private val bmp: Bitmap) : PixelStore {
+    override val width: Int get() = bmp.width
+    override val height: Int get() = bmp.height
+
+    override fun read(y0: Int, rows: Int, dst: IntArray, offset: Int) {
+        bmp.getPixels(dst, offset, bmp.width, 0, y0, bmp.width, rows)
+    }
+
+    override fun write(y0: Int, rows: Int, src: IntArray, offset: Int) {
+        bmp.setPixels(src, offset, bmp.width, 0, y0, bmp.width, rows)
+    }
+}
 
 /**
  * Turns a page source into the final page: perspective correction (crop),
@@ -41,11 +56,10 @@ object PageRenderer {
     fun render(src: Bitmap, page: ScanPage, signature: Bitmap? = null): Bitmap {
         val warped = warp(src, page.corners)
         val rotated = BitmapIO.rotate(warped, page.rotation)
-        val px = IntArray(rotated.width * rotated.height)
-        rotated.getPixels(px, 0, rotated.width, 0, 0, rotated.width, rotated.height)
-        ImageFilters.apply(page.filter, px, rotated.width, rotated.height)
         val out = if (rotated.isMutable) rotated else rotated.copy(Bitmap.Config.ARGB_8888, true).also { rotated.recycle() }
-        out.setPixels(px, 0, out.width, 0, 0, out.width, out.height)
+        // 2.0-cam2 (A8): the filter (with its noise reduction) works on the bitmap in strips, so
+        // no second full-size pixel copy is made, whatever the page size.
+        ImageFilters.apply(page.filter, BitmapPixels(out))
         if (signature != null) drawStamps(out, page.stamps, signature)
         return out
     }

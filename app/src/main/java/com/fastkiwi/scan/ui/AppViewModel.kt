@@ -432,7 +432,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 val retake = target.retakePageId
                 val keepFilter = retake?.let { id -> doc.pages.firstOrNull { it.id == id }?.filter }
                 // The heavy work (encode, render) happens outside the lock...
-                val newPage = addSource(doc.id, bmp, corners, keepFilter ?: settings.defaultFilter).copy(quality = quality) // 2.0-cam: quality report
+                // 2.0-cam2: automatic alignment (PRD §4.2): a small residual skew the report measured is
+                // removed by turning the outline (one warp, nothing invented); Undo or «قص» brings it back.
+                val straight = if (corners != null && quality != null) {
+                    com.fastkiwi.scan.core.Deskew.straighten(corners, bmp.width, bmp.height, quality.skewDegrees)
+                } else null
+                val pageQuality = if (straight != null) quality?.copy(skewDegrees = 0f) else quality
+                val newPage = addSource(doc.id, bmp, straight ?: corners, keepFilter ?: settings.defaultFilter).copy(quality = pageQuality) // 2.0-cam: quality report
                 bmp.recycle()
                 // 2.0-cam: glare found -> the camera offers a second shot from another angle.
                 glareOffer.value = if (retake == null && quality != null && com.fastkiwi.scan.core.GlareFusion.needsSecondShot(quality.glare)) doc.id to newPage.id else null
@@ -802,6 +808,24 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Removes a page from the document; its files stay until restart so Undo works. */
     fun deletePage(docId: String, index: Int) = mutatePages(docId, UiMessage(R.string.msg_page_deleted, undoDocId = docId)) { p ->
         if (index in p.indices) p.removeAt(index)
+    }
+
+    // 2.0-cam2: «تسوية الميل» in the page screen (automatic alignment on demand, imports too).
+    /** Measures the page's residual skew now and turns its outline by it (an ordinary, undoable crop edit). */
+    fun straightenPage(docId: String, pageId: String) {
+        viewModelScope.launch {
+            val turned = job("STRAIGHTEN") {
+                val page = store.load(docId)?.pages?.firstOrNull { it.id == pageId } ?: return@job null
+                com.fastkiwi.scan.imaging.AutoStraighten.measureAndTurn(store, docId, page)
+            }
+            if (turned == null) {
+                _messages.send(UiMessage(R.string.straighten_none))
+                return@launch
+            }
+            val (page, degrees) = turned
+            editPage(docId, pageId) { cur -> if (cur.corners == page.corners || cur.revision != page.revision) cur else cur.copy(corners = page.corners, quality = page.quality) }
+            _messages.send(UiMessage(R.string.straighten_done, String.format(Locale.getDefault(), "%.1f", kotlin.math.abs(degrees)), undoDocId = docId))
+        }
     }
 
     /** Applies an edit to one page and re-renders it. Edits apply in order, each to the latest page state. */

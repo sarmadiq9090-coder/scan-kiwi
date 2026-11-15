@@ -33,4 +33,8 @@
     <string name="book_split_add">Split and add 2 pages</string>
     <string name="book_retake">Retake</string>
     <string name="book_added">2 pages added</string>
+    <!-- 2.0-cam2: automatic alignment (deskew) -->
+    <string name="straighten">Straighten</string>
+    <string name="straighten_done">Page straightened by %1$s°. To undo: Undo or Crop.</string>
+    <string name="straighten_none">The page is straight; nothing to straighten.</string>
 </resources>

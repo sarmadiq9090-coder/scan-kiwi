@@ -13,7 +13,11 @@ package com.fastkiwi.scan.core
  *    so a single bad frame neither moves the outline nor restarts the countdown;
  *  - 2.0 (CAM-03): the countdown waits while the frame is blurry or the phone is moving;
  *  - after a shot the gate stays closed until the page changes (it leaves the
- *    view, or moves by more than [rearmShift]), so a page is never captured twice.
+ *    view, or moves by more than [rearmShift]), so a page is never captured twice;
+ *  - 2.0-cam2 (CAM-06, [DetectionConfig.contentRearm]): with a content signature
+ *    ([QualityMetrics.contentSignature]) the page itself decides: the page just taken, seen again
+ *    after the phone moved or the page was lifted and put back, is not taken again; a new page
+ *    laid on the same spot (outline unchanged) re-arms after [DetectionConfig.contentChangeFrames].
  *
  * Corners are smoothed for display. Pure Kotlin, unit-tested.
  */
@@ -39,23 +43,41 @@ class AutoCapture(
     private var lastTime = 0L
     /** State of the last frame that had an outline and no countdown (FOUND, TOO_SMALL, BLURRY, MOVING). */
     private var lastSeen = State.FOUND
+    /** 2.0-cam2: content of the last frame, and of the page last taken (survives the page leaving the view). */
+    private var lastContent: FloatArray? = null
+    private var firedContent: FloatArray? = null
+    private var changedFrames = 0
 
     fun reset() {
         smooth = null; anchor = null; misses = 0; firedQuad = null; history.clear(); lastRaw = null
+        lastContent = null; firedContent = null; changedFrames = 0
     }
 
     /** Call after a photo was taken (manually or by [State.FIRE]). */
     fun captured(quad: Quad?) {
         firedQuad = quad ?: smooth ?: anchor
+        firedContent = lastContent
+        changedFrames = 0
         anchor = null
+    }
+
+    /** True / false when both signatures are known, null otherwise. */
+    private fun sameAsTaken(content: FloatArray?): Boolean? {
+        val f = firedContent ?: return null
+        val c = content ?: return null
+        return QualityMetrics.similarity(c, f) >= cfg.sameContent
     }
 
     /**
      * Feeds one analysed frame. [quad] is normalised (0..1) or null when no page
      * was found; [confident] comes from the detector; [enabled] is the auto switch;
-     * [sharp] comes from [QualityMetrics.sharpness] on the same frame.
+     * [sharp] comes from [QualityMetrics.sharpness] on the same frame; [content] is the page's
+     * [QualityMetrics.contentSignature] on the same frame (null = unknown: outline rules only).
      */
-    fun feed(quad: Quad?, confident: Boolean, timeMs: Long, enabled: Boolean = true, sharp: Boolean = true): Update {
+    fun feed(quad: Quad?, confident: Boolean, timeMs: Long, enabled: Boolean = true, sharp: Boolean = true, content: FloatArray? = null): Update {
+        val useContent = cfg.contentRearm
+        // A blurred or moving frame's signature is not trusted (the outline may lag the page).
+        if (useContent && quad != null) lastContent = if (sharp) content else null
         if (quad == null) {
             misses++
             if (misses > graceMisses) {
@@ -93,7 +115,12 @@ class AutoCapture(
         }
         val fired = firedQuad
         if (fired != null) {
-            if (med.maxCornerShift(fired) > rearmShift) firedQuad = null
+            val same = if (useContent && sharp) sameAsTaken(content) else null
+            changedFrames = if (same == false) changedFrames + 1 else 0
+            val moved = med.maxCornerShift(fired) > rearmShift
+            // Moved, unless the content says it is still the same page; or new content in place.
+            val rearm = (moved && same != true) || (same == false && changedFrames >= cfg.contentChangeFrames)
+            if (rearm) { firedQuad = null; changedFrames = 0 }
             else return Update(State.CAPTURED, s, 0f)
         }
         lastSeen = State.FOUND
@@ -115,6 +142,12 @@ class AutoCapture(
         if (a == null || med.maxCornerShift(a) > maxShift) {
             anchor = med
             holdStart = timeMs
+        }
+        // The page last taken, back in view (outline moved, or it was lifted and put back): stay closed.
+        if (useContent && sameAsTaken(content) == true) {
+            firedQuad = med
+            anchor = null
+            return Update(State.CAPTURED, s, 0f)
         }
         val p = progress(timeMs)
         return if (p >= 1f) Update(State.FIRE, s, 1f) else Update(State.HOLD, s, p)

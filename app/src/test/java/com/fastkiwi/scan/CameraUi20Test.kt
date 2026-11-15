@@ -59,13 +59,15 @@ class CameraUi20Test {
     }
 
     /** A photo of a white page with text lines on a dark desk; [spread] draws two facing pages. */
-    private fun photo(w: Int = 1200, h: Int = 900, spread: Boolean = false): Bitmap {
+    private fun photo(w: Int = 1200, h: Int = 900, spread: Boolean = false, tiltDegrees: Float = 0f): Bitmap {
         val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
         val c = Canvas(bmp)
         c.drawColor(Color.rgb(70, 52, 40))
         val paper = Paint().apply { color = Color.rgb(238, 236, 230) }
         c.drawRect(w * 0.08f, h * 0.08f, w * 0.92f, h * 0.92f, paper)
         val ink = Paint().apply { color = Color.rgb(40, 40, 45) }
+        // 2.0-cam2: text lines turned on an untouched sheet (a crooked print / residual skew).
+        c.rotate(tiltDegrees, w / 2f, h / 2f)
         for (i in 0 until 16) {
             val y = h * 0.14f + i * h * 0.045f
             if (spread) {
@@ -77,11 +79,11 @@ class CameraUi20Test {
         return bmp
     }
 
-    private fun addPage(quality: PageQuality?): Pair<String, ScanPage> {
+    private fun addPage(quality: PageQuality?, tiltDegrees: Float = 0f): Pair<String, ScanPage> {
         val vm = rule.activity.vm
         val doc = vm.store.create("وثيقة")
         val id = DocumentStore.newId()
-        BitmapIO.saveJpeg(photo(), vm.store.srcFile(doc.id, id), 92)
+        BitmapIO.saveJpeg(photo(tiltDegrees = tiltDegrees), vm.store.srcFile(doc.id, id), 92)
         val page = ScanPage(id, Quad(Pt(0.08f, 0.08f), Pt(0.92f, 0.08f), Pt(0.92f, 0.92f), Pt(0.08f, 0.92f)), 0, Filter.ENHANCED, quality = quality)
         runBlocking { PageRenderer.renderAndSave(vm.store, doc.id, page)?.recycle() }
         vm.store.save(doc.copy(pages = listOf(page)))
@@ -189,5 +191,53 @@ class CameraUi20Test {
             assertTrue("$w x $h -> 1/$s", (w.toLong() / s) * (h.toLong() / s) <= BitmapIO.MAX_DECODE_PIXELS)
         }
         assertEquals(1, BitmapIO.sampleSize(4000, 3000, 3200))
+    }
+
+    /** View-model jobs resume on the main thread: keep its queue draining while waiting. */
+    private fun drainMain(): Boolean {
+        shadowOf(android.os.Looper.getMainLooper()).idle()
+        return true
+    }
+
+    /** Slope of a quad's top edge in degrees, in a [w] x [h] photo. */
+    private fun topSlope(q: Quad, w: Int, h: Int): Double =
+        Math.toDegrees(kotlin.math.atan2(((q.tr.y - q.tl.y) * h).toDouble(), ((q.tr.x - q.tl.x) * w).toDouble()))
+
+    @Test
+    fun straightenTurnsTheOutlineByTheMeasuredSkewAndUndoes() {
+        // 2.0-cam2 (PRD §4.2 automatic alignment): «تسوية الميل» in the page menu.
+        val vm = rule.activity.vm
+        val (docId, page) = addPage(null, tiltDegrees = 2f)
+        val measured = com.fastkiwi.scan.imaging.AutoStraighten.measure(vm.store, docId, page)
+        assertEquals("measured skew", 2f, measured, 0.4f)
+        rule.runOnUiThread { vm.open(Screen.Page(docId, 0)) }
+        rule.waitForIdle()
+        rule.onNodeWithContentDescription("خيارات أخرى").performClick()
+        rule.onNodeWithText("تسوية الميل").assertHeightIsAtLeast(48.dp).performClick()
+        rule.waitUntil(15_000) { drainMain(); vm.store.load(docId)!!.pages[0].corners != page.corners }
+        val turned = vm.store.load(docId)!!.pages[0]
+        assertEquals("outline turned with the text", measured.toDouble(), topSlope(turned.corners, 1200, 900), 0.3)
+        assertTrue(turned.revision > page.revision)
+        // What is left is within the measure's precision, so a second tap changes nothing.
+        val left = com.fastkiwi.scan.imaging.AutoStraighten.measure(vm.store, docId, turned)
+        assertTrue("left $left", kotlin.math.abs(left) < com.fastkiwi.scan.core.Deskew.MIN_DEGREES + 0.2f)
+        // An ordinary crop edit: Undo brings the old outline back.
+        rule.runOnUiThread { vm.undo(docId) }
+        rule.waitUntil(15_000) { drainMain(); vm.store.load(docId)!!.pages[0].corners == page.corners }
+    }
+
+    @Test
+    fun captureStraightensASmallResidualSkew() {
+        // 2.0-cam2: after a shot, the skew the quality report measured is removed automatically.
+        val vm = rule.activity.vm
+        val bytes = java.io.ByteArrayOutputStream().also { photo(tiltDegrees = -1.5f).compress(Bitmap.CompressFormat.JPEG, 92, it) }.toByteArray()
+        var result: com.fastkiwi.scan.ui.CaptureResult? = null
+        var done = false
+        rule.runOnUiThread { vm.addCapture(Screen.Camera(null), bytes, 0, null) { result = it; done = true } }
+        rule.waitUntil(30_000) { drainMain(); done }
+        val r = result!!
+        val p = vm.store.load(r.docId)!!.pages.single()
+        assertEquals("no skew left to warn about", 0f, p.quality!!.skewDegrees, 0f)
+        assertEquals("outline turned with the text", -1.5, topSlope(p.corners, 1200, 900), 0.4)
     }
 }
