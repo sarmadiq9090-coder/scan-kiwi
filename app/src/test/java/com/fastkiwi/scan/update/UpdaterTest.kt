@@ -321,6 +321,15 @@ class UpdaterTest {
         }
     }
 
+    /** Bug hunt 2.0 (S3): only the APK named for the tag's version is taken (not a debug or older build in the same release). */
+    @Test
+    fun theApkMustBeNamedForTheTagsVersion() {
+        fun json(names: List<String>) = "{\"tag_name\":\"v2.1.0\",\"assets\":[" + (names + "SHA256SUMS.txt").joinToString(",") { "{\"name\":\"$it\",\"browser_download_url\":\"https://github.com/x/$it\"}" } + "]}"
+        assertEquals("ScanKiwi-2.1.0.apk", Updater.parse(json(listOf("ScanKiwi-2.1.0-debug.apk", "ScanKiwi-2.1.0.apk")))?.apkName)
+        assertNull(Updater.parse(json(listOf("ScanKiwi-2.0.9.apk"))))
+        assertNull(Updater.parse(json(listOf("ScanKiwi-2.1.0-debug.apk"))))
+    }
+
     @Test
     fun sha256SumsFormats() {
         val h = "a".repeat(64)

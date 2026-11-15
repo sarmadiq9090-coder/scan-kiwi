@@ -126,7 +126,8 @@ class Updater(
                 val name = a.optString("name")
                 when {
                     name == "SHA256SUMS.txt" || name == "SHA256SUMS" -> sums = a
-                    APK_NAME.matches(name) && apk == null -> apk = a
+                    // The release contract: exactly ScanKiwi-<the tag's version>.apk (never another build in the release).
+                    name == "ScanKiwi-$version.apk" && APK_NAME.matches(name) -> apk = a
                 }
             }
             val ap = apk ?: return null
