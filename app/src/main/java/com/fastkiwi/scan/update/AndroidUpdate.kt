@@ -103,17 +103,53 @@ object UpdateInstaller {
     }
 }
 
+/**
+ * What the installer reported, shared between [UpdateInstallReceiver] (which can run when no screen is open)
+ * and the app: whether the app is in front, Android's confirmation screen waiting for the user, and who to tell.
+ */
+object UpdateInstallEvents {
+    /** True between MainActivity.onStart and onStop: only then may the confirmation screen be opened directly. */
+    @Volatile var foreground = false
+
+    /** Android's confirmation screen (from the installer) that could not be opened because the app was in the background. */
+    @Volatile var pending: Intent? = null
+
+    /** Called on the main thread when the installer reported something that changes what the screen shows. */
+    @Volatile var listener: (() -> Unit)? = null
+
+    /** The installer said the install failed (PackageInstaller status other than success or "needs the user"). */
+    @Volatile var failed = false
+}
+
 /** Receives the install status; on «needs the user» it opens Android's own confirmation screen. */
 class UpdateInstallReceiver : BroadcastReceiver() {
     override fun onReceive(ctx: Context, intent: Intent) {
-        when (intent.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE)) {
+        @Suppress("DEPRECATION")
+        val confirm = if (Build.VERSION.SDK_INT >= 33) intent.getParcelableExtra(Intent.EXTRA_INTENT, Intent::class.java) else intent.getParcelableExtra(Intent.EXTRA_INTENT)
+        handle(ctx, intent.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE), confirm)
+    }
+
+    internal fun handle(ctx: Context, status: Int, confirm: Intent?) {
+        when (status) {
             PackageInstaller.STATUS_PENDING_USER_ACTION -> {
-                @Suppress("DEPRECATION")
-                val confirm = if (Build.VERSION.SDK_INT >= 33) intent.getParcelableExtra(Intent.EXTRA_INTENT, Intent::class.java) else intent.getParcelableExtra(Intent.EXTRA_INTENT)
-                confirm?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)?.let { runCatching { ctx.startActivity(it) } }
+                if (confirm == null) return
+                confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                // Android refuses to start an activity from the background (10+): the user left the app during the
+                // download. Keep the screen and let the app offer it when the user comes back (banner «التحديث جاهز للتثبيت»).
+                val opened = UpdateInstallEvents.foreground && runCatching { ctx.startActivity(confirm) }.isSuccess
+                UpdateInstallEvents.pending = if (opened) null else confirm
             }
-            PackageInstaller.STATUS_SUCCESS -> File(ctx.cacheDir, "updates").listFiles()?.forEach { it.delete() }
-            else -> File(ctx.cacheDir, "updates").listFiles()?.forEach { it.delete() }
+            PackageInstaller.STATUS_SUCCESS -> {
+                UpdateInstallEvents.pending = null
+                UpdateInstallEvents.failed = false
+                File(ctx.cacheDir, "updates").listFiles()?.forEach { it.delete() }
+            }
+            else -> {
+                // Failed (or aborted by the user): the verified file stays so «try again» does not download it again.
+                UpdateInstallEvents.pending = null
+                UpdateInstallEvents.failed = true
+            }
         }
+        UpdateInstallEvents.listener?.invoke() // a broadcast receiver runs on the main thread
     }
 }

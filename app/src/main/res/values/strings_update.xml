@@ -27,5 +27,10 @@
     <string name="update_err_signature">الملف المنزَّل غير موقّع بمفتاح التطبيق، فحُذف ولم يُثبَّت.</string>
     <string name="update_err_not_newer">هذا الإصدار ليس أحدث من المثبّت.</string>
     <string name="update_err_storage">تعذّر حفظ الملف أو فتح المثبّت. حاول مرة أخرى.</string>
+    <string name="update_err_install">لم يُثبَّت التحديث. حاول مرة أخرى.</string>
+    <string name="update_retry">حاول مرة أخرى</string>
+    <string name="update_ready_title">التحديث جاهز للتثبيت</string>
+    <string name="update_ready_body">انتهى تنزيل التحديث. اضغط «تثبيت» ثم أكّد في شاشة أندرويد.</string>
+    <string name="update_later">لاحقاً</string>
     <string name="update_other_ways">طرق أخرى</string>
 </resources>

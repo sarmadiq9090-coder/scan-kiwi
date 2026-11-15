@@ -1236,8 +1236,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     viewModelScope.launch { textUndoCounts[key] = st.size }
                     val d = store.load(docId) ?: return@job
                     val p = d.pages.firstOrNull { it.id == pageId } ?: return@job
-                    // Only an overlay made on this revision may come back.
-                    store.saveTextOverlay(docId, pageId, prev?.takeIf { it.revision == p.revision })
+                    // Only an overlay made on this revision may come back; if a later export re-read the page
+                    // meanwhile, it is carried over onto the new words (the correction is never hidden).
+                    val cur = store.pageWords(docId, p)?.base?.map { it.text }
+                    val back = prev?.takeIf { it.revision == p.revision }?.let { o -> if (cur == null || o.base == cur) o else o.rebasedOn(cur) }
+                    store.saveTextOverlay(docId, pageId, back)
                     afterTextChange(d)
                 }
                 _messages.send(UiMessage(R.string.docs_text_undone))

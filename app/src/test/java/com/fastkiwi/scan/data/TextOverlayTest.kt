@@ -109,4 +109,51 @@ class TextOverlayTest {
         assertEquals("تاريخ الفاتورة: 2026/03/14\nTotal: 1,250.00 USD\nشكرا", PageText.text(words))
         assertEquals(3, PageText.lines(words).size)
     }
+
+    /**
+     * S3 (torture gate): a later export re-reads the page (another language or engine) and saves different
+     * words for the same revision. The user's corrections stay: the corrected text is authoritative, a new
+     * correction builds on it instead of starting from the raw text, and the overlay is never hidden.
+     */
+    @Test
+    fun aLaterExportKeepsTheUsersCorrectionsAuthoritative() {
+        val store = DocumentStore(tmp.root)
+        val page = ScanPage("abcd", Quad.full(1f, 1f), revision = 2)
+        val doc = store.save(store.create("t").copy(pages = listOf(page)))
+        val first = line(100, "المبلغ", "المستحق", "١٢٠٠")
+        store.saveOcr(doc.id, page, first, "ara", 2000, 2800)
+        store.saveTextOverlay(doc.id, page.id, TextOverlay(2, texts(first), TextOverlay.diff(texts(first), "المبلغ المستحق ١٥٠٠")))
+
+        // The export reads again and gets other words (one misread, two extra words).
+        val again = line(100, "المبلغ", "المستحقة", "١٢٠٠", "شكرا", "جزيلا")
+        store.saveOcr(doc.id, page, again, "ara+eng", 2000, 2800)
+        assertEquals("المبلغ المستحق ١٥٠٠", PageText.text(store.loadOcr(doc.id, page)!!))
+        assertEquals("export path sees the corrections", "المبلغ المستحق ١٥٠٠", PageText.text(store.loadOcrFrame(doc.id, page, "ara+eng")!!.words))
+        val pw = store.pageWords(doc.id, page)!!
+        assertTrue("overlay still applies, the editor shows the corrected text", pw.overlay != null)
+        assertEquals("المبلغ المستحق ١٥٠٠", PageText.text(pw.corrected))
+        assertEquals("the raw cache is the new reading", "المبلغ المستحقة ١٢٠٠ شكرا جزيلا", PageText.text(store.loadOcr(doc.id, page, corrected = false)!!))
+
+        // A new correction made on the new words keeps the old one (the editor started from the corrected text).
+        val base2 = pw.base.map { it.text }
+        store.saveTextOverlay(doc.id, page.id, TextOverlay(2, base2, TextOverlay.diff(base2, "المبلغ المستحق ١٥٠٠ فقط")))
+        assertEquals("المبلغ المستحق ١٥٠٠ فقط", PageText.text(store.loadOcr(doc.id, page)!!))
+
+        // A new revision of the page still drops the correction (it belonged to the old picture).
+        val changed = page.copy(revision = 3)
+        store.saveOcr(doc.id, changed, again, "ara", 2000, 2800)
+        assertEquals("المبلغ المستحقة ١٢٠٠ شكرا جزيلا", PageText.text(store.loadOcr(doc.id, changed)!!))
+    }
+
+    @Test
+    fun anEmptyRereadNeverWipesCorrections() {
+        val store = DocumentStore(tmp.root)
+        val page = ScanPage("abcd", Quad.full(1f, 1f), revision = 0)
+        val doc = store.save(store.create("t").copy(pages = listOf(page)))
+        val first = line(100, "one", "tow")
+        store.saveOcr(doc.id, page, first, "eng", 2000, 2800)
+        store.saveTextOverlay(doc.id, page.id, TextOverlay(0, texts(first), mapOf(1 to "two")))
+        store.saveOcr(doc.id, page, emptyList(), "eng", 2000, 2800)
+        assertEquals("one two", PageText.text(store.loadOcr(doc.id, page)!!))
+    }
 }

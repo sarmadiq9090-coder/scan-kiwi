@@ -70,4 +70,34 @@ object TargetSize {
         }
         return LADDER.lastIndex
     }
+
+    /** The largest target the field accepts (10 TB): anything beyond is a typing slip. */
+    private const val MAX_TARGET_BYTES = 10_000_000_000_000L
+
+    /**
+     * The target size typed in the export sheet, in bytes ([megabytes]: the unit chip), or null when it is
+     * not a positive number. Arabic-Indic digits and separators are read as typed: "1,000", "1٬000",
+     * "١٬٠٠٠" and "1 000" are one thousand; "1.5", "1,5" and "١٫٥" are one and a half. A comma followed by
+     * exactly three digits (and more digits before it) is a thousands separator, any other comma a decimal point.
+     */
+    fun parseBytes(text: String, megabytes: Boolean): Long? {
+        var t = PagePlans.normalizeDigits(text.replace("٬", ",").replace(" ", " ").replace(" ", " ")).trim()
+        t = t.replace(" ", "")
+        if (!Regex("""[0-9.,]+""").matches(t)) return null
+        val dot = t.lastIndexOf('.')
+        val comma = t.lastIndexOf(',')
+        t = when {
+            comma < 0 -> t
+            dot >= 0 && comma < dot -> t.replace(",", "")                 // 1,250.5
+            dot >= 0 -> t.replace(".", "").replace(',', '.')              // 1.250,5
+            t.count { it == ',' } > 1 -> t.replace(",", "")               // 1,234,567
+            t.length - comma - 1 == 3 && comma >= 1 -> t.replace(",", "") // 1,000
+            else -> t.replace(',', '.')                                   // 1,5
+        }
+        val n = runCatching { java.math.BigDecimal(t) }.getOrNull() ?: return null
+        if (n.signum() <= 0) return null
+        val bytes = n.multiply(java.math.BigDecimal(if (megabytes) 1_000_000L else 1_000L))
+        if (bytes > java.math.BigDecimal(MAX_TARGET_BYTES)) return null
+        return bytes.toLong().takeIf { it > 0 }
+    }
 }

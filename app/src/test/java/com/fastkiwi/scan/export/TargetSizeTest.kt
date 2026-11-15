@@ -78,4 +78,31 @@ class TargetSizeTest {
         assertEquals(l.lastIndex, TargetSize.choose(1) { est[it] })
         assertEquals(null, TargetSize.afterMiss(l.lastIndex, 5, 1) { 1 })
     }
+
+    /** S3 (torture gate): "1,000" is one thousand, not 1.0; Arabic digits and separators count too. */
+    @Test
+    fun typedTargetsAreReadInTheSelectedUnit() {
+        fun kb(t: String) = TargetSize.parseBytes(t, megabytes = false)
+        fun mb(t: String) = TargetSize.parseBytes(t, megabytes = true)
+        assertEquals(1_000_000L, kb("1,000"))
+        assertEquals(1_000_000L, kb("1٬000"))      // Arabic thousands separator
+        assertEquals(1_000_000L, kb("١٬٠٠٠"))
+        assertEquals(1_000_000L, kb("١,٠٠٠"))
+        assertEquals(1_000_000L, kb("1 000"))
+        assertEquals(1_234_567_000L, kb("1,234,567"))
+        assertEquals(500_000L, kb("500"))
+        assertEquals(500_000L, kb("٥٠٠"))
+        assertEquals(1_500_000L, mb("1.5"))
+        assertEquals(1_500_000L, mb("1,5"))          // decimal comma
+        assertEquals(1_500_000L, mb("١٫٥"))          // Arabic decimal separator
+        assertEquals(1_500_000L, mb("١،٥"))
+        assertEquals(2_000_000L, mb("2"))
+        assertEquals(1_000_000_000L, mb("1,000"))
+        assertEquals(1_234_500L, mb("1.2345"))
+        assertEquals(1_000_000L, kb("1,000.0"))
+        assertEquals(1_250_500L, kb("1,250.5"))
+        for (bad in listOf("", "abc", "0", "-5", "NaN", "Infinity", "1e400", "99999999999999")) {
+            assertEquals("<$bad>", null, kb(bad))
+        }
+    }
 }

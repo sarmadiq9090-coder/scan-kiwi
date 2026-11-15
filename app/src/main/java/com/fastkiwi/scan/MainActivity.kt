@@ -81,6 +81,18 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onStart() {
+        super.onStart()
+        // 2.0 torture gate: an update confirmation that Android could not open while the app was in the background.
+        com.fastkiwi.scan.update.UpdateInstallEvents.foreground = true
+        vm.updates.refreshInstallStatus()
+    }
+
+    override fun onStop() {
+        com.fastkiwi.scan.update.UpdateInstallEvents.foreground = false
+        super.onStop()
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         handleIncoming(intent)
@@ -175,6 +187,7 @@ private fun App(vm: AppViewModel) {
         com.fastkiwi.scan.ui.ImportPasswordPrompt(vm)
         // 2.0-update: the one-time notice about the update connection.
         com.fastkiwi.scan.ui.UpdateNoticeDialog(vm)
+        com.fastkiwi.scan.ui.UpdateConfirmDialog(vm)
     }
 }
 

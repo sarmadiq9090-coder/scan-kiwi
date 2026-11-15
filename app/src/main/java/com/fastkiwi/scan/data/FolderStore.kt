@@ -27,19 +27,35 @@ data class Folder(val id: String, val name: String, val created: Long) {
 class FolderStore(root: File) {
     private val file = File(root, "folders.json")
 
+    /** The last good copy (the bytes of the last successful write), restored when the main file is damaged. */
+    private val backup = File(root, "folders.json.bak")
+
+    /** The folders in [f], or null when it is missing or not a valid folder file. */
+    private fun read(f: File): List<Folder>? {
+        if (!f.exists()) return null
+        return runCatching {
+            val a = JSONObject(f.readText()).getJSONArray("folders")
+            List(a.length()) { Folder.fromJson(a.getJSONObject(it)) }.filter { it.id.isNotEmpty() }
+        }.getOrNull()
+    }
+
     @Synchronized
     fun list(): List<Folder> {
-        if (!file.exists()) return emptyList()
-        return runCatching {
-            val a = JSONObject(file.readText()).optJSONArray("folders") ?: JSONArray()
-            List(a.length()) { Folder.fromJson(a.getJSONObject(it)) }.filter { it.id.isNotEmpty() }
-        }.getOrDefault(emptyList())
+        read(file)?.let { return it }
+        // No folders.json is normal (1.x data, no folder yet) unless a backup exists: a damaged or lost main
+        // file is rebuilt from the last good copy, so folder names are never lost to one bad write.
+        val saved = read(backup) ?: return emptyList()
+        runCatching { val bytes = backup.readBytes(); writeAtomically(file) { it.write(bytes) } }
+        return saved
     }
 
     @Synchronized
     private fun write(folders: List<Folder>) {
         val o = JSONObject().put("version", 1).put("folders", JSONArray().apply { folders.forEach { put(it.toJson()) } })
-        writeAtomically(file) { it.write(o.toString().toByteArray(Charsets.UTF_8)) }
+        val bytes = o.toString().toByteArray(Charsets.UTF_8)
+        writeAtomically(file) { it.write(bytes) }
+        // The copy is made only after the main file is safely on disk; a failure here never fails the write.
+        runCatching { writeAtomically(backup) { it.write(bytes) } }
     }
 
     @Synchronized

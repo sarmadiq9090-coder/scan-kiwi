@@ -123,9 +123,57 @@ class UpdateController(
 
     /** Opens Android's install confirmation for a verified file (again, if the user backed out). */
     fun install(apk: File, release: Release) {
+        lastInstall = apk to release
+        UpdateInstallEvents.failed = false
         if (!apk.exists()) { _state.value = UpdateState.Failed(UpdateError.STORAGE, release); return }
-        if (!installer(apk)) { updater.clean(); _state.value = UpdateState.Failed(UpdateError.STORAGE, release) }
+        // The installer could not even start (a session could not be created or written): the file is kept and the
+        // message says the update was not installed, so the next tap tries the installer again.
+        _state.value = if (installer(apk)) UpdateState.Ready(release, apk) else UpdateState.Failed(UpdateError.INSTALL, release)
     }
+
+    /**
+     * «حاول مرة أخرى» after a failed install: the verified file again if it is still there, otherwise a fresh
+     * download (never a storage error for a file that was simply cleaned).
+     */
+    fun retryInstall(release: Release): Job? {
+        if (job?.isActive == true) return null
+        val last = lastInstall
+        if (last != null && last.second.apkName == release.apkName && last.first.exists()) {
+            install(last.first, last.second)
+            return null
+        }
+        return downloadAndInstall(release)
+    }
+
+    private var lastInstall: Pair<File, Release>? = null
+
+    private val _confirmPending = mutableStateOf(UpdateInstallEvents.pending != null)
+    /** Android's confirmation screen is waiting because the user had left the app: the banner «التحديث جاهز للتثبيت». */
+    val confirmPending: State<Boolean> = _confirmPending
+
+    /** The app came to the front (or the installer just reported): show the banner / failure message if one is due. */
+    fun refreshInstallStatus() {
+        _confirmPending.value = UpdateInstallEvents.pending != null
+        if (UpdateInstallEvents.failed) {
+            UpdateInstallEvents.failed = false
+            val release = lastInstall?.second ?: (_state.value as? UpdateState.Ready)?.release
+            if (release != null) _state.value = UpdateState.Failed(UpdateError.INSTALL, release)
+        }
+    }
+
+    /** The banner's button: opens Android's own confirmation screen. */
+    fun openPendingConfirm() {
+        val i = UpdateInstallEvents.pending ?: return
+        UpdateInstallEvents.pending = null
+        _confirmPending.value = false
+        if (runCatching { ctx.startActivity(i) }.isFailure) {
+            lastInstall?.second?.let { _state.value = UpdateState.Failed(UpdateError.INSTALL, it) }
+        }
+    }
+
+    fun dismissPendingConfirm() { _confirmPending.value = false }
+
+    init { UpdateInstallEvents.listener = { refreshInstallStatus() } }
 
     @VisibleForTesting
     internal var installer: (File) -> Boolean = { f -> runCatching { UpdateInstaller.install(ctx, f) }.isSuccess }

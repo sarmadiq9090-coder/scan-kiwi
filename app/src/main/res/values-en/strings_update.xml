@@ -27,5 +27,10 @@
     <string name="update_err_signature">The downloaded file is not signed with this app\'s key, so it was deleted and not installed.</string>
     <string name="update_err_not_newer">This version is not newer than the installed one.</string>
     <string name="update_err_storage">Could not save the file or open the installer. Try again.</string>
+    <string name="update_err_install">The update was not installed. Try again.</string>
+    <string name="update_retry">Try again</string>
+    <string name="update_ready_title">Update ready to install</string>
+    <string name="update_ready_body">The update finished downloading. Tap Install, then confirm on Android\'s screen.</string>
+    <string name="update_later">Later</string>
     <string name="update_other_ways">Other ways</string>
 </resources>

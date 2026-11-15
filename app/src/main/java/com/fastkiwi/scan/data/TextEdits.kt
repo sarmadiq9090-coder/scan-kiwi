@@ -46,6 +46,22 @@ data class TextOverlay(
         return out
     }
 
+    /** The corrected text of the page: every word with its correction, split into words, removed words gone. */
+    fun correctedTokens(): List<String> =
+        base.indices.flatMap { i -> (edits[i] ?: base[i]).split(WS).filter { it.isNotEmpty() } }
+
+    /**
+     * The same corrected text expressed on a re-read of the page ([newBase], the words now in the cache).
+     * Null when nothing of it can be carried (no word to hold the text): the caller then keeps this overlay.
+     */
+    fun rebasedOn(newBase: List<String>): TextOverlay? {
+        val corrected = correctedTokens()
+        val edits = diff(newBase, corrected.joinToString(" "))
+        // diff() returns nothing for "no change" and also when the new reading has no word at all.
+        if (edits.isEmpty() && newBase.isEmpty()) return null
+        return TextOverlay(revision, newBase, edits)
+    }
+
     companion object {
         fun fromJson(o: JSONObject): TextOverlay {
             val b = o.getJSONArray("base")

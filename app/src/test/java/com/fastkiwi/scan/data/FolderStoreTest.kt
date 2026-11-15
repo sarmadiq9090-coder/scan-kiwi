@@ -97,6 +97,8 @@ class FolderStoreTest {
         assertEquals("ب", FolderStore(tmp.root).list().single().name)
         folders.rename(f.id, "   ")
         assertEquals("blank names are ignored", "ب", folders.list().single().name)
+        // No last good copy (a folders.json from before the backup existed): damaged means empty, never a crash.
+        File(tmp.root, "folders.json.bak").delete()
         File(tmp.root, "folders.json").writeText("{not json")
         assertTrue(FolderStore(tmp.root).list().isEmpty())
         assertFalse(File(tmp.root, "folders.json.tmp").exists())
@@ -115,5 +117,34 @@ class FolderStoreTest {
         assertEquals(listOf("د"), homeEntries(all, listOf(f), "f1", false, DocSort.DATE, c).map { it.doc.name })
         // Favorites at the top level gather starred documents from every folder.
         assertEquals(listOf("د", "ج"), homeEntries(all, listOf(f), null, true, DocSort.DATE, c).map { it.doc.name })
+    }
+
+    /** S3 (torture gate): a damaged folders.json must not lose the folder names; the last good copy comes back. */
+    @Test
+    fun aDamagedFoldersFileIsRestoredFromTheLastGoodCopy() {
+        val folders = FolderStore(tmp.root)
+        val a = folders.create("فواتير")
+        val b = folders.create("Receipts")
+        folders.rename(a.id, "فواتير ٢٠٢٦")
+        val expected = folders.list()
+        assertEquals(2, expected.size)
+        val file = File(tmp.root, "folders.json")
+        assertTrue("a backup is kept beside the file", File(tmp.root, "folders.json.bak").exists())
+        for (damage in listOf("", "{\"version\":1,\"fold", "not json at all", "{\"version\":1}")) {
+            file.writeText(damage)
+            assertEquals("damage: <$damage>", expected, FolderStore(tmp.root).list())
+            assertTrue("the main file is repaired too", file.length() > 20)
+            assertEquals(expected, FolderStore(tmp.root).list())
+        }
+        // The main file vanished altogether: the backup brings it back.
+        file.delete()
+        assertEquals(expected, FolderStore(tmp.root).list())
+        // Work goes on normally afterwards and the backup follows.
+        FolderStore(tmp.root).delete(b.id, DocumentStore(tmp.root))
+        file.writeText("garbage")
+        assertEquals(listOf(a.id), FolderStore(tmp.root).list().map { it.id })
+        // Both damaged: empty, never a crash.
+        file.writeText("x"); File(tmp.root, "folders.json.bak").writeText("y")
+        assertTrue(FolderStore(tmp.root).list().isEmpty())
     }
 }

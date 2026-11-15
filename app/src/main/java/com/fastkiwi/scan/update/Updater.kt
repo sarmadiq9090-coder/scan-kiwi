@@ -9,7 +9,7 @@ import java.io.File
 data class Release(val version: SemVer, val tag: String, val apkName: String, val apkUrl: String, val apkSize: Long, val sumsUrl: String)
 
 /** Why an update could not be offered or installed. Each maps to one message in the UI. */
-enum class UpdateError { OFFLINE, NETWORK, NO_RELEASE, BAD_RELEASE, WIFI_REQUIRED, SHA_MISMATCH, SIGNATURE_MISMATCH, NOT_NEWER, STORAGE }
+enum class UpdateError { OFFLINE, NETWORK, NO_RELEASE, BAD_RELEASE, WIFI_REQUIRED, SHA_MISMATCH, SIGNATURE_MISMATCH, NOT_NEWER, STORAGE, INSTALL }
 
 sealed interface CheckResult {
     data object UpToDate : CheckResult

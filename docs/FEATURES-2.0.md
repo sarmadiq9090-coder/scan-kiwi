@@ -90,10 +90,14 @@
 - قياسات الهاتف (زمن «دقيق»، ذاكرة المحرك، بدء التشغيل، OCR −20٪، عتبات الوضوح، أندرويد 7/8 على جهاز حقيقي، مسار التحديث): لا هاتف في بيئة التطوير؛ أداة القياس جاهزة (سطر التشخيص).
 - إعادة إنتاج القياس بمتصفح Chromium: فرق 1.8 نقطة لـ Tesseract وحده (مسجّل؛ صفحات Edge هي المرجع).
 
+### مشكلات معروفة (تُعالج في 2.1)
+- النص المكتوب ولم يُحفظ بعد (حقل تصحيح النص وما شابه) يضيع إن أنهى النظام عملية التطبيق وهو في الخلفية؛ يعود التطبيق إلى الشاشة الرئيسية كما في 1.x. لا يضيع أي مستند محفوظ.
+
 ### قائمة 2.1
 - المجلدات المتداخلة (2.0 بمستوى واحد بقرار المدير 4).
 - تسوية الصفحات المنحنية (مستبعدة من 2.0 بقرار A4).
 - (الصفحات المختلطة أُصلحت في 2.0، فلا بند لها.)
+- حفظ النص غير المحفوظ عند إنهاء العملية (المشكلة المعروفة أعلاه).
 
 ### فحوص المالك على الهاتف
 «دقيق» ≤ 8 ث/صفحة و≤ 300 م.ب، بدء ≤ 1 ث، OCR −20٪، عتبات الوضوح، جهاز أندرويد 7/8، ومسار التحديث (قراءة الشهادة، تأكيد PackageInstaller، كشف Wi-Fi، إصدار حقيقي)، إضافة إلى قوائم الكاميرا وPDF في ملفاتها.
@@ -121,6 +125,8 @@ synthetic data). Status: done / partial / not done (with reason).
 | Perf | Cold start ≤ 1 s, OCR −20 % on the phone | not done | no phone (JVM proxy 86 ms) | owner check |
 | Update | GitHub-only HTTPS check (4 hosts), SemVer, SHA256SUMS, same signer, higher versionCode, weekly at app open, Wi-Fi only for the whole download, one-time notice, PackageInstaller | done (phone path unverified) | any failure deletes the file; a dropped connection is a network error, never a crash | `UpdaterTest`, `UpdateUiTest`, CI permission check |
 
+**Known issue (2.1):** text typed but not yet saved (for example in the text-correction field) is lost if Android ends the app process while it is in the background; the app restarts at Home, as in 1.x. No saved document is affected.
 **2.1 list:** nested folders; curved-page dewarping. (Mixed pages were fixed in 2.0.)
+**2.1 list also:** keep unsaved typed text across process death.
 **Owner phone checks:** Accurate time and native heap, cold start, OCR −20 %, blur thresholds, an Android 7/8 device, the
 update path on a phone (certificate read, PackageInstaller confirmation, Wi-Fi detection, a real release).

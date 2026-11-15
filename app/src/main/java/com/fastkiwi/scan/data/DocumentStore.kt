@@ -124,20 +124,47 @@ class DocumentStore(root: File) {
      * boxes are measured in; without it a later export cannot place them (see [loadOcrFrame]).
      */
     fun saveOcr(docId: String, page: ScanPage, words: List<OcrWord>, lang: String? = null, frameWidth: Int = 0, frameHeight: Int = 0) {
+        if (keepsCorrectionsInsteadOf(docId, page, words.size)) return
         val arr = JSONArray()
         for (w in words) arr.put(JSONArray().put(w.text).put(w.left).put(w.top).put(w.right).put(w.bottom))
         val o = JSONObject().put("revision", page.revision).put("words", arr)
         if (lang != null) o.put("lang", lang)
         if (frameWidth > 0 && frameHeight > 0) o.put("frame", JSONArray().put(frameWidth).put(frameHeight))
         writeAtomically(ocrFile(docId, page.id)) { it.write(o.toString().toByteArray(Charsets.UTF_8)) }
+        rebaseTextOverlay(docId, page, words.map { it.text })
     }
 
     /** Caches a whole OCR result (format 2: engine, lines, confidences; boxes in the result's frame). */
     fun saveOcr(docId: String, page: ScanPage, result: OcrResult, lang: String, maxSide: Int) {
+        val texts = result.lines.flatMap { l -> l.words.map { it.text } }
+        if (keepsCorrectionsInsteadOf(docId, page, texts.size)) return
         val json = OcrResultCodec.encode(page.revision, result, lang, maxSide)
         writeAtomically(ocrFile(docId, page.id)) { it.write(json.toByteArray(Charsets.UTF_8)) }
+        rebaseTextOverlay(docId, page, texts)
     }
 
+
+    /**
+     * A re-read that finds no words must not replace a cache the user corrected: the corrections (and the
+     * words they sit on) would be lost, and there is nothing to show instead.
+     */
+    private fun keepsCorrectionsInsteadOf(docId: String, page: ScanPage, newWords: Int): Boolean {
+        if (newWords > 0) return false
+        val ov = loadTextOverlay(docId, page.id) ?: return false
+        return ov.revision == page.revision && ov.edits.isNotEmpty() && readOcr(docId, page) != null
+    }
+
+    /**
+     * The OCR cache of a page was just replaced (a later export read it again, another language or engine).
+     * The user's corrections for this revision stay authoritative: the overlay is re-made on the new words so
+     * that the page text is still the corrected text, not the new raw reading, and never hidden.
+     */
+    private fun rebaseTextOverlay(docId: String, page: ScanPage, newBase: List<String>) {
+        val ov = loadTextOverlay(docId, page.id) ?: return
+        if (ov.revision != page.revision || ov.edits.isEmpty() || ov.base == newBase) return
+        val next = ov.rebasedOn(newBase)
+        if (next != null) runCatching { saveTextOverlay(docId, page.id, next) }
+    }
     /** The cache file as stored, or null (missing, unreadable, or another revision of the page). */
     private fun readOcr(docId: String, page: ScanPage): OcrResultCodec.Decoded? {
         val f = ocrFile(docId, page.id)

@@ -126,6 +126,10 @@ fun UpdatesScreen(vm: AppViewModel) {
                         SettingsRow(KiwiIcons.update(), stringResource(R.string.update_install_again), stringResource(R.string.update_ready), shape, {
                             vm.updates.install(st.apk, st.release)
                         })
+                    } else if (st is UpdateState.Failed && st.error == UpdateError.INSTALL && release != null) {
+                        SettingsRow(KiwiIcons.update(), stringResource(R.string.update_retry), stringResource(R.string.update_err_install), shape, {
+                            if (!busy) vm.updates.retryInstall(release)
+                        })
                     } else if (release != null) {
                         SettingsRow(KiwiIcons.update(), stringResource(R.string.update_download_install), stringResource(R.string.update_available, release.version.toString()), shape, {
                             if (!busy) vm.updates.downloadAndInstall(release)
@@ -221,6 +225,7 @@ fun updateErrorText(e: UpdateError): Int = when (e) {
     UpdateError.SIGNATURE_MISMATCH -> R.string.update_err_signature
     UpdateError.NOT_NEWER -> R.string.update_err_not_newer
     UpdateError.STORAGE -> R.string.update_err_storage
+    UpdateError.INSTALL -> R.string.update_err_install
 }
 
 /** 2.0-update: shown once (the owner's wording), before the first automatic check. */
@@ -239,6 +244,27 @@ fun UpdateNoticeDialog(vm: AppViewModel) {
         dismissButton = {
             TextButton(onClick = { vm.updates.noticeSeen(); vm.open(Screen.Updates) }, modifier = Modifier.heightIn(min = 48.dp)) {
                 Text(stringResource(R.string.update_notice_settings))
+            }
+        },
+    )
+}
+
+/** 2.0 torture gate: the user left the app while the update downloaded, so Android's confirmation could not open then. */
+@Composable
+fun UpdateConfirmDialog(vm: AppViewModel) {
+    if (!vm.updates.confirmPending.value) return
+    AlertDialog(
+        onDismissRequest = { vm.updates.dismissPendingConfirm() },
+        title = { Text(stringResource(R.string.update_ready_title)) },
+        text = { Text(stringResource(R.string.update_ready_body), style = MaterialTheme.typography.bodyMedium) },
+        confirmButton = {
+            TextButton(onClick = { vm.updates.openPendingConfirm() }, modifier = Modifier.heightIn(min = 48.dp)) {
+                Text(stringResource(R.string.update_install_again))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = { vm.updates.dismissPendingConfirm() }, modifier = Modifier.heightIn(min = 48.dp)) {
+                Text(stringResource(R.string.update_later))
             }
         },
     )

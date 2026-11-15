@@ -538,8 +538,7 @@ fun ExportSheet(vm: AppViewModel, docId: String, onDismiss: () -> Unit) {
     var watermark by remember { mutableStateOf(Watermark("", 0.25f, true)) }
     val busy by vm.busy
 
-    val targetBytes: Long? = if (!targetMode || asJpeg) null else
-        PagePlans.normalizeDigits(targetText).replace(',', '.').trim().toDoubleOrNull()?.takeIf { it > 0 }?.let { (it * if (targetMb) 1_000_000 else 1_000).toLong() }
+    val targetBytes: Long? = if (!targetMode || asJpeg) null else com.fastkiwi.scan.pdf.TargetSize.parseBytes(targetText, targetMb)
     val numbering = if (numbersOn) numbers.copy(start = PagePlans.normalizeDigits(startText).trim().toIntOrNull()?.coerceIn(0, 99_999) ?: 1) else null
     val mark = if (watermarkOn && watermark.text.isNotBlank()) watermark else null
 
@@ -644,7 +643,7 @@ fun ExportSheet(vm: AppViewModel, docId: String, onDismiss: () -> Unit) {
                     Spacer(Modifier.height(Dimens.m))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         OutlinedTextField(
-                            value = targetText, onValueChange = { targetText = it.take(7) }, singleLine = true,
+                            value = targetText, onValueChange = { targetText = it.take(14) }, singleLine = true,
                             label = { Text(stringResource(R.string.pdf_target_label)) }, isError = targetBytes == null,
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.weight(1f),
                         )
