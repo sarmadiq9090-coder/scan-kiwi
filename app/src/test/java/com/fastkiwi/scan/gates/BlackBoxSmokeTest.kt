@@ -76,7 +76,7 @@ class BlackBoxSmokeTest {
         val shot = box.ok("camera_sees ${if (en) "en-letter" else "invoice"}")
         assertTrue("no auto capture:\n${shot.text}", shot.events.any { it.contains("photo taken automatically") })
         // Arabic numbers are shown with Arabic-Indic digits («١»).
-        val done = if (en) "Done, 1 pages" else "تم، عدد الصفحات ١"
+        val done = if (en) "Done, pages: 1" else "تم، عدد الصفحات ١"
         assertTrue("Done pill missing:\n${shot.text}", shot.text.contains(done))
         box.ok("tap \"${if (en) "Done" else "تم"}\"")
         // Back to Home and open the document from the list.

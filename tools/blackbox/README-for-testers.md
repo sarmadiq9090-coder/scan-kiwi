@@ -60,7 +60,7 @@ Layer 2: dialog (on top: only this layer can be used)
 
 | Command | What it does |
 |---|---|
-| `tap "<label>"` | Taps the element with that label. If several match, `tap "<label>" #2` takes the second. `tap @12` taps element `[12]` of the last screen. A label may be given by its first words (`"Done"` for `"Done, 3 pages"`). |
+| `tap "<label>"` | Taps the element with that label. If several match, `tap "<label>" #2` takes the second. `tap @12` taps element `[12]` of the last screen. A label may be given by its first words (`"Done"` for `"Done, pages: 3"`). |
 | `longpress "<label>"` | Touch and hold. |
 | `type "<field>" "<text>"` | Taps the text field (by its label, hint or current text) and types. |
 | `clear "<field>"` | Empties the text field. |

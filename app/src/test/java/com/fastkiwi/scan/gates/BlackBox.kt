@@ -329,7 +329,7 @@ class BlackBox(private val rule: ComposeTestRule, val dir: File) {
             val q = norm(l)
             val exact = candidatesAll.filter { n -> norm(n.label) == q || n.label.split(" · ").any { norm(it) == q } || (n.value != null && norm(n.value) == q) }
             if (exact.isNotEmpty()) return exact
-            // A label that starts with the words given ("Done" for "Done, 3 pages"); never a
+            // A label that starts with the words given ("Done" for "Done, pages: 3"); never a
             // word in the middle of a sentence, which would tap the wrong thing.
             return candidatesAll.filter { n -> n.label.split(" · ").any { p -> val s = norm(p); s.startsWith("$q ") || s.startsWith("$q،") || s.startsWith("$q,") || s.startsWith("$q:") } }
         }
