@@ -145,6 +145,9 @@ no background service; «تحقق من التحديثات» any time (Updates sc
 «التنزيل عبر Wi-Fi فقط», both on by default. One-time notice (owner's wording) before the first automatic check, the same
 text in About, the privacy section and the README. Plain `HttpURLConnection`, no network library. CI allows exactly these
 permissions and fails on network code outside `update/UpdateClient.kt`. Obtainium and the releases page stay as other ways.
+Leader decisions (2026-11-15): ACCESS_NETWORK_STATE accepted (needed for «التنزيل عبر Wi-Fi فقط»); the source repository is
+`sarmadiq9090-coder/scan-kiwi` (the order's `kiwi-scan` is the local folder name); the notice says «ماسح كيوي», the app's
+own Arabic name, not the order's «سكان كيوي».
 
 ### D29 — Updates (council D-077; its "no network" part replaced in 2.0 by D30)
 1.2: no network code, no new permissions. Settings ▸ «التحديثات»: version line, «حدّثه تلقائياً عبر Obtainium»

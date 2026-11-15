@@ -25,10 +25,10 @@ small PDF ready to share. **Offline, no account, no ads, no watermark.**
 - عربي أولًا مع الإنجليزية، واجهة من اليمين لليسار، ودعم قارئ الشاشة.
 
 ### المتطلبات
-أندرويد 7.0 فما فوق (API 24+). الإذن الوحيد: الكاميرا.
+أندرويد 7.0 فما فوق (API 24+). الأذونات: الكاميرا (CAMERA)، ومنذ 2.0 للتحديث فقط: الإنترنت (INTERNET) وحالة الشبكة (ACCESS_NETWORK_STATE) وتثبيت الحزم (REQUEST_INSTALL_PACKAGES).
 
 ### الخصوصية
-- يتصل سكان كيوي بالإنترنت فقط للتحقق من التحديثات وتنزيلها من GitHub. لا يُرسل أي ملف أو صورة أو بيانات عنك. يمكنك إيقافه من الإعدادات.
+- يتصل ماسح كيوي بالإنترنت فقط للتحقق من التحديثات وتنزيلها من GitHub. لا يُرسل أي ملف أو صورة أو بيانات عنك. يمكنك إيقافه من الإعدادات.
 - الأذونات: الكاميرا، والإنترنت وحالة الشبكة وتثبيت الحزم للتحديث فقط؛ يتحقق CI من القائمة في كل بناء، ومن أن كود الشبكة الوحيد هو `update/UpdateClient.kt` (GitHub وHTTPS فقط).
 - المستندات في مساحة التطبيق الخاصة، والنسخ الاحتياطي السحابي معطّل لها. لا يخرج ملف إلا حين تختار «مشاركة» أو «حفظ».
 - لا تتبّع، ولا إحصاءات، ولا إعلانات، ولا حسابات.
@@ -83,7 +83,7 @@ small PDF ready to share. **Offline, no account, no ads, no watermark.**
 - Arabic first with English, full right-to-left layout, TalkBack support.
 
 ### Requirements
-Android 7.0+ (API 24+). Permissions: the camera, and since 2.0 internet, network state and install packages for the update check only.
+Android 7.0+ (API 24+). Permissions: CAMERA, and since 2.0, for the update check only, INTERNET, ACCESS_NETWORK_STATE (Wi-Fi vs mobile data for "Wi-Fi only") and REQUEST_INSTALL_PACKAGES.
 
 ### Privacy
 - Scan Kiwi connects to the internet only to check for and download updates from GitHub. It sends no file, photo or data about you. You can turn this off in Settings.

@@ -38,7 +38,7 @@ class UpdateUiTest {
     val rule = createAndroidComposeRule<MainActivity>()
 
     companion object {
-        private const val NOTICE = "يتصل سكان كيوي بالإنترنت فقط للتحقق من التحديثات وتنزيلها من GitHub. لا يُرسل أي ملف أو صورة أو بيانات عنك. يمكنك إيقافه من الإعدادات."
+        private const val NOTICE = "يتصل ماسح كيوي بالإنترنت فقط للتحقق من التحديثات وتنزيلها من GitHub. لا يُرسل أي ملف أو صورة أو بيانات عنك. يمكنك إيقافه من الإعدادات."
 
         @JvmStatic
         @BeforeClass

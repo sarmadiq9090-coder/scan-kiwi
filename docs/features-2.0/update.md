@@ -30,7 +30,7 @@
 | الإشعار لمرة واحدة | One-time notice (owner's wording) | D30 | منجز | يظهر مرة، قبل أي فحص | النص حرفياً؛ لا فحص قبل إغلاقه؛ لا يظهر مرة ثانية؛ «الإعدادات» يفتح «التحديثات» | `UpdaterTest.noticeComesBeforeAnyAutomaticCheck`, `UpdateUiTest.noticeOnceThenUpdatesScreenWithItsSettings` |
 | شاشة «التحديثات» و«حول» | Updates screen + About button | D30 | منجز | زر وإعدادان ≥ 48 dp | «تحقق من التحديثات»، «تنزيل وتثبيت»، المفتاحان، النص؛ زر في «حول» | `UpdateUiTest`, `UpdatesSettingsTest` |
 | التثبيت | PackageInstaller with Android's confirmation | D30 | منجز (لم يُجرَّب على هاتف) | موافقة المستخدم المعتادة | جلسة PackageInstaller، `USER_ACTION_REQUIRED` على 31+، `UpdateInstallReceiver` يفتح شاشة التأكيد | فحص المالك على الهاتف |
-| الأذونات وCI | Permissions + CI | D30 | منجز | INTERNET وREQUEST_INSTALL_PACKAGES فقط | أُضيف أيضاً ACCESS_NETWORK_STATE (لازم لمعرفة Wi-Fi من بيانات الهاتف؛ **بحاجة لقرار القائد**)؛ CI يسمح بهذه الأربعة فقط ويفشل إن ظهر كود شبكة خارج `update/UpdateClient.kt` | CI `Check permissions (exact list)` |
+| الأذونات وCI | Permissions + CI | D30 | منجز | CAMERA وINTERNET وACCESS_NETWORK_STATE وREQUEST_INSTALL_PACKAGES فقط | ACCESS_NETWORK_STATE لازم لمعرفة Wi-Fi من بيانات الهاتف (**قبله القائد 2026-11-15**)؛ CI يسمح بهذه الأربعة فقط ويفشل إن ظهر كود شبكة خارج `update/UpdateClient.kt` | CI `Check permissions (exact list)` |
 | الحجم | Size | D30 | منجز | بلا مكتبات جديدة | `HttpURLConnection` ومكتبة جافا القياسية فقط؛ لا تبعية Maven جديدة | — |
 
 ---
@@ -50,8 +50,7 @@ Release asset contract (for the release phase): the GitHub release must carry `S
 Not verified here: a real GitHub release (none exists for 2.0 yet), the PackageManager certificate read on a phone,
 PackageInstaller's confirmation on Android 7–16, Wi-Fi detection on a phone. These are owner phone checks.
 
-Decision needed: the owner's spec lists INTERNET and REQUEST_INSTALL_PACKAGES only; «التنزيل عبر Wi-Fi فقط» cannot be
-honoured without ACCESS_NETWORK_STATE (a normal, install-time permission that reads only the connection type), so it was
-added. The repository is `sarmadiq9090-coder/scan-kiwi` (`git remote -v`, and the existing release links); the request
-named `kiwi-scan`, which is the local folder name. The notice uses the owner's wording verbatim («سكان كيوي»), while the
-app's Arabic name elsewhere is «ماسح كيوي».
+Leader decisions (2026-11-15): ACCESS_NETWORK_STATE is accepted (a normal, install-time permission that reads only
+the connection type; «التنزيل عبر Wi-Fi فقط» cannot work without it), so the permissions are CAMERA, INTERNET,
+ACCESS_NETWORK_STATE and REQUEST_INSTALL_PACKAGES. The repository is `sarmadiq9090-coder/scan-kiwi` everywhere. The notice,
+About and the privacy text use the app's own Arabic name «ماسح كيوي».
