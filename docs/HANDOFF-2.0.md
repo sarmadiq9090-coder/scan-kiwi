@@ -36,7 +36,7 @@ Each fix has a test (new: `gates/BlackBoxTasksTest` (6 tasks through the bb.sh i
   so text in that band is not in the page (searching «فاتورة» on the invoice finds nothing; body words are found).
 - **Tester guide:** `tools/blackbox/README-for-testers.md` says OCR is simulated, to `wait` for background reading, and that the camera
   works after `launch`/`locale`/`darkmode`; `pages` lists the new two-page `book-spread`.
-- **Full suite once, on the fix commit:** RESULT_PLACEHOLDER
+- **Full suite once, on the fix commit:** f50aead: 312 tests, 0 failures, 0 errors, 21 skipped (torture classes, `KIWI_TORTURE=1` only). A first run before the commit had 3 failures (QC-1 footer at 200 %, the smoke test's 200 % Share, an over-strict SimulatedOcr assertion), fixed and re-run by class. Torture not re-run (app code changed only in UI, dialogs and names; run it before the release if the manager wants it).
 - **Re-run with the black-box tester (gate 6.4):** task 9 folders (Home and «نقل إلى مجلد»), tasks 7–8 search / view / copy / correct text,
   task 10 book mode (camera and gallery, Book tab), task 11 glare by name, task 6 TXT export, task 1 TalkBack name of «مسح», and the
   200 % export sheet; quick checks of task 12 (offline message, privacy line) and the English default name.
