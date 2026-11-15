@@ -30,6 +30,11 @@ interface OcrEngine : AutoCloseable {
 
     /** Releases native memory. Idempotent. */
     override fun close()
+
+    companion object {
+        /** 1.2's name for the longest side OCR reads ([OcrOptions.DEFAULT_MAX_SIDE]). */
+        const val WORK_SIDE = OcrOptions.DEFAULT_MAX_SIDE
+    }
 }
 
 /** Why the effective mode is not the requested one (shown in Settings → About diagnostics). */
