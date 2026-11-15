@@ -130,14 +130,17 @@ class TortureStressTest {
         repeat(50) { i ->
             val q = Quality.entries[i % 3]
             vm.share(doc.id, ExportOptions(PageSize.entries[i % PageSize.entries.size], q, ocr = false), asJpeg = i % 7 == 0)
-            if (rnd.nextInt(3) != 0) {
+            val cancelNow = rnd.nextInt(3) != 0
+            if (cancelNow) {
                 Gates.pump(rnd.nextLong(0, 120)) { false }
                 vm.cancelExport()
                 cancelled++
             }
-            val r = Gates.awaitExport(vm, 60_000)
+            // A cancelled export reports no result (nothing to wait 60 s for); the others finish with one.
+            val r = if (cancelNow) null else Gates.awaitExport(vm, 60_000)
             if (r != null) finished++
             assertTrue("export $i still running", Gates.pump(30_000) { vm.exportState.value == null })
+            if (cancelNow) Gates.awaitExport(vm, 150) // a result that raced the cancel must not leak into the next round
             Gates.awaitIdle(vm)
             val left = exports.listFiles()?.map { it.name } ?: emptyList()
             assertTrue("partial file after export $i: $left", left.none { it.endsWith(".part") })

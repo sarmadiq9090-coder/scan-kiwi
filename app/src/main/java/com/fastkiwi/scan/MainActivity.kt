@@ -122,7 +122,9 @@ class MainActivity : ComponentActivity() {
  * Scan read its own private files, such as the signature image or another
  * document's export, into a new document.
  */
-internal fun isAcceptableIncoming(uri: Uri, ownAuthority: String): Boolean {
+internal fun isAcceptableIncoming(uri: Uri?, ownAuthority: String): Boolean {
+    // A share list from another app may hold a null entry (torture gate: multi-with-null crashed here).
+    if (uri == null) return false
     if (!"content".equals(uri.scheme, ignoreCase = true)) return false
     // "10@authority" addresses the same provider in another user profile.
     val authority = uri.authority?.substringAfterLast('@') ?: return false

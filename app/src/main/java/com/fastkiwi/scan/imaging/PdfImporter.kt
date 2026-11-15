@@ -20,6 +20,19 @@ import kotlin.math.max
 object PdfImporter {
     class ProtectedPdfException : Exception()
 
+    /** Thrown for a PDF with more pages than [MAX_IMPORT_PAGES]: refused before any page is read. */
+    class TooManyPagesException(val pages: Int) : java.io.IOException("too many pages: $pages")
+
+    /**
+     * A PDF may declare any page count (torture gate: /Count 2147483647 kept the import busy for ever).
+     * Real scans stay far below this; anything above is refused up front, never read page by page.
+     */
+    const val MAX_IMPORT_PAGES = 5000
+
+    fun requireImportable(pageCount: Int) {
+        if (pageCount < 0 || pageCount > MAX_IMPORT_PAGES) throw TooManyPagesException(pageCount)
+    }
+
     /**
      * True for a PDF. Mail and cloud apps often give no MIME type (or a generic one)
      * and a URI without a file name, so when neither says "PDF" the first bytes are
@@ -79,6 +92,7 @@ object PdfImporter {
                 throw ProtectedPdfException()
             }
             renderer.use { r ->
+                requireImportable(r.pageCount)
                 for (i in 0 until r.pageCount) {
                     r.openPage(i).use { page ->
                         // 200 dpi, capped so huge posters do not exhaust memory.
