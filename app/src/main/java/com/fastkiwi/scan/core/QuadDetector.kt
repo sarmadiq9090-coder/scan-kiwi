@@ -20,10 +20,19 @@ class GrayImage(val width: Int, val height: Int, val data: ByteArray) {
 /**
  * A found page outline. [minSupport]/[meanSupport] are the fractions of the
  * sides lying on detected edges (0..1); low values mean a doubtful outline.
+ * [cut]: one or two sides lie on the frame border, so part of the page is outside the
+ * picture (CAM-04); such an outline is never confident.
  */
-data class Detection(val quad: Quad, val score: Float, val minSupport: Float = 1f, val meanSupport: Float = 1f) {
+data class Detection(
+    val quad: Quad,
+    val score: Float,
+    val minSupport: Float = 1f,
+    val meanSupport: Float = 1f,
+    val cut: Boolean = false,
+) {
     /** Confident enough to crop without asking the user. */
-    val confident: Boolean get() = minSupport >= 0.6f && meanSupport >= 0.78f
+    val confident: Boolean
+        get() = !cut && minSupport >= DetectionConfig.DEFAULT.confidentMinSupport && meanSupport >= DetectionConfig.DEFAULT.confidentMeanSupport
 }
 
 /**
@@ -31,66 +40,317 @@ data class Detection(val quad: Quad, val score: Float, val minSupport: Float = 1
  * sides are backed by strong edges) in a luminance image.
  *
  * Our own pure-Kotlin implementation (no OpenCV), so the APK stays small:
- *  1. downscale to ~[workSize] px, Gaussian blur
- *  2. Canny edges (Sobel, non-maximum suppression, hysteresis)
+ *  1. downscale to ~[workSize] px; 2.0: grey-level closing removes thin dark text, and a
+ *     percentile stretch lifts low-contrast frames (dim rooms, white page on a white table)
+ *  2. Gaussian blur, Canny edges (Sobel, non-maximum suppression, hysteresis)
  *  3. connected edge components -> convex hull -> best inscribed quad
- *  4. score = area x (fraction of each side lying on detected edges)
+ *  4. score = area x (fraction of each side lying on detected edges); 2.0: the page must
+ *     differ from its surroundings with the same sign on every side (rejects texture)
+ *
+ * Every threshold lives in [DetectionConfig]; [DetectionConfig.LEGACY_1_2] is the 1.2.0 detector.
  */
-class QuadDetector(private val workSize: Int = 320) {
+class QuadDetector(private val workSize: Int = 320, private val cfg: DetectionConfig = DetectionConfig.DEFAULT) {
+
+    /** Test hook: receives why candidates were rejected. */
+    internal var trace: ((String) -> Unit)? = null
 
     /**
-     * Tries each channel in turn (e.g. luminance, then [ImageFilters.paperMap])
-     * and keeps the best outline; stops early at the first confident one.
+     * Detects on each channel (e.g. luminance and [ImageFilters.paperMap]). 2.0 (CAM-01/02 fusion):
+     * every channel is scored and the best outline wins, a confident one before a doubtful one.
+     * 1.2.0 ([DetectionConfig.fuseChannels] off) stopped at the first confident channel.
      */
     fun detectBest(channels: List<() -> GrayImage>): Detection? {
         var best: Detection? = null
         for (make in channels) {
             val d = detect(make()) ?: continue
-            if (best == null || (d.confident && !best.confident) || (d.confident == best.confident && d.score > best.score)) best = d
-            if (best.confident) break
+            if (best == null || better(d, best)) best = d
+            if (!cfg.fuseChannels && best.confident) break
         }
         return best
     }
 
+    private fun better(a: Detection, b: Detection): Boolean = when {
+        a.cut != b.cut -> !a.cut
+        a.confident != b.confident -> a.confident
+        else -> a.score > b.score
+    }
+
     fun detect(img: GrayImage): Detection? {
         val scale = max(img.width, img.height).toFloat() / workSize
-        val small = if (scale > 1.05f) downscale(img, scale) else img
-        val s = if (scale > 1.05f) img.width.toFloat() / small.width else 1f
-        val w = small.width
-        val h = small.height
+        val small0 = if (scale > 1.05f) downscale(img, scale) else img
+        val s = if (scale > 1.05f) img.width.toFloat() / small0.width else 1f
+        val w = small0.width
+        val h = small0.height
         if (w < 16 || h < 16) return null
+        val small = prepare(small0)
 
         val blurred = gaussian5(small.data, w, h)
         val nms = nonMaxSuppressed(blurred, w, h)
         val (baseHigh, strong) = thresholds(nms)
 
-        val minArea = 0.12f * w * h
+        val minArea = cfg.minArea * w * h
         var best: Detection? = null
         // Several passes with rising thresholds: weak texture (wood, cloth) that
         // merges with the page outline at a low threshold drops out at a higher one.
-        for (factor in floatArrayOf(1f, 1.7f, 2.8f)) {
-            val high = (baseHigh * factor).toInt().coerceAtMost(max(60, (strong * 0.8f).toInt()))
+        for ((pass, factor) in cfg.passFactors.withIndex()) {
+            val high = (baseHigh * factor).toInt().coerceAtMost(max(cfg.highFloor, (strong * 0.8f).toInt()))
             val edges = hysteresis(nms, w, h, high, high / 2)
             // Dilation closes small gaps in the outline and tolerates 1 px of error.
             val support = dilate(edges, w, h, 1)
-            for (hull in componentHulls(support, w, h)) {
+            val hulls = componentHulls(support, w, h)
+            trace?.invoke("pass $factor high=$high base=$baseHigh strong=$strong hulls=${hulls.size}")
+            val candidates = ArrayList<Quad>()
+            for (hull in hulls) {
                 val rough = bestQuadInHull(hull) ?: continue
-                val quad = refine(rough, edges, w, h)
+                candidates += refine(rough, edges, w, h)
+            }
+            // 2.0 (CAM-05): quads from four strong straight lines, immune to other edges
+            // (shadows, text blocks, clutter) touching the page outline.
+            if (pass < cfg.linePasses) candidates += lineQuads(edges, blurred, w, h).map { refine(it, edges, w, h) }
+            for (quad in candidates) {
                 val area = quad.area()
-                if (area < minArea || area > 0.995f * w * h) continue
+                trace?.invoke("  cand area=${area / (w * h)} quad=$quad")
+                if (area < minArea || area > cfg.maxArea * w * h) continue
                 if (!quad.isConvex()) continue
                 val (lo, hi) = quad.angleRange()
-                if (lo < 35f || hi > 145f) continue
+                if (lo < cfg.minAngle || hi > cfg.maxAngle) continue
+                val border = if (cfg.detectCut) borderSides(quad, w, h) else BooleanArray(4)
+                val nBorder = border.count { it }
+                if (nBorder > 2) continue
                 val sides = sideSupport(quad, support, w, h)
+                for (i in 0 until 4) if (border[i]) sides[i] = 1f
                 val minSide = sides.min()
                 val mean = sides.average().toFloat()
-                if (minSide < 0.45f || mean < 0.62f) continue
-                val score = (area / (w * h)) * mean * mean
-                if (best == null || score > best.score) best = Detection(quad, score, minSide, mean)
+                trace?.invoke("  support min=$minSide mean=$mean border=${border.toList()}")
+                if (minSide < cfg.minSideSupport || mean < cfg.minMeanSupport) continue
+                if (cfg.minSideContrast > 0f && sideContrast(quad, small, border).also { trace?.invoke("  contrast=$it") } < cfg.minSideContrast) continue
+                val cut = nBorder > 0
+                // A cut outline only matters when nothing whole was found.
+                val score = (area / (w * h)) * mean * mean * (if (cut) 0.5f else 1f)
+                val d = Detection(quad, score, minSide, mean, cut)
+                // 1.2.0 kept the highest score within one channel; 2.0 prefers confident outlines.
+                if (best == null || (if (cfg.fuseChannels) better(d, best) else d.score > best.score)) best = d
             }
-            if (best != null && best.score > 0.25f) break
+            if (best != null && !best.cut && best.score > 0.25f) break
         }
         return best?.let { it.copy(quad = it.quad.scale(s, s)) }
+    }
+
+    // ---------------------------------------------------------------- 2.0 line candidates (CAM-05)
+
+    private class Line(val theta: Float, val rho: Float, val votes: Int) {
+        val c = kotlin.math.cos(theta)
+        val s = kotlin.math.sin(theta)
+    }
+
+    /**
+     * Gradient-directed Hough transform: each edge pixel votes only for lines near its own
+     * orientation. The strongest lines are paired into opposite sides and every two pairs
+     * give a candidate quad (validated by the same support and contrast checks as hull quads).
+     */
+    private fun lineQuads(edges: ByteArray, g: IntArray, w: Int, h: Int): List<Quad> {
+        val nTheta = 90
+        val diag = sqrt((w * w + h * h).toFloat()).toInt() + 1
+        val nRho = 2 * diag + 1
+        val acc = IntArray(nTheta * nRho)
+        val cosT = FloatArray(nTheta) { kotlin.math.cos(it * Math.PI / nTheta).toFloat() }
+        val sinT = FloatArray(nTheta) { kotlin.math.sin(it * Math.PI / nTheta).toFloat() }
+        for (y in 1 until h - 1) for (x in 1 until w - 1) {
+            val i = y * w + x
+            if (edges[i].toInt() == 0) continue
+            val gx = -g[i - w - 1] - 2 * g[i - 1] - g[i + w - 1] + g[i - w + 1] + 2 * g[i + 1] + g[i + w + 1]
+            val gy = -g[i - w - 1] - 2 * g[i - w] - g[i - w + 1] + g[i + w - 1] + 2 * g[i + w] + g[i + w + 1]
+            if (gx == 0 && gy == 0) continue
+            var phi = kotlin.math.atan2(gy.toDouble(), gx.toDouble())
+            if (phi < 0) phi += Math.PI
+            val t0 = (phi / Math.PI * nTheta).roundToInt()
+            for (dt in -3..3) {
+                val t = ((t0 + dt) % nTheta + nTheta) % nTheta
+                val r = (x * cosT[t] + y * sinT[t]).roundToInt() + diag
+                acc[t * nRho + r]++
+            }
+        }
+        val minVotes = (cfg.lineMinVotes * min(w, h)).toInt()
+        val peaks = ArrayList<Line>()
+        for (t in 0 until nTheta) for (r in 0 until nRho) {
+            val v = acc[t * nRho + r]
+            if (v < minVotes) continue
+            var isMax = true
+            loop@ for (dt in -2..2) for (dr in -4..4) {
+                if (dt == 0 && dr == 0) continue
+                var tt = t + dt
+                var rr = r + dr
+                if (tt < 0) { tt += nTheta; rr = 2 * diag - rr } else if (tt >= nTheta) { tt -= nTheta; rr = 2 * diag - rr }
+                if (rr < 0 || rr >= nRho) continue
+                val o = acc[tt * nRho + rr]
+                if (o > v || (o == v && (dt < 0 || (dt == 0 && dr < 0)))) { isMax = false; break@loop }
+            }
+            if (isMax) peaks += Line((t * Math.PI / nTheta).toFloat(), (r - diag).toFloat(), v)
+        }
+        val lines = peaks.sortedByDescending { it.votes }.take(cfg.maxLines)
+        // Opposite sides: nearly parallel lines that do not cross inside the frame.
+        val pairs = ArrayList<IntArray>()
+        val maxPar = kotlin.math.sin(Math.toRadians(30.0)).toFloat()
+        for (i in lines.indices) for (j in i + 1 until lines.size) {
+            val a = lines[i]; val b = lines[j]
+            val sinD = abs(a.c * b.s - a.s * b.c)
+            if (sinD > maxPar) continue
+            val p = intersect(a, b)
+            if (p != null && p.x > -0.1f * w && p.x < 1.1f * w && p.y > -0.1f * h && p.y < 1.1f * h) continue
+            // Far enough apart (distance from one line's centre point to the other).
+            val mid = Pt(w / 2f, h / 2f)
+            val da = a.c * mid.x + a.s * mid.y - a.rho
+            val db = b.c * mid.x + b.s * mid.y - b.rho
+            val sameSide = (a.c * b.c + a.s * b.s) > 0
+            val sep = if (sameSide) abs(da - db) else abs(da + db)
+            if (sep < 0.2f * min(w, h)) continue
+            pairs += intArrayOf(i, j)
+        }
+        val out = ArrayList<Quad>()
+        val minCross = kotlin.math.sin(Math.toRadians(45.0)).toFloat()
+        for (pi in pairs.indices) for (pj in pi + 1 until pairs.size) {
+            val (a1, a2) = pairs[pi].let { lines[it[0]] to lines[it[1]] }
+            val (b1, b2) = pairs[pj].let { lines[it[0]] to lines[it[1]] }
+            if (pairs[pi].any { it in pairs[pj] }) continue
+            if (abs(a1.c * b1.s - a1.s * b1.c) < minCross) continue
+            val c1 = intersect(a1, b1) ?: continue
+            val c2 = intersect(b1, a2) ?: continue
+            val c3 = intersect(a2, b2) ?: continue
+            val c4 = intersect(b2, a1) ?: continue
+            val pts = listOf(c1, c2, c3, c4)
+            if (pts.any { it.x < -2f || it.y < -2f || it.x > w + 1f || it.y > h + 1f }) continue
+            out += Quad.order(pts.map { Pt(it.x.coerceIn(0f, w - 1f), it.y.coerceIn(0f, h - 1f)) })
+            if (out.size >= cfg.maxLineQuads) return out
+        }
+        return out
+    }
+
+    private fun intersect(a: Line, b: Line): Pt? {
+        val det = a.c * b.s - a.s * b.c
+        if (abs(det) < 1e-4f) return null
+        return Pt((a.rho * b.s - b.rho * a.s) / det, (a.c * b.rho - b.c * a.rho) / det)
+    }
+
+    // ---------------------------------------------------------------- 2.0 pre-processing
+
+    /** Closing (text removal) and percentile stretch, as configured. */
+    internal fun prepare(img: GrayImage): GrayImage {
+        var data = img.data
+        val w = img.width
+        val h = img.height
+        if (cfg.closeRadius > 0) data = minFilter(maxFilter(data, w, h, cfg.closeRadius), w, h, cfg.closeRadius)
+        if (cfg.stretchBelowSpread > 0) data = stretch(data)
+        return if (data === img.data) img else GrayImage(w, h, data)
+    }
+
+    /** Linear stretch of the p2..p98 range to 0..255 when the frame is low in contrast. */
+    private fun stretch(src: ByteArray): ByteArray {
+        val hist = IntArray(256)
+        for (b in src) hist[b.toInt() and 0xFF]++
+        val lo = percentile(hist, src.size, cfg.stretchLowPct)
+        val hi = percentile(hist, src.size, cfg.stretchHighPct)
+        val spread = hi - lo
+        if (spread >= cfg.stretchBelowSpread) return src
+        val gain = min(cfg.maxStretchGain, 255f / max(1, spread))
+        val mid = (lo + hi) / 2f
+        val lut = ByteArray(256) { (128 + (it - mid) * gain).roundToInt().coerceIn(0, 255).toByte() }
+        return ByteArray(src.size) { lut[src[it].toInt() and 0xFF] }
+    }
+
+    private fun percentile(hist: IntArray, total: Int, p: Double): Int {
+        val target = (total * p).toLong()
+        var acc = 0L
+        for (i in 0 until 256) {
+            acc += hist[i]
+            if (acc > target) return i
+        }
+        return 255
+    }
+
+    private fun maxFilter(src: ByteArray, w: Int, h: Int, r: Int): ByteArray = rankFilter(src, w, h, r, true)
+    private fun minFilter(src: ByteArray, w: Int, h: Int, r: Int): ByteArray = rankFilter(src, w, h, r, false)
+
+    /** Separable square max (or min) filter of radius [r]. */
+    private fun rankFilter(src: ByteArray, w: Int, h: Int, r: Int, isMax: Boolean): ByteArray {
+        val tmp = ByteArray(w * h)
+        val out = ByteArray(w * h)
+        for (y in 0 until h) {
+            val row = y * w
+            for (x in 0 until w) {
+                var m = if (isMax) 0 else 255
+                for (d in max(0, x - r)..min(w - 1, x + r)) {
+                    val v = src[row + d].toInt() and 0xFF
+                    m = if (isMax) max(m, v) else min(m, v)
+                }
+                tmp[row + x] = m.toByte()
+            }
+        }
+        for (y in 0 until h) for (x in 0 until w) {
+            var m = if (isMax) 0 else 255
+            for (d in max(0, y - r)..min(h - 1, y + r)) {
+                val v = tmp[d * w + x].toInt() and 0xFF
+                m = if (isMax) max(m, v) else min(m, v)
+            }
+            out[y * w + x] = m.toByte()
+        }
+        return out
+    }
+
+    /** Which sides run along the frame border (the page continues outside the picture). */
+    private fun borderSides(q: Quad, w: Int, h: Int): BooleanArray {
+        val p = q.points
+        val tol = 3f
+        return BooleanArray(4) { s ->
+            val a = p[s]; val b = p[(s + 1) % 4]
+            fun near(v: Float, lim: Float) = v <= tol || v >= lim - 1 - tol
+            (near(a.x, w.toFloat()) && near(b.x, w.toFloat()) && abs(a.x - b.x) <= 2 * tol) ||
+                (near(a.y, h.toFloat()) && near(b.y, h.toFloat()) && abs(a.y - b.y) <= 2 * tol)
+        }
+    }
+
+    /**
+     * Minimum over the non-border sides of the share of points where the inside differs from
+     * the outside with the page's overall sign (paper brighter, or darker, than the surface).
+     */
+    private fun sideContrast(q: Quad, img: GrayImage, border: BooleanArray): Float {
+        val p = q.points
+        val cx = p.sumOf { it.x.toDouble() }.toFloat() / 4f
+        val cy = p.sumOf { it.y.toDouble() }.toFloat() / 4f
+        val n = 24
+        val diffs = Array(4) { IntArray(n) }
+        var total = 0L
+        for (s in 0 until 4) {
+            if (border[s]) continue
+            val a = p[s]; val b = p[(s + 1) % 4]
+            val dx = b.x - a.x; val dy = b.y - a.y
+            val len = sqrt(dx * dx + dy * dy).coerceAtLeast(1e-3f)
+            var nx = -dy / len; var ny = dx / len
+            val mx = (a.x + b.x) / 2f; val my = (a.y + b.y) / 2f
+            if ((cx - mx) * nx + (cy - my) * ny < 0) { nx = -nx; ny = -ny }
+            for (i in 0 until n) {
+                val t = 0.1f + 0.8f * i / (n - 1)
+                val x = a.x + dx * t; val y = a.y + dy * t
+                val inside = sample(img, x + 3 * nx, y + 3 * ny)
+                val outside = sample(img, x - 3 * nx, y - 3 * ny)
+                val d = if (inside < 0 || outside < 0) 0 else inside - outside
+                diffs[s][i] = d
+                total += d
+            }
+        }
+        val sign = if (total >= 0) 1 else -1
+        var worst = 1f
+        for (s in 0 until 4) {
+            if (border[s]) continue
+            val ok = diffs[s].count { it * sign >= cfg.sideContrastLevel }
+            worst = min(worst, ok.toFloat() / n)
+        }
+        return worst
+    }
+
+    private fun sample(img: GrayImage, x: Float, y: Float): Int {
+        val xi = x.roundToInt(); val yi = y.roundToInt()
+        if (xi < 0 || yi < 0 || xi >= img.width || yi >= img.height) return -1
+        return img[xi, yi]
     }
 
     /**
@@ -265,10 +525,10 @@ class QuadDetector(private val workSize: Int = 320) {
             }
             return 2046
         }
-        val p80 = pct(0.80)
+        val p80 = pct(cfg.highPercentile)
         val p99 = pct(0.99)
         // Ignore edges much weaker than the strongest ones (texture, noise).
-        val high = max(p80, (p99 * 0.3f).toInt()).coerceIn(60, 400)
+        val high = max(p80, (p99 * cfg.strongFraction).toInt()).coerceIn(cfg.highFloor, cfg.highCeil)
         return high to p99
     }
 
