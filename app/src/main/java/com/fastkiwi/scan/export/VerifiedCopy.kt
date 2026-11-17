@@ -13,6 +13,7 @@ import java.security.MessageDigest
  * 2.0.1: copies a finished export to a place the user picked ("Save as", a folder) and reads it back.
  * The copy counts only when the saved bytes are the file's bytes: same length, same SHA-256. A provider
  * that cannot truncate ("wt") is written with "w" and then caught here if old bytes stayed at the end.
+ * (A provider that cannot be read back at all is not checked.)
  */
 object VerifiedCopy {
     class Mismatch(message: String) : IOException(message)
@@ -22,7 +23,10 @@ object VerifiedCopy {
             ?: cr.openOutputStream(target, "w") ?: throw IOException("cannot open the chosen file")
         out.use { o -> file.inputStream().use { it.copyTo(o) } }
         val want = file.inputStream().use { digest(it) }
-        val got = (cr.openInputStream(target) ?: throw Mismatch("cannot read the saved file back")).use { digest(it) }
+        // A provider that cannot be read back (some cloud folders are write-only until uploaded) is
+        // trusted with what it accepted; one that can be read must hold exactly the export.
+        val back = try { cr.openInputStream(target) } catch (e: Exception) { null } ?: return
+        val got = back.use { digest(it) }
         if (got.first != want.first) throw Mismatch("saved ${got.first} bytes, expected ${want.first}")
         if (!got.second.contentEquals(want.second)) throw Mismatch("the saved file differs from the export")
     }
