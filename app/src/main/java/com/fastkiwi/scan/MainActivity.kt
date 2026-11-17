@@ -35,6 +35,7 @@ import com.fastkiwi.scan.ui.CameraScreen
 import com.fastkiwi.scan.ui.CropScreen
 import com.fastkiwi.scan.ui.EditorScreen
 import com.fastkiwi.scan.ui.ExportResult
+import kotlinx.coroutines.launch
 import com.fastkiwi.scan.ui.HomeScreen
 import com.fastkiwi.scan.ui.PageScreen
 import com.fastkiwi.scan.ui.Screen
@@ -159,13 +160,19 @@ private fun App(vm: AppViewModel) {
             }
         }
     }
+    val exportScope = androidx.compose.runtime.rememberCoroutineScope()
     LaunchedEffect(Unit) {
         vm.exports.collect { r ->
             when (r) {
-                is ExportResult.Share -> share(ctx, r.files, r.mime)
-                is ExportResult.Saved -> snackbar.showSnackbar(
-                    res.getString(R.string.msg_saved, com.fastkiwi.scan.ui.LocalFormat.size(ctx, r.bytes)),
-                )
+                // 2.0.1: a share sheet that cannot open (no FileProvider root, no app) says so.
+                is ExportResult.Share -> try { share(ctx, r.files, r.mime) } catch (e: Exception) { vm.exportFailed(e) }
+                // 2.0.1: shown without holding up this collector. 2.0.0 waited here until the snackbar was gone
+                // (behind every message queued before it), so a Share right after a Save did nothing meanwhile.
+                is ExportResult.Saved -> {
+                    val text = res.getString(R.string.msg_saved, com.fastkiwi.scan.ui.LocalFormat.size(ctx, r.bytes))
+                    vm.exportDone.value = text
+                    exportScope.launch { snackbar.showSnackbar(text) }
+                }
             }
         }
     }

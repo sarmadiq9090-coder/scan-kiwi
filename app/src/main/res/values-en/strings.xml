@@ -100,6 +100,9 @@
     <string name="msg_saved">Saved (%1$s)</string>
     <string name="msg_imported">Imported: %1$s</string>
     <string name="msg_error">Something went wrong: %1$s</string>
+    <string name="msg_export_failed">Export failed: %1$s</string>
+    <string name="export_page_unreadable">page %1$s could not be read</string>
+    <string name="export_file_damaged">the file came out damaged, so it was not shared or saved</string>
     <string name="msg_out_of_memory">Not enough memory. Try a lower quality or fewer pages.</string>
     <string name="msg_pdf_protected">This PDF is password protected and cannot be imported.</string>
 

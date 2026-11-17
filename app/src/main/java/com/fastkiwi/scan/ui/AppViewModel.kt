@@ -157,6 +157,36 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     val exportState = mutableStateOf<ExportProgress?>(null)
     private var exportJob: kotlinx.coroutines.Job? = null
 
+    /**
+     * 2.0.1: why the last export, share or save failed («تعذّر التصدير: …»), shown inside the export
+     * sheet. The snackbar alone sat under the sheet, so a failed export looked like "nothing happens".
+     */
+    val exportError = mutableStateOf<String?>(null)
+
+    /** 2.0.1: «تم الحفظ (…)» after "Save to device", also shown in the sheet (the snackbar is under it). */
+    val exportDone = mutableStateOf<String?>(null)
+
+    /** 2.0.1: a failure after the file was made (opening the share sheet); never silent. */
+    fun exportFailed(e: Throwable) {
+        if (BuildConfig.DEBUG) android.util.Log.w("ScanKiwi", "share failed", e)
+        viewModelScope.launch { reportFailure("EXPORT", UiMessage(R.string.msg_error, reasonOf(e), report = "EXPORT" to e.javaClass.simpleName)) }
+    }
+
+    private fun reasonOf(e: Throwable): String = (e.message ?: e.javaClass.simpleName).take(120)
+
+    /** Sends [m]; for an export it becomes «تعذّر التصدير: <reason>» and also stays in the sheet. */
+    private suspend fun reportFailure(code: String, m: UiMessage) {
+        if (!code.startsWith("EXPORT")) { _messages.send(m); return }
+        val ctx = getApplication<Application>()
+        val reason = when {
+            m.res == R.string.msg_error && m.arg != null -> m.arg
+            m.arg != null -> ctx.getString(m.res, m.arg)
+            else -> ctx.getString(m.res)
+        }
+        exportError.value = ctx.getString(R.string.msg_export_failed, reason)
+        _messages.send(UiMessage(R.string.msg_export_failed, reason, report = m.report))
+    }
+
     /** Stops the running export; OCR is interrupted and the half-written file deleted. */
     fun cancelExport() {
         val j = exportJob ?: return
@@ -169,6 +199,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Starts an export job; only one at a time (a second tap is ignored while one runs). */
     private fun launchExport(block: suspend () -> Unit) {
         if (exportJob?.isActive == true) return
+        exportError.value = null
+        exportDone.value = null
         exportState.value = ExportProgress(0, 0, false) // instant feedback on tap
         exportJob = viewModelScope.launch {
             try {
@@ -368,22 +400,30 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         return try {
             withContext(Dispatchers.Default) { block() }
         } catch (e: OutOfMemoryError) {
-            _messages.send(UiMessage(R.string.msg_out_of_memory, report = code to "OutOfMemoryError")); null
+            reportFailure(code, UiMessage(R.string.msg_out_of_memory, report = code to "OutOfMemoryError")); null
         } catch (e: PdfImporter.ProtectedPdfException) {
-            _messages.send(UiMessage(R.string.msg_pdf_protected)); null
+            reportFailure(code, UiMessage(R.string.msg_pdf_protected)); null
         } catch (e: com.fastkiwi.scan.pdf.NoSpaceException) {
             // 2.0-pdf: the free-space check (needed x 1.2) failed before anything was written.
             val ctx = getApplication<Application>()
-            _messages.send(UiMessage(R.string.pdf_msg_no_space, LocalFormat.size(ctx, e.needed))); null
+            reportFailure(code, UiMessage(R.string.pdf_msg_no_space, LocalFormat.size(ctx, e.needed))); null
         } catch (e: com.fastkiwi.scan.pdf.PdfOpException) {
-            _messages.send(UiMessage(pdfErrorMessage(e.error))); null
+            reportFailure(code, UiMessage(pdfErrorMessage(e.error))); null
         } catch (e: CancellationException) {
             throw e
+        } catch (e: com.fastkiwi.scan.export.Exporter.PageUnreadable) {
+            reportFailure(code, UiMessage(R.string.export_page_unreadable, LocalFormat.count(e.index + 1), report = code to "PageUnreadable")); null
+        } catch (e: com.fastkiwi.scan.export.VerifiedCopy.Mismatch) {
+            reportFailure(code, UiMessage(R.string.export_file_damaged, report = code to "Mismatch")); null
         } catch (e: Exception) {
             // Exception texts can carry document content (org.json quotes the whole
             // file it failed on), so release builds log nothing and show a short text.
             if (BuildConfig.DEBUG) android.util.Log.w("ScanKiwi", "job failed", e)
-            _messages.send(UiMessage(R.string.msg_error, (e.message ?: e.javaClass.simpleName).take(120), report = code to e.javaClass.simpleName)); null
+            reportFailure(code, UiMessage(R.string.msg_error, reasonOf(e), report = code to e.javaClass.simpleName)); null
+        } catch (e: LinkageError) {
+            // 2.0.1: a class or native method missing at run time (a shrinking mistake) is reported
+            // like any other failure instead of ending the app or the export without a word.
+            reportFailure(code, UiMessage(R.string.msg_error, reasonOf(e), report = code to e.javaClass.simpleName)); null
         } finally {
             busy.intValue--
             progress.value = null
@@ -1061,8 +1101,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             val r = job("EXPORT") {
                 val doc = store.load(docId) ?: return@job null
                 if (doc.pages.isEmpty()) return@job null
-                if (asJpeg) ExportResult.Share(exporter.exportJpegs(doc, opt) { a, b -> progress.value = a to b; exportState.value = ExportProgress(a, b, false) }, "image/jpeg")
+                val r = if (asJpeg) ExportResult.Share(exporter.exportJpegs(doc, opt) { a, b -> progress.value = a to b; exportState.value = ExportProgress(a, b, false) }, "image/jpeg")
                 else ExportResult.Share(listOf(exportPdf(doc, opt)), "application/pdf")
+                // 2.0.1: re-opened and checked before another app sees it.
+                r.files.forEach { com.fastkiwi.scan.export.VerifiedCopy.checkFinished(it, r.mime) }
+                r
             }
             if (r != null) {
                 refresh() // OCR text may now be searchable
@@ -1079,8 +1122,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 val file = exportPdf(doc, opt)
                 val cr: ContentResolver = getApplication<Application>().contentResolver
                 try {
-                    val out = cr.openOutputStream(target, "wt") ?: throw IOException("cannot open the chosen file")
-                    out.use { o -> file.inputStream().use { it.copyTo(o) } }
+                    com.fastkiwi.scan.export.VerifiedCopy.copy(cr, file, target)
                     ExportResult.Saved(file.name, file.length())
                 } catch (e: Throwable) {
                     // 2.0-pdf: never leave a half-copied file where the user saved (it is the new
@@ -1110,8 +1152,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     val parent = DocumentsContract.buildDocumentUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree))
                     var total = 0L
                     for (f in files) {
-                        val dest = DocumentsContract.createDocument(cr, parent, "image/jpeg", f.name) ?: continue
-                        cr.openOutputStream(dest, "w")?.use { out -> f.inputStream().use { it.copyTo(out) } }
+                        val dest = DocumentsContract.createDocument(cr, parent, "image/jpeg", f.name) ?: throw IOException("cannot create ${f.name}")
+                        com.fastkiwi.scan.export.VerifiedCopy.copy(cr, f, dest)
                         total += f.length()
                     }
                     ExportResult.Saved(files.size.toString(), total)
@@ -1407,7 +1449,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** OCR-08: shares the document's text as a UTF-8 .txt file. */
     fun shareTxt(docId: String) {
         launchExport {
-            val r = job("EXPORT_TXT") { txtFile(docId)?.let { ExportResult.Share(listOf(it), "text/plain") } }
+            val r = job("EXPORT_TXT") {
+                txtFile(docId)?.let { com.fastkiwi.scan.export.VerifiedCopy.checkFinished(it, "text/plain"); ExportResult.Share(listOf(it), "text/plain") }
+            }
             if (r != null) { refresh(); _exports.send(r) }
         }
     }
@@ -1418,8 +1462,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             val r = job("EXPORT_TXT") {
                 val f = txtFile(docId) ?: return@job null
                 try {
-                    val out = getApplication<Application>().contentResolver.openOutputStream(target, "wt") ?: throw IOException("cannot open the chosen file")
-                    out.use { o -> f.inputStream().use { it.copyTo(o) } }
+                    com.fastkiwi.scan.export.VerifiedCopy.copy(getApplication<Application>().contentResolver, f, target)
                     ExportResult.Saved(f.name, f.length())
                 } finally {
                     f.delete()

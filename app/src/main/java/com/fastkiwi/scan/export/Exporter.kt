@@ -114,9 +114,20 @@ class Exporter(
     private suspend fun pageBitmap(doc: ScanDocument, index: Int, maxSide: Int = BitmapIO.MAX_SOURCE_SIDE, pool: BitmapIO.Pool? = null): Bitmap? {
         val page = doc.pages[index]
         val f = store.outFile(doc.id, page.id)
+        fun decode() = if (pool != null) BitmapIO.decodeFile(f, maxSide, pool) else BitmapIO.decodeFile(f, maxSide)
         if (!f.exists()) PageRenderer.renderAndSave(store, doc.id, page)?.recycle()
-        return if (pool != null) BitmapIO.decodeFile(f, maxSide, pool) else BitmapIO.decodeFile(f, maxSide)
+        // 2.0.1: a finished page that does not decode (cut short, emptied) is made again from its photo.
+        return decode() ?: run {
+            PageRenderer.renderAndSave(store, doc.id, page)?.recycle()
+            decode()
+        }
     }
+
+    /** 2.0.1: page [index] (0-based) could not be read; the export stops instead of leaving it out. */
+    class PageUnreadable(val index: Int) : java.io.IOException("page ${index + 1} could not be read")
+
+    private suspend fun requirePage(doc: ScanDocument, index: Int, maxSide: Int, pool: BitmapIO.Pool? = null): Bitmap =
+        pageBitmap(doc, index, maxSide, pool) ?: throw PageUnreadable(index)
 
     /** What a PDF export depends on; equal keys mean the last file can be shared again as is. */
     private fun exportKey(doc: ScanDocument, opt: ExportOptions): String? {
@@ -255,7 +266,7 @@ class Exporter(
         suspend fun encodedSize(i: Int, s0: EncodeSettings): Long {
             val s = MemoryBudget.cap(s0) // 2.0-perf
             val bitonal = doc.pages[i].filter == Filter.BW
-            val full = pageBitmap(doc, i, if (bitonal) s.bitonalLongSide else s.longSide, pool) ?: return 0L
+            val full = requirePage(doc, i, if (bitonal) s.bitonalLongSide else s.longSide, pool)
             return when (val img = encode(full, bitonal, s, i, doc.pages.size, opt, pool).first) {
                 is PdfImage.Jpeg -> img.bytes.size.toLong()
                 is PdfImage.Bitonal -> PdfWriter.deflate(img.bits).size.toLong()
@@ -281,7 +292,8 @@ class Exporter(
                     val needOcr = engineKey != null && cached == null
                     // Decode only as large as needed: the export size, or OCR's working size.
                     val target = if (bitonal) s.bitonalLongSide else s.longSide
-                    val full = pageBitmap(doc, i, if (needOcr) max(target, ocrOptions.maxSide) else target, pool) ?: continue
+                    // 2.0.1: never a page left out (2.0.0 could write a PDF with fewer pages, or none).
+                    val full = requirePage(doc, i, if (needOcr) max(target, ocrOptions.maxSide) else target, pool)
                     // Cached boxes are in the frame OCR read (often larger than this export's
                     // image): bring them into this bitmap's pixels before anything else.
                     var words: List<OcrWord> = cached?.let {
@@ -317,8 +329,9 @@ class Exporter(
                 currentCoroutineContext().ensureActive()
             }
             progress(doc.pages.size, doc.pages.size)
-            // Validated before it can replace anything or be shared.
-            safe.commitPdf(written)
+            // Validated before it can replace anything or be shared: every page of the document is in it.
+            if (written != doc.pages.size || written == 0) { safe.part.delete(); throw PageUnreadable(written) }
+            safe.commitPdf(doc.pages.size)
         }
     }
 
@@ -352,8 +365,10 @@ class Exporter(
             PdfImage.Bitonal(img.width, img.height, PixelStrips.packBits(img))
         } else {
             val bos = ByteArrayOutputStream()
-            img.compress(Bitmap.CompressFormat.JPEG, quality.jpegQuality, bos)
+            val encoded = img.compress(Bitmap.CompressFormat.JPEG, quality.jpegQuality, bos)
             val bytes = bos.toByteArray()
+            // 2.0.1: an image that did not encode is never written into the file as an empty or cut stream.
+            if (!encoded || !completeJpeg(bytes)) { release(img); throw PageUnreadable(index) }
             PdfImage.Jpeg(img.width, img.height, bytes, PdfWriter.jpegComponents(bytes))
         }
         release(img)
@@ -399,6 +414,10 @@ class Exporter(
     }
 
     private companion object {
+        /** Starts with SOI (FFD8) and ends with EOI (FFD9). */
+        fun completeJpeg(b: ByteArray): Boolean = b.size > 4 && b[0] == 0xFF.toByte() && b[1] == 0xD8.toByte() &&
+            b[b.size - 2] == 0xFF.toByte() && b[b.size - 1] == 0xD9.toByte()
+
         const val BITONAL_DEFLATE_RATIO = 0.12f
         /** Header, catalog, page tree, xref: ~2 KB; objects per page ~1.5 KB. */
         const val PDF_OVERHEAD = 2_500L
@@ -415,7 +434,7 @@ class Exporter(
                 progress(i, doc.pages.size)
                 // 2.0-perf: decode only as large as the export (was the 3200 px source size), within the budget.
                 val side = MemoryBudget.capSide(opt.quality.longSide)
-                val full = pageBitmap(doc, i, side) ?: continue
+                val full = requirePage(doc, i, side)
                 var img = BitmapIO.fit(full, side)
                 if (decor.isActive(opt.pageNumbers, opt.watermark)) {
                     if (!img.isMutable) img = img.copy(Bitmap.Config.ARGB_8888, true).also { img.recycle() }

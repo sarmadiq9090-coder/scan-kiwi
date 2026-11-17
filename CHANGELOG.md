@@ -7,6 +7,36 @@ Each release section is written in Arabic first, then English.
 
 ## [Unreleased]
 
+## [2.0.1] - 2026-11-17
+
+### العربية
+
+#### أُصلح
+- **التصدير والمشاركة والحفظ**: لا يُكتب ملف PDF ناقص أبداً. في 2.0.0 كانت الصفحة التي تتعذّر قراءتها تُترك خارج الملف بصمت، فقد يخرج PDF بلا صفحات يراه العارض «تالفاً». الآن تُعاد الصفحة من صورتها الأصلية، وإن تعذّر ذلك يتوقف التصدير برسالة «تعذّر التصدير: تعذّرت قراءة الصفحة N».
+- كل فشل في التصدير أو المشاركة أو الحفظ يظهر داخل نافذة التصدير نفسها («تعذّر التصدير: …»)؛ كانت الرسالة تظهر تحت النافذة فيبدو أن «لا شيء يحدث».
+- قبل المشاركة يُعاد فتح الملف والتحقق منه (PDF كامل، JPEG كامل، نص غير فارغ)، وبعد «حفظ في الجهاز» يُقرأ الملف المحفوظ ويُقارن بالأصل (الطول وSHA-256)؛ لا يُشارك ولا يُحفظ ملف تالف.
+- إن لم تُفتح نافذة المشاركة (مثل عدم وجود تطبيق) تظهر رسالة بدل الصمت.
+
+#### تغيّر
+- فحص جديد في CI يشغّل نسخة الإصدار المصغّرة بـ R8 نفسها (لا نسخة التطوير): تصدير PDF وJPG وTXT ومشاركتها وحفظها على أندرويد 8 حتى 16 مع فحص PDF بمكتبة Apache PDFBox، والتحقق من التحديثات وتنزيلها من خادم GitHub محلي مزيّف، وفحص أن R8 لم يحذف ما يحتاجه التطبيق بالاسم.
+
+### English
+
+#### Fixed
+- **Export, Share and Save**: a PDF is never written with pages missing. In 2.0.0 a page that could not be read was left out
+  without a word, so a PDF could come out with no pages, which viewers call damaged. The page is now made again from its
+  photo; if that fails too, the export stops with "Export failed: page N could not be read".
+- Every export, share or save failure is shown inside the export sheet ("Export failed: …"); the message used to appear
+  under the sheet, so it looked as if nothing happened.
+- Before sharing, the file is opened again and checked (complete PDF, complete JPEG, non-empty text); after "Save to device"
+  the saved file is read back and compared with the export (length and SHA-256). A damaged file is never shared or saved.
+- When the share sheet cannot open (for example, no app to receive the file) the app says so instead of staying silent.
+
+#### Changed
+- New CI checks run the R8-shrunk release program itself, not the debug build: PDF, JPG and TXT export, share and save on
+  Android 8 to 16 with each PDF checked by Apache PDFBox, the update check and download against a local fake GitHub, and a
+  check that R8 kept everything the app reaches by name.
+
 ## [2.0.0] - 2026-11-15
 
 ### العربية
@@ -183,7 +213,8 @@ Each release section is written in Arabic first, then English.
 ### English
 - First release: camera scanning with edge detection, filters, PDF with optional OCR and password, fully offline.
 
-[Unreleased]: https://github.com/sarmadiq9090-coder/scan-kiwi/compare/v2.0.0...HEAD
+[Unreleased]: https://github.com/sarmadiq9090-coder/scan-kiwi/compare/v2.0.1...HEAD
+[2.0.1]: https://github.com/sarmadiq9090-coder/scan-kiwi/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/sarmadiq9090-coder/scan-kiwi/compare/v1.2.0...v2.0.0
 [1.2.0]: https://github.com/sarmadiq9090-coder/scan-kiwi/releases/tag/v1.2.0
 [1.1.1]: https://github.com/sarmadiq9090-coder/scan-kiwi/releases/tag/v1.1.1

@@ -547,6 +547,8 @@ fun ExportSheet(vm: AppViewModel, docId: String, onDismiss: () -> Unit) {
     var watermarkOn by remember { mutableStateOf(false) }
     var watermark by remember { mutableStateOf(Watermark("", 0.25f, true)) }
     val busy by vm.busy
+    // 2.0.1: an error belongs to this opening of the sheet.
+    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { vm.exportError.value = null; vm.exportDone.value = null } }
 
     val targetBytes: Long? = if (!targetMode || format != 0) null else com.fastkiwi.scan.pdf.TargetSize.parseBytes(targetText, targetMb)
     val numbering = if (numbersOn) numbers.copy(start = PagePlans.normalizeDigits(startText).trim().toIntOrNull()?.coerceIn(0, 99_999) ?: 1) else null
@@ -600,6 +602,20 @@ fun ExportSheet(vm: AppViewModel, docId: String, onDismiss: () -> Unit) {
                         }
                     }
                 } else {
+                    // 2.0.1: a failed export says why right here, above the buttons (the snackbar is under the sheet).
+                    vm.exportError.value?.let { err ->
+                        Text(
+                            err, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.fillMaxWidth().padding(bottom = Dimens.s)
+                                .semantics { liveRegion = androidx.compose.ui.semantics.LiveRegionMode.Assertive },
+                        )
+                    } ?: vm.exportDone.value?.let { done ->
+                        Text(
+                            done, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.fillMaxWidth().padding(bottom = Dimens.s)
+                                .semantics { liveRegion = androidx.compose.ui.semantics.LiveRegionMode.Polite },
+                        )
+                    }
                     val canGo = busy == 0 && (asTxt || ((!protect || asJpeg || password.isNotEmpty()) && (!targetMode || asJpeg || targetBytes != null)))
                     ButtonPair(
                         stackOnLargeText = false,

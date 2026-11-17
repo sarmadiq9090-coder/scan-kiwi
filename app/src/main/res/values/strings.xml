@@ -101,6 +101,9 @@
     <string name="msg_saved">تم الحفظ (%1$s)</string>
     <string name="msg_imported">تم الاستيراد: %1$s</string>
     <string name="msg_error">حدث خطأ: %1$s</string>
+    <string name="msg_export_failed">تعذّر التصدير: %1$s</string>
+    <string name="export_page_unreadable">تعذّرت قراءة الصفحة %1$s</string>
+    <string name="export_file_damaged">الملف الناتج غير سليم، فلم يُشارَك ولم يُحفَظ</string>
     <string name="msg_out_of_memory">الذاكرة غير كافية. جرّب جودة أقل أو صفحات أقل.</string>
     <string name="msg_pdf_protected">ملف PDF محمي بكلمة مرور ولا يمكن استيراده.</string>
 

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import java.security.MessageDigest
 import java.util.Properties
+import java.util.zip.ZipFile
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -28,8 +29,8 @@ android {
         applicationId = "com.fastkiwi.scan"
         minSdk = 24
         targetSdk = 36
-        versionCode = 5
-        versionName = "2.0.0"
+        versionCode = 6
+        versionName = "2.0.1"
         // Arabic is the default (values/), English in values-en/.
         resourceConfigurations += listOf("ar", "en")
         ndk {
@@ -320,5 +321,232 @@ tasks.register("releaseSbom") {
         }
         output.parentFile.mkdirs()
         output.writeText(groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(bom)) + "\n")
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 2.0.1 release guard. Scan Kiwi 2.0.0 shipped a release build whose export failed on a phone while
+// every debug test passed. `releaseGuardTest` runs app/src/releaseGuard against the RELEASE program:
+// the same R8 (bundled with AGP), the same inputs and the same merged rules as minifyReleaseWithR8
+// (its printed configuration.txt), written as class files instead of dex, plus the release manifest,
+// the shrunk and optimized release resources and the release assets, under Robolectric.
+// `releaseKeepCheck` (cheap, no Robolectric) reads the R8 outputs of the release build.
+// ---------------------------------------------------------------------------
+val releaseGuardRuntime: Configuration by configurations.creating
+dependencies {
+    releaseGuardRuntime("junit:junit:4.13.2")
+    releaseGuardRuntime("org.robolectric:robolectric:4.16.1")
+    // An independent PDF reader for the files the release build writes (not shipped).
+    releaseGuardRuntime("org.apache.pdfbox:pdfbox:3.0.6")
+}
+
+// Robolectric pulls AARs (androidx.test); the test classpath takes their classes jars.
+val releaseGuardJars = releaseGuardRuntime.incoming.artifactView {
+    attributes { attribute(Attribute.of("artifactType", String::class.java), "android-classes-jar") }
+}.files
+
+val releaseGuardShrink = tasks.register("releaseGuardShrink") {
+    description = "Shrinks the release program with R8 to class files (same inputs and rules as minifyReleaseWithR8)."
+    dependsOn("minifyReleaseWithR8")
+    val outJar = layout.buildDirectory.file("releaseGuard/release-r8.jar")
+    val work = layout.buildDirectory.dir("releaseGuard/in")
+    val cfg = layout.buildDirectory.file("outputs/mapping/release/configuration.txt")
+    // Re-run whenever the release program changes (minifyReleaseWithR8's outputs stand for its inputs).
+    inputs.files(tasks.named("minifyReleaseWithR8").map { it.outputs.files })
+    outputs.file(outJar)
+    doLast {
+        val r8Task = tasks.getByName("minifyReleaseWithR8") as com.android.build.gradle.internal.tasks.ProguardConfigurableTask
+        val r8 = tasks.getByName("minifyReleaseWithR8") as com.android.build.gradle.internal.tasks.R8Task
+        val workDir = work.get().asFile.apply { deleteRecursively(); mkdirs() }
+        // R8 takes jars: class directories are zipped first.
+        val program = r8Task.classes.files.filter { it.exists() }.mapIndexed { i, f ->
+            if (f.isFile) f.toPath() else File(workDir, "dir$i.jar").also { jar ->
+                ant.withGroovyBuilder { "zip"("destfile" to jar, "basedir" to f) }
+            }.toPath()
+        }
+        val out = outJar.get().asFile.apply { parentFile.mkdirs(); delete() }
+        val builder = com.android.tools.r8.R8Command.builder()
+            .addProgramFiles(program)
+            .addLibraryFiles(r8.bootClasspath.files.map { it.toPath() })
+            .addLibraryFiles(r8Task.referencedClasses.files.filter { it.isFile }.map { it.toPath() })
+            .addProguardConfigurationFiles(cfg.get().asFile.toPath())
+            .setMode(com.android.tools.r8.CompilationMode.RELEASE)
+            .setProguardMapOutputPath(File(out.parentFile, "mapping.txt").toPath())
+            .setProgramConsumer(com.android.tools.r8.ClassFileConsumer.ArchiveConsumer(out.toPath(), true))
+        r8Task.resourcesJar.orNull?.asFile?.takeIf { it.exists() }?.let {
+            builder.addProgramResourceProvider(com.android.tools.r8.ArchiveProgramResourceProvider.fromArchive(it.toPath()))
+        }
+        com.android.tools.r8.R8.run(builder.build())
+    }
+}
+
+val releaseGuardCompile = tasks.register<JavaCompile>("releaseGuardCompile") {
+    dependsOn(releaseGuardShrink)
+    source = fileTree("src/releaseGuard/java")
+    val boot = files(android.bootClasspath)
+    classpath = releaseGuardJars + boot
+    destinationDirectory.set(layout.buildDirectory.dir("releaseGuard/test-classes"))
+    sourceCompatibility = "17"
+    targetCompatibility = "17"
+}
+
+// The release resources with the release assets inside, as in the APK (Robolectric reads assets from it):
+// files only, aligned like an APK (Android 8's package parser is strict about both).
+val releaseGuardResources = tasks.register("releaseGuardResources") {
+    dependsOn("optimizeReleaseResources", "mergeReleaseAssets")
+    val res = layout.buildDirectory.file("intermediates/optimized_processed_res/release/optimizeReleaseResources/resources-release-optimize.ap_")
+    val assets = layout.buildDirectory.dir("intermediates/assets/release/mergeReleaseAssets")
+    val unaligned = layout.buildDirectory.file("releaseGuard/release-resources-unaligned.ap_")
+    val aligned = layout.buildDirectory.file("releaseGuard/release-resources.ap_")
+    val zipalign = File(android.sdkDirectory, "build-tools/${android.buildToolsVersion}/" + if (System.getProperty("os.name").startsWith("Windows")) "zipalign.exe" else "zipalign")
+    inputs.files(res, assets)
+    outputs.file(aligned)
+    doLast {
+        val u = unaligned.get().asFile.apply { delete() }
+        ant.withGroovyBuilder {
+            "zip"("destfile" to u, "filesonly" to true, "keepcompression" to true) {
+                "zipfileset"("src" to res.get().asFile)
+                "zipfileset"("dir" to assets.get().asFile, "prefix" to "assets")
+            }
+        }
+        providers.exec { commandLine(zipalign.absolutePath, "-f", "-p", "4", u.absolutePath, aligned.get().asFile.absolutePath) }.result.get().assertNormalExitValue()
+    }
+}
+
+val releaseGuardConfig = tasks.register("releaseGuardConfig") {
+    dependsOn(releaseGuardResources, "processReleaseManifestForPackage")
+    val dir = layout.buildDirectory.dir("releaseGuard/config")
+    val build = layout.buildDirectory
+    outputs.dir(dir)
+    outputs.upToDateWhen { false } // a three-line file
+    doLast {
+        val b = build.get().asFile
+        val f = File(dir.get().asFile, "com/android/tools/test_config.properties").apply { parentFile.mkdirs() }
+        fun p(rel: String) = File(b, rel).absolutePath.replace("\\", "/")
+        f.writeText(
+            "android_merged_manifest=" + p("intermediates/packaged_manifests/release/processReleaseManifestForPackage/AndroidManifest.xml") + "\n" +
+                "android_merged_assets=" + p("intermediates/assets/release/mergeReleaseAssets") + "\n" +
+                "android_resource_apk=" + p("releaseGuard/release-resources.ap_") + "\n" +
+                "android_custom_package=com.fastkiwi.scan\n",
+        )
+    }
+}
+
+fun Test.releaseGuardCommon() {
+    group = "verification"
+    dependsOn(releaseGuardCompile, releaseGuardConfig)
+    testClassesDirs = files(layout.buildDirectory.dir("releaseGuard/test-classes"))
+    classpath = files(
+        layout.buildDirectory.dir("releaseGuard/test-classes"),
+        layout.buildDirectory.dir("releaseGuard/config"),
+        layout.buildDirectory.file("releaseGuard/release-r8.jar"),
+    ) + releaseGuardJars + files(android.bootClasspath)
+    maxHeapSize = "3g"
+    // As the unit-test JVM: Robolectric moves FileDescriptor fields (BitmapFactory.decodeFile).
+    jvmArgs("--add-opens=java.base/java.io=ALL-UNNAMED", "--add-opens=java.base/java.lang=ALL-UNNAMED", "--add-opens=java.base/java.util=ALL-UNNAMED", "--add-opens=java.base/java.nio=ALL-UNNAMED")
+    systemProperty("kiwi.guard.out", layout.buildDirectory.dir("releaseGuard/out").get().asFile.absolutePath)
+    // -PguardLog: the app's log and the test's output in the console.
+    if (providers.gradleProperty("guardLog").isPresent) systemProperty("robolectric.logging", "stdout")
+    testLogging { events("failed"); exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL; showStandardStreams = providers.gradleProperty("guardLog").isPresent }
+    reports.html.outputLocation.set(layout.buildDirectory.dir("reports/tests/$name"))
+    reports.junitXml.outputLocation.set(layout.buildDirectory.dir("test-results/$name"))
+}
+
+val releaseGuardTest = tasks.register<Test>("releaseGuardTest") {
+    description = "Export/Share/Save on the R8-shrunk release program, Android 8 to 16 (2.0.1 guard)."
+    releaseGuardCommon()
+    filter.includeTestsMatching("com.fastkiwi.scan.guard.ReleaseExportGuardTest")
+    // CI runs a subset of the Android versions (-PguardSdks=26,29,33,36); locally all of them.
+    providers.gradleProperty("guardSdks").orNull?.let { systemProperty("robolectric.enabledSdks", it) }
+}
+
+// A test server certificate for the fake GitHub (made with the JDK's keytool; never shipped), and a
+// trust store of the JDK's CAs plus it.
+val releaseGuardCerts = tasks.register("releaseGuardCerts") {
+    val dir = layout.buildDirectory.dir("releaseGuard/certs")
+    outputs.dir(dir)
+    doLast {
+        val d = dir.get().asFile.apply { deleteRecursively(); mkdirs() }
+        val home = System.getProperty("java.home")
+        val keytool = File(home, "bin/" + if (System.getProperty("os.name").startsWith("Windows")) "keytool.exe" else "keytool").absolutePath
+        fun kt(vararg a: String) = providers.exec { commandLine(keytool, *a) }.result.get().assertNormalExitValue()
+        val server = File(d, "server.p12").absolutePath
+        val cer = File(d, "server.cer").absolutePath
+        val trust = File(d, "trust.p12").absolutePath
+        kt("-genkeypair", "-alias", "fake", "-keyalg", "RSA", "-keysize", "2048", "-validity", "2", "-dname", "CN=api.github.com",
+            "-ext", "SAN=dns:api.github.com,dns:github.com,dns:objects.githubusercontent.com,dns:release-assets.githubusercontent.com",
+            "-keystore", server, "-storetype", "PKCS12", "-storepass", "guard-only", "-keypass", "guard-only")
+        kt("-exportcert", "-alias", "fake", "-keystore", server, "-storepass", "guard-only", "-file", cer)
+        kt("-importkeystore", "-srckeystore", File(home, "lib/security/cacerts").absolutePath, "-srcstorepass", "changeit",
+            "-destkeystore", trust, "-deststoretype", "PKCS12", "-deststorepass", "guard-only", "-noprompt")
+        kt("-importcert", "-noprompt", "-alias", "fake-github", "-file", cer, "-keystore", trust, "-storepass", "guard-only")
+        File(d, "hosts").writeText("127.0.0.1 api.github.com github.com objects.githubusercontent.com release-assets.githubusercontent.com\n")
+    }
+}
+
+tasks.register<Test>("releaseUpdateGuardTest") {
+    description = "In-app update check and download against a local fake GitHub, on the R8-shrunk release program (2.0.1 guard)."
+    releaseGuardCommon()
+    dependsOn(releaseGuardCerts)
+    // Android's SDK jars are fetched by the export guard; this JVM resolves only the fake hosts.
+    mustRunAfter(releaseGuardTest)
+    filter.includeTestsMatching("com.fastkiwi.scan.guard.UpdateGuardTest")
+    val certs = layout.buildDirectory.dir("releaseGuard/certs").get().asFile
+    systemProperty("jdk.net.hosts.file", File(certs, "hosts").absolutePath)
+    systemProperty("javax.net.ssl.trustStore", File(certs, "trust.p12").absolutePath)
+    systemProperty("javax.net.ssl.trustStorePassword", "guard-only")
+    systemProperty("kiwi.guard.keystore", File(certs, "server.p12").absolutePath)
+    // Any archive stands in for the APK: the checksum is what the guard checks.
+    systemProperty("kiwi.guard.apk", layout.buildDirectory.file("releaseGuard/release-r8.jar").get().asFile.absolutePath)
+}
+
+// Cheap CI check on the real release build (no device, no Robolectric): what the app reaches by name
+// (manifest components, JNI, PdfBox data, FileProvider paths, export fonts) is still in the APK.
+tasks.register("releaseKeepCheck") {
+    description = "Checks that R8 and resource shrinking kept what the release app needs by name (2.0.1)."
+    group = "verification"
+    dependsOn("assembleRelease")
+    val mapping = layout.buildDirectory.file("outputs/mapping/release/mapping.txt")
+    val apkDir = layout.buildDirectory.dir("outputs/apk/release")
+    doLast {
+        val problems = ArrayList<String>()
+        // Classes that must keep their names: manifest components, JNI, the share sheet's FileProvider.
+        val named = listOf(
+            "com.fastkiwi.scan.MainActivity", "com.fastkiwi.scan.pdf.PdfService", "com.fastkiwi.scan.update.UpdateInstallReceiver",
+            "androidx.core.content.FileProvider", "com.fastkiwi.scan.ocr.fused.MnnNative",
+            "com.googlecode.tesseract.android.TessBaseAPI",
+        )
+        val kept = HashSet<String>()
+        mapping.get().asFile.forEachLine { line ->
+            if (!line.startsWith(" ") && !line.startsWith("#")) {
+                val m = Regex("""^(\S+) -> (\S+):$""").find(line)
+                if (m != null && m.groupValues[1] == m.groupValues[2]) kept += m.groupValues[1]
+            }
+        }
+        named.filter { it !in kept }.forEach { problems += "class renamed or removed: $it" }
+        val apk = apkDir.get().asFile.listFiles { f -> f.name.endsWith(".apk") }?.firstOrNull() ?: throw GradleException("no release APK")
+        val entries = ZipFile(apk).use { z -> z.entries().asSequence().map { it.name }.toSet() }
+        val needed = listOf(
+            "assets/fonts/glyphless.ttf", "assets/icc/sRGB-v2-micro.icc",
+            "assets/tessdata/ara.traineddata", "assets/tessdata/eng.traineddata",
+            "assets/com/tom_roush/pdfbox/resources/glyphlist/glyphlist.txt",
+            "assets/com/tom_roush/pdfbox/resources/afm/Helvetica.afm",
+            "assets/com/tom_roush/pdfbox/resources/ttf/LiberationSans-Regular.ttf",
+        )
+        needed.filter { it !in entries }.forEach { problems += "missing from the APK: $it" }
+        // The FileProvider paths (res/xml/file_paths) must survive resource shrinking and still name the exports folder.
+        val aapt2 = File(android.sdkDirectory, "build-tools/${android.buildToolsVersion}/" + if (System.getProperty("os.name").startsWith("Windows")) "aapt2.exe" else "aapt2")
+        val dump = providers.exec { commandLine(aapt2.absolutePath, "dump", "resources", apk.absolutePath) }.standardOutput.asText.get()
+        val pathsFile = Regex("""resource 0x[0-9a-f]+ xml/file_paths\s+\(\) \(file\) (\S+)""").find(dump)?.groupValues?.get(1)
+        if (pathsFile == null) problems += "xml/file_paths was removed by resource shrinking"
+        else {
+            val tree = providers.exec { commandLine(aapt2.absolutePath, "dump", "xmltree", apk.absolutePath, "--file", pathsFile) }.standardOutput.asText.get()
+            if (!tree.contains("cache-path") || !tree.contains("\"exports/\"")) problems += "file_paths no longer shares cache/exports/"
+        }
+        for (font in listOf("noto_sans_arabic_regular", "noto_sans_arabic_medium", "noto_sans_arabic_bold")) {
+            if (!dump.contains("font/$font")) problems += "font/$font was removed by resource shrinking"
+        }
+        if (problems.isNotEmpty()) throw GradleException("Release keep check failed:\n  " + problems.joinToString("\n  "))
+        println("releaseKeepCheck: ${named.size} classes, ${needed.size} assets, file_paths and fonts present in ${apk.name}")
     }
 }
