@@ -41,6 +41,23 @@ class IntakeTest {
         assertFalse(isAcceptableIncoming(Uri.parse("http://example.com/a.jpg"), own))
     }
 
+    /** Torture gate (S2): a share list from another app with a null entry crashed the intake. */
+    @Test
+    fun aNullEntryInAShareListIsRefusedNotACrash() {
+        assertFalse(isAcceptableIncoming(null, own))
+    }
+
+    /** Torture gate (S2): a PDF that declares billions of pages is refused up front instead of read for ever. */
+    @Test
+    fun aPdfDeclaringAbsurdPageCountsIsRefusedUpFront() {
+        com.fastkiwi.scan.imaging.PdfImporter.requireImportable(0)
+        com.fastkiwi.scan.imaging.PdfImporter.requireImportable(com.fastkiwi.scan.imaging.PdfImporter.MAX_IMPORT_PAGES)
+        for (n in listOf(Int.MAX_VALUE, -1, com.fastkiwi.scan.imaging.PdfImporter.MAX_IMPORT_PAGES + 1)) {
+            val e = runCatching { com.fastkiwi.scan.imaging.PdfImporter.requireImportable(n) }.exceptionOrNull()
+            assertTrue("$n", e is com.fastkiwi.scan.imaging.PdfImporter.TooManyPagesException)
+        }
+    }
+
     @Test
     fun exportFileNamesAreSafe() {
         val ex = Exporter(RuntimeEnvironment.getApplication(), com.fastkiwi.scan.data.DocumentStore(RuntimeEnvironment.getApplication().filesDir))

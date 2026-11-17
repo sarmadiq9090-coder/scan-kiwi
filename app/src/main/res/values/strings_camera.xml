@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 2.0 strings: camera, image quality, book mode, glare. Arabic (default). Keep keys identical in values/ and values-en/. -->
+<resources>
+    <!-- Quality warnings (PRD §4.3): one at a time in the camera, a chip on the page. -->
+    <string name="pq_incomplete">الصفحة غير مكتملة</string>
+    <string name="pq_blurry">الصورة غير واضحة، ثبّت الهاتف</string>
+    <string name="pq_moving">ثبّت الهاتف قليلًا</string>
+    <string name="pq_glare">لمعان على الصفحة</string>
+    <string name="pq_dim">الإضاءة خافتة</string>
+    <string name="pq_skewed">النص مائل قليلًا</string>
+    <plurals name="pq_more">
+        <item quantity="zero">و%1$d تنبيه آخر</item>
+        <item quantity="one">وتنبيه آخر</item>
+        <item quantity="two">وتنبيهان آخران</item>
+        <item quantity="few">و%1$d تنبيهات أخرى</item>
+        <item quantity="many">و%1$d تنبيهًا آخر</item>
+        <item quantity="other">و%1$d تنبيه آخر</item>
+    </plurals>
+    <string name="pq_retake">إعادة الالتقاط</string>
+    <string name="pq_recrop">إعادة القص</string>
+    <string name="pq_dismiss">تجاهل</string>
+    <string name="pq_badge">تنبيه جودة: %1$s</string>
+    <string name="pq_note">التنبيه لا يمنع حفظ الصفحة.</string>
+    <!-- Glare: two-shot fusion (A4). -->
+    <string name="glare_offer_action">لقطة ثانية</string>
+    <string name="glare_second_hint">صوّر الصفحة نفسها من زاوية أخرى لإزالة اللمعان</string>
+    <string name="glare_skip">تخطَّ</string>
+    <string name="glare_fused">خُفّف اللمعان بدمج اللقطتين</string>
+    <string name="glare_fuse_failed">تعذّرت مطابقة اللقطتين، فأُضيفت الثانية صفحةً جديدة</string>
+    <!-- Book mode (A4): split a two-page spread at the spine. -->
+    <string name="mode_book">كتاب</string>
+    <string name="book_guide">ضع الكتاب مفتوحاً تحت الهاتف وصوّر الصفحتين معاً. مع الالتقاط التلقائي تُلتقط الصورة وحدها عند الثبات، ثم نقسمها عند الكعب.</string>
+    <string name="glare_remove">إزالة الوهج</string>
+    <string name="book_hint">صوّر صفحتين متقابلتين، وسنقسمهما عند الكعب</string>
+    <string name="book_title">تقسيم الصفحتين</string>
+    <string name="book_spine">خط الكعب</string>
+    <string name="book_spine_state">عند %1$d٪ من العرض</string>
+    <string name="book_spine_left">حرّك الكعب يسارًا</string>
+    <string name="book_spine_right">حرّك الكعب يمينًا</string>
+    <string name="book_drag_hint">اسحب الخط ليطابق كعب الكتاب</string>
+    <string name="book_order">ترتيب الصفحات</string>
+    <string name="book_order_rtl">من اليمين (عربي)</string>
+    <string name="book_order_ltr">من اليسار (إنجليزي)</string>
+    <string name="book_no_dewarp">لا تُسوّى الصفحات المنحنية: اضغط الكتاب برفق ليستوي قرب الكعب.</string>
+    <string name="book_split_add">تقسيم وإضافة صفحتين</string>
+    <string name="book_retake">إعادة التصوير</string>
+    <string name="book_added">أُضيفت صفحتان</string>
+    <!-- 2.0-cam2: automatic alignment (deskew) -->
+    <string name="straighten">تسوية الميل</string>
+    <string name="straighten_done">سُوّي ميل الصفحة %1$s°. للتراجع: «تراجع» أو «قص».</string>
+    <string name="straighten_none">الصفحة مستقيمة؛ لا ميل يحتاج تسوية.</string>
+</resources>

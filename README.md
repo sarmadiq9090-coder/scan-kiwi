@@ -25,15 +25,16 @@ small PDF ready to share. **Offline, no account, no ads, no watermark.**
 - عربي أولًا مع الإنجليزية، واجهة من اليمين لليسار، ودعم قارئ الشاشة.
 
 ### المتطلبات
-أندرويد 7.0 فما فوق (API 24+). الإذن الوحيد: الكاميرا.
+أندرويد 7.0 فما فوق (API 24+). الأذونات: الكاميرا (CAMERA)، ومنذ 2.0 للتحديث فقط: الإنترنت (INTERNET) وحالة الشبكة (ACCESS_NETWORK_STATE) وتثبيت الحزم (REQUEST_INSTALL_PACKAGES).
 
 ### الخصوصية
-- لا يملك التطبيق إذن الإنترنت؛ يتحقق CI من ذلك في كل بناء.
+- يتصل ماسح كيوي بالإنترنت فقط للتحقق من التحديثات وتنزيلها من GitHub. لا يُرسل أي ملف أو صورة أو بيانات عنك. يمكنك إيقافه من الإعدادات.
+- الأذونات: الكاميرا، والإنترنت وحالة الشبكة وتثبيت الحزم للتحديث فقط؛ يتحقق CI من القائمة في كل بناء، ومن أن كود الشبكة الوحيد هو `update/UpdateClient.kt` (GitHub وHTTPS فقط).
 - المستندات في مساحة التطبيق الخاصة، والنسخ الاحتياطي السحابي معطّل لها. لا يخرج ملف إلا حين تختار «مشاركة» أو «حفظ».
 - لا تتبّع، ولا إحصاءات، ولا إعلانات، ولا حسابات.
 - «أبلغنا عن مشكلة أو اقتراح» يفتح بريدك أو المتصفح بنص تراه قبل إرساله؛ لا يُرسل مستند أو صورة أبدًا.
 
-لا يملك ماسح كيوي إذن الإنترنت ولا يتصل به أبداً، ولا يحدّث نفسه. للتحديث التلقائي يمكنك استعمال Obtainium، وهو تطبيق مجاني مفتوح المصدر من مطوّر مستقل (ليس من FastKiwi)، يتابع إصداراتنا على GitHub ويثبّت الجديد، وقد يطلب أندرويد تأكيدك. حين يتصل Obtainium أو المتصفح بـ GitHub يرى GitHub عنوان IP الخاص بك كأي موقع. ويمكنك التحديث يدوياً من صفحة الإصدارات.
+**التحديثات (منذ 2.0):** يتحقق التطبيق من إصداراته على GitHub مرة كل ٧ أيام على الأكثر عند فتحه (يمكن إيقافه)، وبزر «تحقق من التحديثات» في الإعدادات ← التحديثات أو «حول». لا يُنزَّل شيء إلا بلمستك، وعبر Wi-Fi فقط افتراضياً. لا يُثبَّت تحديث إلا إذا كان أحدث، وطابقت بصمته (SHA-256) ملف SHA256SUMS في الإصدار نفسه، ووُقّع بمفتاح التطبيق نفسه، ثم بموافقتك في شاشة أندرويد. الطلب لا يحمل أي معرّف للجهاز؛ يرى GitHub عنوان IP الخاص بك كأي موقع. ما زال بإمكانك استعمال Obtainium أو التحديث يدوياً من صفحة الإصدارات.
 
 ### التثبيت (ليس على Google Play)
 التطبيق غير منشور على Google Play. نزّل ملف `ScanKiwi-X.Y.Z.apk` من [صفحة الإصدارات](https://github.com/sarmadiq9090-coder/scan-kiwi/releases/latest) ثم:
@@ -82,17 +83,19 @@ small PDF ready to share. **Offline, no account, no ads, no watermark.**
 - Arabic first with English, full right-to-left layout, TalkBack support.
 
 ### Requirements
-Android 7.0+ (API 24+). The only permission is the camera.
+Android 7.0+ (API 24+). Permissions: CAMERA, and since 2.0, for the update check only, INTERNET, ACCESS_NETWORK_STATE (Wi-Fi vs mobile data for "Wi-Fi only") and REQUEST_INSTALL_PACKAGES.
 
 ### Privacy
-- No internet permission; CI checks this on every build.
+- Scan Kiwi connects to the internet only to check for and download updates from GitHub. It sends no file, photo or data about you. You can turn this off in Settings.
+- CI checks the exact permission list on every build, and that `update/UpdateClient.kt` (GitHub only, HTTPS only)
+  is the only network code.
 - Documents stay in the app's private storage and are excluded from cloud backup. A file leaves the phone only
   when you choose Share or Save.
 - No tracking, analytics, ads or accounts.
 - "Report a problem or suggestion" opens your own mail app or browser with a text you review before sending;
   documents and images are never attached.
 
-Scan Kiwi has no internet permission and never connects to the internet. It does not update itself. To get updates automatically, you can use Obtainium, a free open-source app by an independent developer (not FastKiwi): it checks our GitHub releases and installs new versions, and Android may ask you to confirm. When Obtainium or your browser checks GitHub, GitHub sees your IP address, as with any website. You can also update by hand from the releases page.
+**Updates (since 2.0):** the app checks its GitHub releases at most once every 7 days when you open it (you can turn this off), and with «Check for updates» in Settings → Updates or About. Nothing is downloaded without your tap, and only over Wi-Fi by default. An update is installed only if it is newer, its fingerprint (SHA-256) matches the SHA256SUMS file of the same release and it is signed with this app's own key, and then only when you confirm on Android's screen. Requests carry no device identifier; GitHub sees your IP address, as with any website. You can still use Obtainium or update by hand from the releases page.
 
 ### Install (not on Google Play)
 Scan Kiwi is not published on Google Play. Download `ScanKiwi-X.Y.Z.apk` from the

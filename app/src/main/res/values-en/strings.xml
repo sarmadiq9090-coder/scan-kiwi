@@ -1,23 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
     <string name="app_name">Scan Kiwi</string>
     <string name="default_doc_name">Scan %1$s</string>
     <string name="scan">Scan</string>
     <string name="settings">Settings</string>
     <string name="import_files">Import images or PDF</string>
-    <string name="search_hint">Search names or text</string>
     <string name="clear_search">Clear search</string>
     <string name="clear_selection">Clear selection</string>
-    <string name="no_results">No results</string>
     <string name="empty_title">No documents yet</string>
     <string name="empty_body">Tap Scan to capture a page, or import images and PDFs to merge them.</string>
-    <string name="privacy_short">Everything stays on your phone</string>
+    <string name="privacy_short">Your files stay on your phone; the internet is used only to check for updates</string>
     <string name="merge">Merge selected</string>
     <string name="delete">Delete</string>
     <string name="rename">Rename</string>
     <string name="select">Select</string>
-    <string name="selected">Selected</string>
-    <string name="not_selected">Not selected</string>
+    <string name="selected" tools:override="true">Selected</string>
+    <string name="not_selected" tools:override="true">Not selected</string>
     <string name="share_pdf">Share PDF</string>
     <string name="more_options_for">More options for %1$s</string>
     <string name="document_name">Document name</string>
@@ -40,21 +38,18 @@
     <string name="id_back_hint">Now capture the back</string>
     <string name="id_now_back">Front done. Turn the card over.</string>
     <string name="msg_id_added">Both sides of the card were added on one page</string>
-    <string name="torch_on">Turn flash on</string>
-    <string name="torch_off">Turn flash off</string>
     <string name="take_photo">Take photo</string>
-    <string name="done_with_count">Done, %1$d pages</string>
+    <string name="done_with_count">Done, pages: %1$d</string>
     <string name="status_searching">Point the camera at a page</string>
     <string name="status_move_closer">Move closer</string>
     <string name="status_found">Page found</string>
     <string name="status_hold">Hold steady…</string>
     <string name="status_capturing">Capturing…</string>
-    <string name="status_added">Page %1$d added</string>
+    <string name="status_added" tools:ignore="PluralsCandidate">Page %1$d added</string>
     <string name="status_error">Camera unavailable</string>
     <string name="status_next_page">Page captured. Turn to the next one</string>
 
     <string name="export">Export</string>
-    <string name="add_page_camera">Add page with camera</string>
     <string name="no_pages">No pages</string>
     <string name="page_n_of">Page %1$d of %2$d</string>
     <string name="edit_page">Edit page</string>
@@ -69,25 +64,16 @@
     <string name="retake">Retake</string>
     <string name="delete_page">Delete page</string>
     <string name="delete_page_body">This page will be permanently deleted.</string>
-    <string name="previous_page">Previous page</string>
-    <string name="next_page">Next page</string>
-    <string name="filter">Look</string>
     <string name="filter_original">Original</string>
     <string name="filter_enhanced">Enhanced colour</string>
     <string name="filter_whiten">Remove shadows</string>
     <string name="filter_gray">Grayscale</string>
     <string name="filter_bw">Black &amp; white</string>
 
-    <string name="crop_hint">Drag the corners or side midpoints to the page edges. They snap to detected edges when close.</string>
     <string name="crop_area_desc">Crop area. Use the All, Re-detect or Rotate buttons.</string>
-    <string name="auto_detect">Auto detect</string>
-    <string name="whole_image">Whole image</string>
-    <string name="apply">Apply</string>
 
     <string name="format">Format</string>
     <string name="page_size">Page size</string>
-    <string name="size_a4">A4</string>
-    <string name="size_letter">Letter</string>
     <string name="size_fit">Fit to image</string>
     <string name="quality">Quality and size</string>
     <string name="quality_small">Small</string>
@@ -101,14 +87,12 @@
     <string name="ocr_ara_eng">Arabic + English</string>
     <string name="ocr_eng">English</string>
     <string name="ocr_ara">Arabic</string>
-    <string name="ocr_quality_note">English accuracy is good on clear pages. Arabic accuracy is lower and may need correcting; it works best with Black &amp; white or Remove shadows.</string>
     <string name="password_title">Password protect</string>
     <string name="password_hint">AES-256 encryption; the file opens only with the password.</string>
     <string name="password">Password</string>
     <string name="password_ascii_hint">Latin letters, digits and symbols only, so every PDF reader can open it.</string>
     <string name="show_password">Show password</string>
     <string name="hide_password">Hide password</string>
-    <string name="processing_page">Processing page %1$d of %2$d</string>
     <string name="share">Share</string>
     <string name="save_to_device">Save to device</string>
     <string name="share_via">Share via</string>
@@ -116,6 +100,9 @@
     <string name="msg_saved">Saved (%1$s)</string>
     <string name="msg_imported">Imported: %1$s</string>
     <string name="msg_error">Something went wrong: %1$s</string>
+    <string name="msg_export_failed">Export failed: %1$s</string>
+    <string name="export_page_unreadable">page %1$s could not be read</string>
+    <string name="export_file_damaged">the file came out damaged, so it was not shared or saved</string>
     <string name="msg_out_of_memory">Not enough memory. Try a lower quality or fewer pages.</string>
     <string name="msg_pdf_protected">This PDF is password protected and cannot be imported.</string>
 
@@ -125,7 +112,7 @@
     <string name="language_english">English</string>
     <string name="default_filter">Default look for new pages</string>
     <string name="privacy_title">Privacy</string>
-    <string name="privacy_body">The app does not even have the internet permission, so it cannot upload anything. No accounts, no ads, no tracking, no watermark. Documents are kept in the app\'s private storage and excluded from cloud backup. A file only leaves when you choose Share or Save.</string>
+    <string name="privacy_body">The app uploads no document, photo or text anywhere: it uses the internet only to check for and download its own updates from GitHub, and you can turn that off. No accounts, no ads, no tracking, no watermark. Documents are kept in the app\'s private storage and excluded from cloud backup. A file only leaves when you choose Share or Save.</string>
     <string name="about_title">About</string>
     <string name="show_licenses">Licences</string>
     <string name="about_body">Scan Kiwi %1$s, part of the FastKiwi app suite. Free and open source (Apache-2.0).</string>
@@ -138,7 +125,6 @@
     <string name="crop_problem_concave">The shape bends inwards: drag the corner outwards.</string>
     <string name="crop_problem_small">The area is too small.</string>
     <string name="crop_fix">Fix</string>
-    <string name="adjust_last_page">Adjust the crop of the last page</string>
     <string name="review_after_capture">Review crop after each shot</string>
     <string name="review_after_capture_hint">Opens the crop screen after a manual photo. With auto capture, only unclear pages are reviewed.</string>
     <string name="undo">Undo</string>
@@ -155,8 +141,6 @@
     <string name="signature_size">Signature size</string>
     <string name="signature_redraw">Draw again</string>
     <string name="signature_remove">Remove signatures</string>
-    <string name="size_legal">Legal</string>
-    <string name="size_a5">A5</string>
     <string name="estimated_size">Estimated size about %1$s</string>
     <string name="estimating_size">Estimating size…</string>
     <string name="name_suggestion">Suggestion: %1$s</string>
@@ -165,7 +149,6 @@
 
     <!-- v1.2 -->
     <string name="feedback_title">Report a problem or suggestion</string>
-    <string name="feedback_short">Report</string>
     <string name="feedback_settings_hint">Tell us about a problem or an idea. It opens your mail app or browser, and you send it.</string>
     <string name="feedback_report_this">Report this problem</string>
     <string name="feedback_privacy">No document or image is sent. You see everything before it is sent.</string>
@@ -178,11 +161,10 @@
     <string name="feedback_attached_preview">Only this will be attached:</string>
     <string name="feedback_send_email">Send by e-mail</string>
     <string name="feedback_send_github">Or on GitHub</string>
-    <string name="feedback_review_note">Your mail app or browser opens with the text ready; check it, then send it yourself. The app never goes online.</string>
+    <string name="feedback_review_note">Your mail app or browser opens with the text ready; check it, then send it yourself. The app sends nothing itself.</string>
     <string name="feedback_no_mail_app">No e-mail app on this phone. Try "On GitHub".</string>
     <string name="feedback_no_browser">No browser on this phone. Try "By e-mail".</string>
     <string name="updates_title">Updates</string>
-    <string name="updates_body">Updating by hand: download the APK from the releases page and install it over this one; your documents stay. Android only accepts an update signed with the same key.</string>
     <string name="pdfa_title">Archival (PDF/A)</string>
     <string name="pdfa_hint">PDF/A-2b for long-term keeping. Cannot be combined with a password.</string>
 
@@ -190,11 +172,11 @@
     <string name="export_reading_text">Reading text… page %1$d of %2$d</string>
     <string name="export_starting">Preparing the file…</string>
     <string name="msg_export_cancelled">Export cancelled</string>
-    <string name="network_statement">Scan Kiwi has no internet permission and never connects to the internet. It does not update itself. To get updates automatically, you can use Obtainium, a free open-source app by an independent developer (not FastKiwi): it checks our GitHub releases and installs new versions, and Android may ask you to confirm. When Obtainium or your browser checks GitHub, GitHub sees your IP address, as with any website. You can also update by hand from the releases page.</string>
+    <string name="network_statement">Scan Kiwi connects to the internet only to check for and download updates from GitHub. It sends no file, photo or data about you. You can turn this off in Settings.</string>
     <string name="updates_version">Version %1$s</string>
     <string name="updates_obtainium">Auto-update with Obtainium</string>
     <string name="updates_obtainium_sub">A free, independent app that follows our GitHub releases</string>
-    <string name="updates_check">Check for updates</string>
+    <string name="updates_check">Releases page</string>
     <string name="updates_check_sub">Opens the GitHub releases page in your browser</string>
     <string name="obtainium_missing_title">Obtainium is not installed</string>
     <string name="obtainium_missing_body">Obtainium is a free open-source app by an independent developer (not FastKiwi). Install it first, then tap "Auto-update with Obtainium" again.</string>
@@ -213,7 +195,7 @@
     <string name="settings_group_help">Help</string>
     <string name="about_row">About and licences</string>
     <string name="version_full">Version %1$s (%2$s)</string>
-    <string name="updates_offline_tag">Works offline</string>
+    <string name="updates_offline_tag">Internet for updates only</string>
     <string name="updates_group">Update</string>
     <string name="updates_manual_title">Updating by hand</string>
     <string name="updates_manual_step1">Download the latest APK from the GitHub releases page.</string>
@@ -233,6 +215,7 @@
     <string name="done">Done</string>
     <string name="crop_hint_short">Drag the corners to the page edges</string>
     <string name="format_jpg_images">JPG images</string>
+    <string name="format_txt">Text (TXT)</string>
     <string name="size_dims">%1$s × %2$s %3$s</string>
     <string name="unit_cm">cm</string>
     <string name="unit_in">in</string>
@@ -246,8 +229,8 @@
     <string name="auto_short">Auto</string>
     <string name="edit_edges_action">Edit</string>
     <string name="flash">Flash</string>
-    <string name="state_on">On</string>
-    <string name="state_off">Off</string>
+    <string name="state_on" tools:override="true">On</string>
+    <string name="state_off" tools:override="true">Off</string>
     <string name="size_kb">%1$s KB</string>
     <string name="size_mb">%1$s MB</string>
     <string name="whats_new_line">New in this version: a clearer design with buttons in fixed places, one Arabic UI font, dark theme, "Report a problem", faster sharing with Cancel, and an archival PDF/A option.</string>

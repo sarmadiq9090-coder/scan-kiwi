@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 2.0-update strings (owner's order 2026-11-15). English. Keep keys identical in values/ and values-en/. -->
+<resources>
+    <string name="update_notice_title">Internet for updates only</string>
+    <string name="update_notice_ok">OK</string>
+    <string name="update_notice_settings">Settings</string>
+    <string name="update_details">It checks automatically at most once every 7 days, only when you open the app, and you can check by hand at any time. An update is installed only after checking that it is newer, that its fingerprint (SHA-256) matches the one published with it and that it is signed with this app\'s own key, and then only when you confirm on Android\'s screen. GitHub sees your IP address, as with any website.</string>
+    <string name="update_check_now">Check for updates</string>
+    <string name="update_auto">Check for updates automatically</string>
+    <string name="update_auto_hint">At most once every 7 days, when you open the app</string>
+    <string name="update_wifi_only">Download over Wi-Fi only</string>
+    <string name="update_wifi_only_hint">Updates are not downloaded over mobile data</string>
+    <string name="update_checking">Checking…</string>
+    <string name="update_up_to_date">You have the latest version.</string>
+    <string name="update_available">Version %1$s is available</string>
+    <string name="update_available_msg">Scan Kiwi %1$s is available. To download: Settings → Updates.</string>
+    <string name="update_download_install">Download and install</string>
+    <string name="update_downloading">Downloading… %1$s</string>
+    <string name="update_ready">Ready to install: confirm on Android\'s screen</string>
+    <string name="update_install_again">Install</string>
+    <string name="update_err_offline">No internet connection. Connect to Wi-Fi or mobile data, then try again.</string>
+    <string name="update_err_network">Could not reach GitHub. Try again later.</string>
+    <string name="update_err_no_release">No release has been published yet.</string>
+    <string name="update_err_bad_release">The published release is incomplete (no APK or SHA256SUMS), so nothing was downloaded.</string>
+    <string name="update_err_wifi">Download over Wi-Fi only is on: connect to Wi-Fi or turn the option off.</string>
+    <string name="update_err_sha">The downloaded file\'s fingerprint does not match the published one, so it was deleted and not installed.</string>
+    <string name="update_err_signature">The downloaded file is not signed with this app\'s key, so it was deleted and not installed.</string>
+    <string name="update_err_not_newer">This version is not newer than the installed one.</string>
+    <string name="update_err_storage">Could not save the file or open the installer. Try again.</string>
+    <string name="update_err_install">The update was not installed. Try again.</string>
+    <string name="update_retry">Try again</string>
+    <string name="update_ready_title">Update ready to install</string>
+    <string name="update_ready_body">The update finished downloading. Tap Install, then confirm on Android\'s screen.</string>
+    <string name="update_later">Later</string>
+    <string name="update_other_ways">Other ways</string>
+</resources>

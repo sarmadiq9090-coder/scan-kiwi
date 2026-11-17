@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 package com.fastkiwi.scan.ui
 
+import androidx.core.graphics.createBitmap
 import android.graphics.Bitmap
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -107,7 +108,7 @@ fun SignatureScreen(vm: AppViewModel, docId: String, pageId: String) {
 }
 
 @Composable
-private fun SignaturePad(onCancel: (() -> Unit)?, onSave: (Bitmap) -> Unit) {
+private fun ColumnScope.SignaturePad(onCancel: (() -> Unit)?, onSave: (Bitmap) -> Unit) {
     val strokes = remember { mutableStateListOf<List<Offset>>() }
     var current by remember { mutableStateOf<List<Offset>>(emptyList()) }
     val ink = Color(0xFF1A237E)
@@ -146,7 +147,9 @@ private fun SignaturePad(onCancel: (() -> Unit)?, onSave: (Bitmap) -> Unit) {
             for (s in strokes + listOf(current)) drawPath(pathOf(s), ink, style = Stroke(strokePx, cap = StrokeCap.Round, join = StrokeJoin.Round))
         }
     }
-    // Footer: secondary «مسح», tertiary «إلغاء», primary «حفظ» at the end.
+    // Footer: secondary «مسح», tertiary «إلغاء», primary «حفظ» at the end, in the thumb zone at the bottom
+    // (QC 2.0.0: it sat under the pad in the top half of the screen; DESIGN-SPEC §3 global rule).
+    Spacer(Modifier.weight(1f))
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Dimens.s), verticalAlignment = Alignment.CenterVertically) {
         OutlinedButton(onClick = { strokes.clear() }, modifier = Modifier.weight(1f).heightIn(min = Dimens.button)) { Text(stringResource(R.string.signature_clear)) }
         if (onCancel != null) TextButton(onClick = onCancel, modifier = Modifier.heightIn(min = Dimens.button)) { Text(stringResource(R.string.cancel)) }
@@ -176,7 +179,7 @@ private fun renderSignature(strokes: List<List<Offset>>, pad: IntSize, strokePx:
     val minY = max(0f, all.minOf { it.y } - m); val maxY = min(pad.height.toFloat(), all.maxOf { it.y } + m)
     val w = max(1, ((maxX - minX) * scale).toInt())
     val h = max(1, ((maxY - minY) * scale).toInt())
-    val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+    val bmp = createBitmap(w, h)
     val c = android.graphics.Canvas(bmp)
     val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
         style = android.graphics.Paint.Style.STROKE

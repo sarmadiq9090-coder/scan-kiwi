@@ -65,6 +65,8 @@ class PdfCrypt private constructor(
                 0, 0, 0, 0,
             )
             for (i in 12 until 16) permsPlain[i] = random.nextInt(256).toByte()
+            // ISO 32000-2 Algorithm 10: /Perms is ONE block encrypted with AES-256 in ECB mode (mandated by the spec).
+            @android.annotation.SuppressLint("GetInstance")
             val ecb = Cipher.getInstance("AES/ECB/NoPadding")
             ecb.init(Cipher.ENCRYPT_MODE, SecretKeySpec(fileKey, "AES"))
             val perms = ecb.doFinal(permsPlain)

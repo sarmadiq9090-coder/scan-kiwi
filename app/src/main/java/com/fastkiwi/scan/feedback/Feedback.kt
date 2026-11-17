@@ -26,7 +26,7 @@ data class DeviceInfo(
 
 /**
  * Builds the e-mail and GitHub-issue hand-offs for "report a problem or a
- * suggestion". The app has no INTERNET permission: it only opens the user's
+ * suggestion". The app never sends this itself (its only connection is the GitHub update check): it only opens the user's
  * own mail app or browser with this text, which the user sees and sends.
  * Pure Kotlin so the encoding and limits are unit-tested.
  */

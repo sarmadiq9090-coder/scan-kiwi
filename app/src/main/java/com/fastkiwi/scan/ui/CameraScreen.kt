@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 package com.fastkiwi.scan.ui
 
+import androidx.core.graphics.scale
+import androidx.compose.runtime.mutableLongStateOf
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -103,6 +105,9 @@ import com.fastkiwi.scan.core.GrayImage
 import com.fastkiwi.scan.core.Pt
 import com.fastkiwi.scan.core.Quad
 import com.fastkiwi.scan.core.QuadDetector
+import com.fastkiwi.scan.core.DetectionConfig
+import com.fastkiwi.scan.core.QualityMetrics
+import com.fastkiwi.scan.core.QualityWarning
 import com.fastkiwi.scan.core.rotateNormalized
 import java.util.concurrent.Executors
 import kotlin.math.max
@@ -113,7 +118,25 @@ private data class Live(
     val aspect: Float,
     val state: AutoCapture.State = AutoCapture.State.SEARCHING,
     val progress: Float = 0f,
+    /** 2.0: the most important quality warning on this frame (incomplete > blur > glare > dim). */
+    val warning: QualityWarning? = null,
 )
+
+/**
+ * 2.0 live quality on the 320 px analysis frame only (CAM-03/04, A4 glare, dim light), so the
+ * preview stays smooth. [quadPx] is in frame pixels, [norm] normalised.
+ */
+private fun liveWarning(gray: GrayImage, det: com.fastkiwi.scan.core.Detection?, norm: Quad?): Pair<QualityWarning?, Boolean> {
+    if (det == null || norm == null) return null to true
+    val cfg = DetectionConfig.DEFAULT
+    if (!QualityMetrics.isComplete(norm, det.cut, cfg)) return QualityWarning.INCOMPLETE to true
+    val s = QualityMetrics.sharpness(gray, det.quad, cfg)
+    val sharp = s.isNaN() || s >= cfg.liveBlurThreshold
+    if (!sharp) return QualityWarning.BLURRY to false
+    if (QualityMetrics.glare(gray, det.quad, cfg) > cfg.glareShare) return QualityWarning.GLARE to true
+    if (QualityMetrics.lightingScore(QualityMetrics.light(gray, det.quad), cfg) < 0.5f) return QualityWarning.DIM to true
+    return null to true
+}
 
 @Composable
 fun CameraScreen(vm: AppViewModel, target: Screen.Camera) {
@@ -132,16 +155,23 @@ fun CameraScreen(vm: AppViewModel, target: Screen.Camera) {
     }
     BackHandler { leave() }
 
-    val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia()) { uris: List<Uri> ->
-        vm.importUris(target.docId, uris) { id -> vm.cancelIdCard(); vm.finishCamera(id) }
+    // BLACKBOX-2.0 re-test: a photo picked here goes the same way as a shot (Book mode -> split screen, the
+    // armed «إزالة الوهج» second photo -> fused); one photo is picked then, several otherwise.
+    val onPicked: (List<Uri>) -> Unit = { uris ->
+        val top = vm.screen as? Screen.Camera ?: target
+        vm.importFromCamera(top, uris) { id -> vm.cancelIdCard(); vm.finishCamera(id) }
+    }
+    val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia()) { uris: List<Uri> -> onPicked(uris) }
+    val singleLauncher = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri: Uri? -> if (uri != null) onPicked(listOf(uri)) }
+    val pickImages: () -> Unit = {
+        val request = PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+        if (!target.idCard && target.retakePageId == null && (target.book || vm.glareSecond.value != null)) singleLauncher.launch(request) else galleryLauncher.launch(request)
     }
 
     CameraTheme {
         Box(Modifier.fillMaxSize().background(Color.Black)) {
             if (granted) {
-                CameraContent(vm, target, onClose = leave, onGallery = {
-                    galleryLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                })
+                CameraContent(vm, target, onClose = leave, onGallery = pickImages)
             } else {
                 // Permission screen (design spec §3.2): one primary in the thumb zone.
                 Column(Modifier.fillMaxSize().safeDrawingPadding().padding(horizontal = Dimens.xl)) {
@@ -177,7 +207,7 @@ fun CameraScreen(vm: AppViewModel, target: Screen.Camera) {
                             modifier = Modifier.fillMaxWidth().heightIn(min = Dimens.buttonLarge),
                         ) { Text(stringResource(if (asked) R.string.open_settings else R.string.allow_camera)) }
                         OutlinedButton(
-                            onClick = { galleryLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                            onClick = pickImages,
                             modifier = Modifier.fillMaxWidth().heightIn(min = Dimens.button),
                         ) { Text(stringResource(R.string.pick_images)) }
                         TextButton(onClick = leave, modifier = Modifier.fillMaxWidth().heightIn(min = Dimens.button)) { Text(stringResource(R.string.not_now)) }
@@ -215,12 +245,17 @@ private fun CameraContent(vm: AppViewModel, initial: Screen.Camera, onClose: () 
     val captured = target.captured
     var live by remember { mutableStateOf(Live(null, 3f / 4f)) }
     // Auto-capture decisions (time based, re-arms only when the page changes).
-    val gate = remember { AutoCapture() }
+    // BLACKBOX-2.0 re-test: no shot by itself in the first seconds after the camera opens or the mode changes,
+    // so there is time to choose Book (or ID card) before a page in view is taken as a document page.
+    val gate = remember { AutoCapture(startDelayMillis = AutoCapture.CAMERA_START_DELAY_MS) }
+    // The gate's clock. 2.0-gates: with the test camera it is the wall clock the driver holds the page for
+    // (Robolectric's uptime clock only moves with the main looper, not with the simulated hold).
+    val now: () -> Long = { if (CaptureSeam.camera != null) System.nanoTime() / 1_000_000 else android.os.SystemClock.uptimeMillis() }
     val autoFlag = remember { java.util.concurrent.atomic.AtomicBoolean(vm.settings.autoCapture) }
     var torch by remember { mutableStateOf(false) }
     var auto by remember { mutableStateOf(vm.settings.autoCapture) }
     var capturing by remember { mutableStateOf(false) }
-    var cooldownUntil by remember { mutableStateOf(0L) }
+    var cooldownUntil by remember { mutableLongStateOf(0L) }
     var status by remember { mutableIntStateOf(R.string.status_searching) }
     val idFront by vm.idFrontCaptured
     val haptics = androidx.compose.ui.platform.LocalHapticFeedback.current
@@ -248,6 +283,17 @@ private fun CameraContent(vm: AppViewModel, initial: Screen.Camera, onClose: () 
         status = R.string.status_capturing
         val liveQuad = live.quad
         synchronized(gate) { gate.captured(liveQuad) }
+        // 2.0-gates (test seam): a test-supplied photo goes through the same path as a real shot.
+        CaptureSeam.camera?.let { fake ->
+            val shot = fake.takePicture()
+            if (shot == null) { capturing = false; status = R.string.status_error; return }
+            vm.addCapture(target, shot.first, shot.second, liveQuad) { r ->
+                capturing = false
+                cooldownUntil = System.currentTimeMillis() + 2000
+                if (r == null) status = R.string.status_error else if (vm.afterCapture(target, r, auto)) status = R.string.status_added
+            }
+            return
+        }
         imageCapture.takePicture(ContextCompat.getMainExecutor(ctx), object : ImageCapture.OnImageCapturedCallback() {
             override fun onCaptureSuccess(image: ImageProxy) {
                 val buf = image.planes[0].buffer
@@ -272,7 +318,42 @@ private fun CameraContent(vm: AppViewModel, initial: Screen.Camera, onClose: () 
         })
     }
 
+    // 2.0-gates (test seam): frames from a test drive the same detection and auto-capture gate as the camera.
+    LaunchedEffect(Unit) {
+        val fake = CaptureSeam.camera ?: return@LaunchedEffect
+        while (true) {
+            val frame = fake.previewFrame()
+            if (frame != null) {
+                val det = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { com.fastkiwi.scan.imaging.BitmapIO.detectPage(frame) }
+                // The same content signature the camera path feeds (2.0-cam2, CAM-06), on a 320 px copy.
+                val content = if (det != null && autoFlag.get()) kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                    runCatching {
+                        // Not BitmapIO.fit: that recycles its source, and the frame belongs to the test.
+                        val k = minOf(1f, 320f / maxOf(frame.width, frame.height))
+                        val small = frame.scale(maxOf(1, (frame.width * k).toInt()), maxOf(1, (frame.height * k).toInt()))
+                        val px = IntArray(small.width * small.height)
+                        small.getPixels(px, 0, small.width, 0, 0, small.width, small.height)
+                        if (small !== frame) small.recycle()
+                        val gray = com.fastkiwi.scan.core.ImageFilters.toGray(px, small.width, small.height)
+                        QualityMetrics.contentSignature(gray, det.quad.scale(small.width.toFloat(), small.height.toFloat()))
+                    }.getOrNull()
+                } else null
+                val u = synchronized(gate) { gate.feed(det?.quad, det?.confident == true, now(), autoFlag.get(), true, content) }
+                live = Live(u.quad, frame.width.toFloat() / frame.height, u.state, u.progress)
+            }
+            kotlinx.coroutines.delay(100)
+        }
+    }
+
     DisposableEffect(lifecycleOwner) {
+        // 2.0-gates (test seam): with a test camera nothing is bound. The CameraX path cannot run under the
+        // test driver and its failure showed «تعذّر استخدام الكاميرا» over the simulated camera whenever the
+        // status had nothing else to say (only the desk in view: BLACKBOX-2.0 re-test, task 3).
+        if (CaptureSeam.camera != null) return@DisposableEffect onDispose {
+            analysisExecutor.shutdown()
+            vm.dropGlareOffer()
+            vm.cancelBookSplit()
+        }
         val future = ProcessCameraProvider.getInstance(ctx)
         val detector = QuadDetector(320)
         future.addListener({
@@ -294,10 +375,15 @@ private fun CameraContent(vm: AppViewModel, initial: Screen.Camera, onClose: () 
                     val rot = img.imageInfo.rotationDegrees
                     val norm = det?.quad?.map { Pt(it.x / gray.width, it.y / gray.height) }?.rotateNormalized(rot)
                     val upright = if (rot == 90 || rot == 270) img.height.toFloat() / img.width else img.width.toFloat() / img.height
+                    // 2.0: quality on the same frame; auto-capture waits for a whole, sharp, steady page.
+                    val (warning, sharp) = liveWarning(gray, det, norm)
+                    val confident = det?.confident == true && warning != QualityWarning.INCOMPLETE
+                    // 2.0-cam2 (CAM-06): the page's content decides re-arming, not only its outline.
+                    val content = if (det != null && autoFlag.get()) runCatching { QualityMetrics.contentSignature(gray, det.quad) }.getOrNull() else null
                     val u = synchronized(gate) {
-                        gate.feed(norm, det?.confident == true, android.os.SystemClock.uptimeMillis(), autoFlag.get())
+                        gate.feed(norm, confident, now(), autoFlag.get(), sharp, content)
                     }
-                    ContextCompat.getMainExecutor(ctx).execute { live = Live(u.quad, upright, u.state, u.progress) }
+                    ContextCompat.getMainExecutor(ctx).execute { live = Live(u.quad, upright, u.state, u.progress, warning) }
                 } catch (_: Throwable) {
                 } finally {
                     img.close()
@@ -313,6 +399,9 @@ private fun CameraContent(vm: AppViewModel, initial: Screen.Camera, onClose: () 
         onDispose {
             runCatching { future.get().unbindAll() }
             analysisExecutor.shutdown()
+            // 2.0: an offer or a spread belongs to this camera visit only.
+            vm.dropGlareOffer()
+            vm.cancelBookSplit()
         }
     }
 
@@ -329,8 +418,10 @@ private fun CameraContent(vm: AppViewModel, initial: Screen.Camera, onClose: () 
             // Same page still in view after a shot: say so instead of capturing it again.
             AutoCapture.State.CAPTURED -> if (recentlyAdded) status else R.string.status_next_page
             AutoCapture.State.FIRE -> R.string.status_capturing
+            AutoCapture.State.BLURRY -> R.string.status_found
+            AutoCapture.State.MOVING -> R.string.pq_moving
         }
-        if (live.state == AutoCapture.State.FIRE && auto) {
+        if (live.state == AutoCapture.State.FIRE && auto && vm.bookPending.value == null) {
             haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.Confirm)
             capture(auto = true)
         }
@@ -354,7 +445,7 @@ private fun CameraContent(vm: AppViewModel, initial: Screen.Camera, onClose: () 
         if (captured > 0 && !reducedMotion) { flash = true; kotlinx.coroutines.delay(120); flash = false }
     }
     // «تعديل» on the status pill for a few seconds after each capture (accessibility-aware timeout).
-    var editUntil by remember { mutableStateOf(0L) }
+    var editUntil by remember { mutableLongStateOf(0L) }
     val a11y = remember { ctx.getSystemService(android.view.accessibility.AccessibilityManager::class.java) }
     val editMillis = remember {
         if (Build.VERSION.SDK_INT >= 29) a11y?.getRecommendedTimeoutMillis(4000, android.view.accessibility.AccessibilityManager.FLAG_CONTENT_CONTROLS or android.view.accessibility.AccessibilityManager.FLAG_CONTENT_TEXT)?.toLong() ?: 4000L
@@ -364,6 +455,9 @@ private fun CameraContent(vm: AppViewModel, initial: Screen.Camera, onClose: () 
         if (captured > 0) { editUntil = System.currentTimeMillis() + editMillis; kotlinx.coroutines.delay(editMillis); editUntil = 0L }
     }
 
+    val bookPending by vm.bookPending
+    val glareOffer by vm.glareOffer
+    val glareSecond by vm.glareSecond
     val docsState by vm.docs.collectAsStateWithLifecycle()
     val last = target.docId?.let { id -> docsState.firstOrNull { it.doc.id == id }?.doc }?.takeIf { target.captured > 0 }?.pages?.lastOrNull()
     Box(Modifier.fillMaxSize()) {
@@ -384,12 +478,38 @@ private fun CameraContent(vm: AppViewModel, initial: Screen.Camera, onClose: () 
                     )
                 }
 
+                // BLACKBOX-2.0 #4: book mode says what to do (the status pill only says it while searching).
+                if (target.book && bookPending == null) {
+                    Text(
+                        stringResource(R.string.book_guide), color = Color.White, style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center,
+                        modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 72.dp, start = Dimens.l, end = Dimens.l)
+                            .background(Color.Black.copy(alpha = 0.72f), RoundedCornerShape(16.dp)).padding(horizontal = Dimens.l, vertical = Dimens.s),
+                    )
+                }
+
                 // Status pill: white on 72% black, polite live region, «تعديل» after a capture.
                 val statusText = when {
+                    glareSecond != null && status != R.string.status_capturing -> stringResource(R.string.glare_second_hint)
+                    target.book && status == R.string.status_searching -> stringResource(R.string.book_hint)
                     target.idCard && !idFront && status != R.string.status_capturing -> stringResource(R.string.id_front_hint)
                     target.idCard && idFront && status != R.string.status_capturing -> stringResource(R.string.id_back_hint)
                     status == R.string.status_added -> stringResource(R.string.status_added, captured)
                     else -> stringResource(status)
+                }
+                // 2.0: one quality pill above the status pill; after a glare shot, the second-shot offer.
+                Column(
+                    Modifier.align(Alignment.BottomCenter).padding(bottom = Dimens.l + 56.dp, start = Dimens.l, end = Dimens.l),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    if (glareOffer != null && !capturing) {
+                        GlareOfferPill(onSecond = { vm.armGlareSecondShot() }, onSkip = { vm.dropGlareOffer() })
+                    } else if (glareSecond != null) {
+                        TextButton(onClick = { vm.dropGlareOffer() }, modifier = Modifier.heightIn(min = 48.dp).background(Color.Black.copy(alpha = 0.72f), CircleShape)) {
+                            Text(stringResource(R.string.glare_skip), color = KiwiAccent)
+                        }
+                    } else {
+                        CameraQualityPill(live.warning?.takeIf { live.quad != null && !capturing }?.let { stringResource(qualityLabel(it)) })
+                    }
                 }
                 Row(
                     Modifier.align(Alignment.BottomCenter).padding(bottom = Dimens.l)
@@ -410,8 +530,13 @@ private fun CameraContent(vm: AppViewModel, initial: Screen.Camera, onClose: () 
             // Controls panel on black.
             Column(Modifier.fillMaxWidth().background(Color.Black).navigationBarsPadding().padding(bottom = Dimens.l)) {
                 if (target.retakePageId == null) {
-                    ModeTabs(target.idCard, Modifier.align(Alignment.CenterHorizontally).padding(vertical = Dimens.s)) { id ->
-                        if (id != target.idCard) { vm.cancelIdCard(); vm.replaceTop(target.copy(idCard = id)) }
+                    val mode = when { target.idCard -> 1; target.book -> 2; else -> 0 }
+                    ModeTabs(mode, Modifier.align(Alignment.CenterHorizontally).padding(vertical = Dimens.s)) { m ->
+                        if (m != mode) {
+                            vm.cancelIdCard()
+                            synchronized(gate) { gate.restartDelay(now()) }
+                            vm.replaceTop(target.copy(idCard = m == 1, book = m == 2))
+                        }
                     }
                 }
                 // Weights 1 : 96 dp : 1 keep the shutter centred whatever sits beside it.
@@ -435,6 +560,25 @@ private fun CameraContent(vm: AppViewModel, initial: Screen.Camera, onClose: () 
                 }
             }
         }
+        // 2.0 book mode: check the spine, then add both pages.
+        bookPending?.let { p ->
+            BookSplitScreen(p, onConfirm = { spine, order -> vm.confirmBookSplit(spine, order) }, onRetake = { vm.cancelBookSplit() })
+        }
+    }
+}
+
+/** After a shot with glare: «لمعان على الصفحة · لقطة ثانية» (a single-shot keeps the warning only). */
+@Composable
+private fun GlareOfferPill(onSecond: () -> Unit, onSkip: () -> Unit) {
+    Row(
+        Modifier.background(Color.Black.copy(alpha = 0.72f), CircleShape).padding(start = Dimens.l, end = Dimens.xs),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(KiwiIcons.warning(), null, Modifier.size(20.dp), tint = Color(0xFFFFC857))
+        Spacer(Modifier.width(Dimens.s))
+        Text(stringResource(R.string.pq_glare), color = Color.White, style = MaterialTheme.typography.titleSmall)
+        TextButton(onClick = onSecond, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.glare_offer_action), color = KiwiAccent) }
+        TextButton(onClick = onSkip, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.glare_skip), color = Color.White) }
     }
 }
 
@@ -460,10 +604,10 @@ private fun AutoManualPill(auto: Boolean, modifier: Modifier, onChange: (Boolean
 }
 
 @Composable
-private fun ModeTabs(idCard: Boolean, modifier: Modifier, onSelect: (Boolean) -> Unit) {
+private fun ModeTabs(mode: Int, modifier: Modifier, onSelect: (Int) -> Unit) {
     Row(modifier.selectableGroup(), horizontalArrangement = Arrangement.spacedBy(Dimens.xl)) {
-        listOf(false to R.string.mode_document, true to R.string.id_card_mode).forEach { (value, label) ->
-            val sel = idCard == value
+        listOf(0 to R.string.mode_document, 1 to R.string.id_card_mode, 2 to R.string.mode_book).forEach { (value, label) ->
+            val sel = mode == value
             Column(
                 Modifier.heightIn(min = 48.dp).selectable(selected = sel, onClick = { onSelect(value) }, role = Role.Tab).padding(horizontal = Dimens.s),
                 horizontalAlignment = Alignment.CenterHorizontally,

@@ -240,7 +240,7 @@ class AppUiTest {
         // Jobs finish on the main thread (busy--), so keep its queue draining while waiting.
         rule.waitUntil(30_000) {
             org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
-            vm.busy.value == 0
+            vm.busy.intValue == 0
         }
         rule.waitForIdle()
     }

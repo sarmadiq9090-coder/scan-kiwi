@@ -30,6 +30,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.foundation.layout.padding
 import com.fastkiwi.scan.R
 import com.fastkiwi.scan.imaging.BitmapIO
 import kotlinx.coroutines.Dispatchers
@@ -74,11 +77,26 @@ fun FileImage(
     }
 }
 
+/**
+ * For every [AlertDialog] that holds a text field. With the platform's default dialog width the
+ * window is wrap-content, and Android measures it twice on each layout pass (first at its preferred
+ * dialog width, 320 dp, then at the full width, because the dialog's minimum width does not fit in 320 dp).
+ * A text field measured at a new width asks for another layout, so the dialog never stopped laying
+ * itself out (BLACKBOX-2.0 #1: «مجلد جديد» kept the app busy; under Robolectric the same framework code
+ * never goes idle). A full-width window, inset like a Material dialog, is measured once.
+ */
+val TextFieldDialogProperties = DialogProperties(usePlatformDefaultWidth = false)
+
+/** The side margins a Material dialog has with the platform width (pair with [TextFieldDialogProperties]). */
+val TextFieldDialogModifier: Modifier = Modifier.padding(horizontal = 24.dp)
+
 @Composable
 fun RenameDialog(current: String, suggestion: String? = null, onDismiss: () -> Unit, onRename: (String) -> Unit) {
     var value by remember { mutableStateOf(TextFieldValue(current, TextRange(0, current.length))) }
     AlertDialog(
         onDismissRequest = onDismiss,
+        properties = TextFieldDialogProperties,
+        modifier = TextFieldDialogModifier,
         title = { Text(stringResource(R.string.rename)) },
         text = {
             androidx.compose.foundation.layout.Column {

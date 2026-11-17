@@ -12,26 +12,47 @@ enum class Filter { ORIGINAL, ENHANCED, WHITEN, GRAYSCALE, BW }
 /**
  * Document filters working in place on packed ARGB pixels (as from
  * Bitmap.getPixels). Pure Kotlin: no Android types, unit-testable on the JVM.
+ *
+ * 2.0-cam2 (A8, PRD §4.2): every filter runs over horizontal strips of a [PixelStore], so a page of
+ * any size needs one strip of working memory besides the page itself, never a second full-size copy.
+ * Global measures (histograms, white balance, the paper-brightness grid) are gathered over all
+ * strips first and then applied strip by strip, so the result is the same for any strip height
+ * (seam-free by construction; `ImageTilesTest`). With [FilterOptions.denoise], an edge-preserving
+ * noise reduction ([Denoise]) runs first on noisy pages in «ألوان محسّنة», «تبييض» and «رمادي»;
+ * «الأصلي» (original colour preservation) is never touched.
  */
 object ImageFilters {
 
     fun apply(filter: Filter, px: IntArray, w: Int, h: Int) {
+        apply(filter, IntPixels(px, w, h))
+    }
+
+    /**
+     * Applies [filter] to the pixels of [s] in place, strip by strip. Returns the noise sigma that
+     * was reduced first (0 when the page was clean, the filter is «الأصلي», or denoise is off).
+     */
+    fun apply(filter: Filter, s: PixelStore, opt: FilterOptions = FilterOptions.DEFAULT): Float {
+        if (filter == Filter.ORIGINAL) return 0f
+        // «أبيض وأسود» is left out: its threshold already ignores the grain, and smoothing first
+        // measurably thickened thin strokes (DenoiseBenchTest).
+        val sigma = if (opt.denoise && filter != Filter.BW) Denoise.auto(s, chroma = filter == Filter.ENHANCED || filter == Filter.WHITEN, opt) else 0f
         when (filter) {
             Filter.ORIGINAL -> Unit
-            Filter.ENHANCED -> enhance(px, w, h)
-            Filter.WHITEN -> whiten(px, w, h)
-            Filter.GRAYSCALE -> grayscale(px, w, h)
-            Filter.BW -> blackWhite(px, w, h)
+            Filter.ENHANCED -> enhanceStore(s, opt)
+            Filter.WHITEN -> whitenStore(s, opt)
+            Filter.GRAYSCALE -> grayscaleStore(s, opt)
+            Filter.BW -> blackWhiteStore(s, opt)
         }
+        return sigma
     }
 
     // ------------------------------------------------------------- helpers
 
-    private inline fun r(c: Int) = (c shr 16) and 0xFF
-    private inline fun g(c: Int) = (c shr 8) and 0xFF
-    private inline fun b(c: Int) = c and 0xFF
-    private inline fun argb(r: Int, g: Int, b: Int) = (0xFF shl 24) or (r shl 16) or (g shl 8) or b
-    private inline fun clamp(v: Int) = if (v < 0) 0 else if (v > 255) 255 else v
+    internal inline fun r(c: Int) = (c shr 16) and 0xFF
+    internal inline fun g(c: Int) = (c shr 8) and 0xFF
+    internal inline fun b(c: Int) = c and 0xFF
+    internal inline fun argb(r: Int, g: Int, b: Int) = (0xFF shl 24) or (r shl 16) or (g shl 8) or b
+    internal inline fun clamp(v: Int) = if (v < 0) 0 else if (v > 255) 255 else v
     fun luma(c: Int) = (r(c) * 77 + g(c) * 150 + b(c) * 29) shr 8
 
     /** Value at the given percentile (0..1) of a 256-bin histogram. */
@@ -43,6 +64,34 @@ object ImageFilters {
             if (acc > target) return i
         }
         return 255
+    }
+
+    private fun percentileAt(hist: IntArray, off: Int, total: Int, p: Double): Int {
+        val target = (total * p).toLong()
+        var acc = 0L
+        for (i in 0 until 256) {
+            acc += hist[off + i]
+            if (acc > target) return i
+        }
+        return 255
+    }
+
+    /** Rows per strip for [opt] on a [w] px wide page (a multiple of [multipleOf]). */
+    internal fun stripRows(w: Int, opt: FilterOptions, multipleOf: Int = 1): Int {
+        val rows = max(1, opt.stripPixels / max(1, w))
+        return max(multipleOf, rows / multipleOf * multipleOf)
+    }
+
+    /** Calls [body] for each strip (rows [y0, y0 + n)) with its pixels in [buf]; writes them back if [write]. */
+    internal inline fun strips(s: PixelStore, rows: Int, buf: IntArray, write: Boolean, body: (y0: Int, n: Int) -> Unit) {
+        var y0 = 0
+        while (y0 < s.height) {
+            val n = min(rows, s.height - y0)
+            s.read(y0, n, buf)
+            body(y0, n)
+            if (write) s.write(y0, n, buf)
+            y0 += n
+        }
     }
 
     /**
@@ -83,12 +132,74 @@ object ImageFilters {
             }
             grid[gy * gw + gx] = percentile(hist, n, 0.90).toFloat()
         }
+        return smoothGrid(grid, gw, gh, cell)
+    }
+
+    private fun smoothGrid(grid: FloatArray, gw: Int, gh: Int, cell: Int): Background {
         // Dilate (3x3 max) to swallow bold text/blocks, then blur twice.
         var cur = grid
         cur = maxFilter(cur, gw, gh)
         repeat(2) { cur = boxBlur(cur, gw, gh) }
         for (i in cur.indices) cur[i] = max(cur[i], 24f)
         return Background(gw, gh, cell, cur)
+    }
+
+    private const val CH_LUMA = 0
+    private const val CH_R = 1
+    private const val CH_G = 2
+    private const val CH_B = 3
+
+    private fun channel(c: Int, ch: Int): Int = when (ch) {
+        CH_R -> r(c)
+        CH_G -> g(c)
+        CH_B -> b(c)
+        else -> luma(c)
+    }
+
+    /**
+     * [background] over a strip store: the same cells, samples and smoothing, so the grid equals
+     * the one-array version. Only one band of cells is counted at a time.
+     */
+    private fun backgrounds(s: PixelStore, channels: IntArray, opt: FilterOptions): Array<Background> {
+        val w = s.width; val h = s.height
+        val cell = max(8, max(w, h) / 64)
+        val gw = (w + cell - 1) / cell
+        val gh = (h + cell - 1) / cell
+        val grids = Array(channels.size) { FloatArray(gw * gh) }
+        val hist = Array(channels.size) { IntArray(gw * 256) }
+        val counts = IntArray(gw)
+        val rows = stripRows(w, opt, cell)
+        val buf = IntArray(rows * w)
+        strips(s, rows, buf, write = false) { y0, n ->
+            var band = 0
+            while (band < n) {
+                val gy = (y0 + band) / cell
+                val bandRows = min(cell, n - band)
+                for (hs in hist) hs.fill(0)
+                counts.fill(0)
+                // Every other pixel from the cell origin, as in [background].
+                var yy = 0
+                while (yy < bandRows) {
+                    val row = (band + yy) * w
+                    for (gx in 0 until gw) {
+                        val x1 = min(w, gx * cell + cell)
+                        var x = gx * cell
+                        while (x < x1) {
+                            val c = buf[row + x]
+                            for (k in channels.indices) hist[k][gx * 256 + channel(c, channels[k])]++
+                            counts[gx]++
+                            x += 2
+                        }
+                    }
+                    yy += 2
+                }
+                for (k in channels.indices) for (gx in 0 until gw) {
+                    grids[k][gy * gw + gx] = percentileAt(hist[k], gx * 256, counts[gx], 0.90).toFloat()
+                }
+                band += bandRows
+            }
+        }
+        return Array(channels.size) { k -> smoothGrid(grids[k], gw, gh, cell) }
     }
 
     private fun maxFilter(src: FloatArray, w: Int, h: Int): FloatArray {
@@ -120,30 +231,62 @@ object ImageFilters {
     // ------------------------------------------------------------- filters
 
     /** Grayscale with automatic levels (0.5% / 99.5% stretch). */
-    fun grayscale(px: IntArray, w: Int, h: Int) {
-        val hist = IntArray(256)
-        for (c in px) hist[luma(c)]++
-        val lo = percentile(hist, px.size, 0.005)
-        val hi = max(lo + 1, percentile(hist, px.size, 0.995))
-        val lut = IntArray(256) { clamp(((it - lo) * 255f / (hi - lo)).roundToInt()) }
-        for (i in px.indices) {
-            val l = lut[luma(px[i])]
-            px[i] = argb(l, l, l)
-        }
-    }
+    fun grayscale(px: IntArray, w: Int, h: Int) = apply(Filter.GRAYSCALE, px, w, h)
 
     /**
      * "Enhanced colour": lifts shadows a little, auto-levels, white balance
      * on the paper colour and a gentle saturation boost. Keeps photos natural.
      */
-    fun enhance(px: IntArray, w: Int, h: Int) {
-        val bg = background(px, w, h, ::luma)
-        // Paper white balance: average colour of the brightest 10% of pixels.
+    fun enhance(px: IntArray, w: Int, h: Int) = apply(Filter.ENHANCED, px, w, h)
+
+    /**
+     * Shadow removal / whitening: divides every channel by its own
+     * illumination estimate so paper becomes pure white while ink keeps its colour.
+     */
+    fun whiten(px: IntArray, w: Int, h: Int) = apply(Filter.WHITEN, px, w, h)
+
+    /** Black & white document: illumination-normalised luminance + Otsu threshold. */
+    fun blackWhite(px: IntArray, w: Int, h: Int) = apply(Filter.BW, px, w, h)
+
+    private fun grayscaleStore(s: PixelStore, opt: FilterOptions) {
+        val w = s.width
+        val total = w * s.height
+        val rows = stripRows(w, opt)
+        val buf = IntArray(rows * w)
         val hist = IntArray(256)
-        for (c in px) hist[luma(c)]++
-        val bright = percentile(hist, px.size, 0.90)
+        strips(s, rows, buf, write = false) { _, n -> for (i in 0 until n * w) hist[luma(buf[i])]++ }
+        val lo = percentile(hist, total, 0.005)
+        val hi = max(lo + 1, percentile(hist, total, 0.995))
+        val lut = IntArray(256) { clamp(((it - lo) * 255f / (hi - lo)).roundToInt()) }
+        strips(s, rows, buf, write = true) { _, n ->
+            for (i in 0 until n * w) {
+                val l = lut[luma(buf[i])]
+                buf[i] = argb(l, l, l)
+            }
+        }
+    }
+
+    private fun enhanceStore(s: PixelStore, opt: FilterOptions) {
+        val w = s.width
+        val total = w * s.height
+        val bg = backgrounds(s, intArrayOf(CH_LUMA), opt)[0]
+        val rows = stripRows(w, opt)
+        val buf = IntArray(rows * w)
+        // Paper white balance: average colour of the brightest 10% of pixels. Sums are kept per
+        // luma level, so one pass gives the sums a second pass over the 90th percentile would.
+        val hist = IntArray(256)
+        val sumR = LongArray(256); val sumG = LongArray(256); val sumB = LongArray(256)
+        strips(s, rows, buf, write = false) { _, n ->
+            for (i in 0 until n * w) {
+                val c = buf[i]
+                val l = luma(c)
+                hist[l]++
+                sumR[l] += r(c).toLong(); sumG[l] += g(c).toLong(); sumB[l] += b(c).toLong()
+            }
+        }
+        val bright = percentile(hist, total, 0.90)
         var sr = 0L; var sg = 0L; var sb = 0L; var n = 0L
-        for (c in px) if (luma(c) >= bright) { sr += r(c); sg += g(c); sb += b(c); n++ }
+        for (l in bright until 256) { sr += sumR[l]; sg += sumG[l]; sb += sumB[l]; n += hist[l] }
         val wr = if (n > 0) sr.toFloat() / n else 255f
         val wg = if (n > 0) sg.toFloat() / n else 255f
         val wb = if (n > 0) sb.toFloat() / n else 255f
@@ -152,77 +295,89 @@ object ImageFilters {
         val kg = (wm / wg.coerceAtLeast(1f)).coerceIn(0.8f, 1.25f)
         val kb = (wm / wb.coerceAtLeast(1f)).coerceIn(0.8f, 1.25f)
         val lhist = IntArray(256)
-        for (y in 0 until h) {
-            val row = y * w
-            for (x in 0 until w) {
-                val i = row + x
-                val c = px[i]
-                // Partial illumination correction (60%) keeps the image natural.
-                val gain = 1f + 0.6f * (245f / bg.at(x, y) - 1f)
-                val nr = clamp((r(c) * kr * gain).toInt())
-                val ng = clamp((g(c) * kg * gain).toInt())
-                val nb = clamp((b(c) * kb * gain).toInt())
-                px[i] = argb(nr, ng, nb)
-                lhist[luma(px[i])]++
+        strips(s, rows, buf, write = true) { y0, rowsHere ->
+            for (j in 0 until rowsHere) {
+                val y = y0 + j
+                val row = j * w
+                for (x in 0 until w) {
+                    val i = row + x
+                    val c = buf[i]
+                    // Partial illumination correction (60%) keeps the image natural.
+                    val gain = 1f + 0.6f * (245f / bg.at(x, y) - 1f)
+                    val nr = clamp((r(c) * kr * gain).toInt())
+                    val ng = clamp((g(c) * kg * gain).toInt())
+                    val nb = clamp((b(c) * kb * gain).toInt())
+                    buf[i] = argb(nr, ng, nb)
+                    lhist[luma(buf[i])]++
+                }
             }
         }
-        val lo = percentile(lhist, px.size, 0.01)
-        val hi = max(lo + 1, percentile(lhist, px.size, 0.98))
+        val lo = percentile(lhist, total, 0.01)
+        val hi = max(lo + 1, percentile(lhist, total, 0.98))
         val lut = IntArray(256) { clamp(((it - lo) * 255f / (hi - lo)).roundToInt()) }
-        for (i in px.indices) {
-            val c = px[i]
-            val cr = lut[r(c)]; val cg = lut[g(c)]; val cb = lut[b(c)]
-            val l = (cr * 77 + cg * 150 + cb * 29) shr 8
-            val s = 1.2f
-            px[i] = argb(clamp((l + (cr - l) * s).toInt()), clamp((l + (cg - l) * s).toInt()), clamp((l + (cb - l) * s).toInt()))
-        }
-    }
-
-    /**
-     * Shadow removal / whitening: divides every channel by its own
-     * illumination estimate so paper becomes pure white while ink keeps its colour.
-     */
-    fun whiten(px: IntArray, w: Int, h: Int) {
-        val br = background(px, w, h) { r(it) }
-        val bgc = background(px, w, h) { g(it) }
-        val bb = background(px, w, h) { b(it) }
-        // Map normalised value v in [0,1]: >= 0.90 -> white, darker ink deepened a bit.
-        val lut = IntArray(1025) { i ->
-            val v = i / 1024f
-            val t = ((v - 0.08f) / (0.90f - 0.08f)).coerceIn(0f, 1f)
-            (255f * Math.pow(t.toDouble(), 1.25).toFloat()).roundToInt()
-        }
-        for (y in 0 until h) {
-            val row = y * w
-            for (x in 0 until w) {
-                val i = row + x
-                val c = px[i]
-                val nr = lut[min(1024, (r(c) / br.at(x, y) * 1024f).toInt())]
-                val ng = lut[min(1024, (g(c) / bgc.at(x, y) * 1024f).toInt())]
-                val nb = lut[min(1024, (b(c) / bb.at(x, y) * 1024f).toInt())]
-                px[i] = argb(nr, ng, nb)
+        strips(s, rows, buf, write = true) { _, rowsHere ->
+            for (i in 0 until rowsHere * w) {
+                val c = buf[i]
+                val cr = lut[r(c)]; val cg = lut[g(c)]; val cb = lut[b(c)]
+                val l = (cr * 77 + cg * 150 + cb * 29) shr 8
+                val sat = 1.2f
+                buf[i] = argb(clamp((l + (cr - l) * sat).toInt()), clamp((l + (cg - l) * sat).toInt()), clamp((l + (cb - l) * sat).toInt()))
             }
         }
     }
 
-    /** Black & white document: illumination-normalised luminance + Otsu threshold. */
-    fun blackWhite(px: IntArray, w: Int, h: Int) {
-        val bg = background(px, w, h, ::luma)
-        val norm = ByteArray(px.size)
+    /** Whitening curve on the normalised value v in [0,1]: >= 0.90 -> white, darker ink deepened a bit. */
+    private val whitenLut = IntArray(1025) { i ->
+        val v = i / 1024f
+        val t = ((v - 0.08f) / (0.90f - 0.08f)).coerceIn(0f, 1f)
+        (255f * Math.pow(t.toDouble(), 1.25).toFloat()).roundToInt()
+    }
+
+    private fun whitenStore(s: PixelStore, opt: FilterOptions) {
+        val w = s.width
+        val (br, bgc, bb) = backgrounds(s, intArrayOf(CH_R, CH_G, CH_B), opt)
+        val lut = whitenLut
+        val rows = stripRows(w, opt)
+        val buf = IntArray(rows * w)
+        strips(s, rows, buf, write = true) { y0, n ->
+            for (j in 0 until n) {
+                val y = y0 + j
+                val row = j * w
+                for (x in 0 until w) {
+                    val i = row + x
+                    val c = buf[i]
+                    val nr = lut[min(1024, (r(c) / br.at(x, y) * 1024f).toInt())]
+                    val ng = lut[min(1024, (g(c) / bgc.at(x, y) * 1024f).toInt())]
+                    val nb = lut[min(1024, (b(c) / bb.at(x, y) * 1024f).toInt())]
+                    buf[i] = argb(nr, ng, nb)
+                }
+            }
+        }
+    }
+
+    private fun blackWhiteStore(s: PixelStore, opt: FilterOptions) {
+        val w = s.width
+        val total = w * s.height
+        val bg = backgrounds(s, intArrayOf(CH_LUMA), opt)[0]
+        val rows = stripRows(w, opt)
+        val buf = IntArray(rows * w)
         val hist = IntArray(256)
-        for (y in 0 until h) {
-            val row = y * w
-            for (x in 0 until w) {
-                val i = row + x
-                val v = clamp((luma(px[i]) / bg.at(x, y) * 255f).toInt())
-                norm[i] = v.toByte()
-                hist[v]++
+        strips(s, rows, buf, write = false) { y0, n ->
+            for (j in 0 until n) {
+                val y = y0 + j
+                for (x in 0 until w) hist[clamp((luma(buf[j * w + x]) / bg.at(x, y) * 255f).toInt())]++
             }
         }
-        val t = otsu(hist, px.size).coerceIn(150, 215)
-        for (i in px.indices) {
-            val v = norm[i].toInt() and 0xFF
-            px[i] = if (v < t) argb(0, 0, 0) else argb(255, 255, 255)
+        val t = otsu(hist, total).coerceIn(150, 215)
+        strips(s, rows, buf, write = true) { y0, n ->
+            for (j in 0 until n) {
+                val y = y0 + j
+                for (x in 0 until w) {
+                    val i = j * w + x
+                    val v = clamp((luma(buf[i]) / bg.at(x, y) * 255f).toInt())
+                    buf[i] = if (v < t) argb(0, 0, 0) else argb(255, 255, 255)
+                }
+            }
         }
     }
 

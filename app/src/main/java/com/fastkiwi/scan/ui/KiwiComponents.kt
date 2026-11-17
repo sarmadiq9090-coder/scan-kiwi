@@ -8,6 +8,10 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.material3.RadioButton
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -48,6 +52,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -85,6 +90,7 @@ enum class NavIcon { BACK, CLOSE, NONE }
 
 /** Small top app bar with an optional subtitle; titles never clip Arabic descenders. */
 @OptIn(ExperimentalMaterial3Api::class)
+@android.annotation.SuppressLint("ModifierParameter") // titleModifier styles the title only; the bar takes no modifier
 @Composable
 fun KiwiTopBar(
     title: String,
@@ -135,17 +141,20 @@ fun BottomActionBar(content: @Composable ColumnScope.() -> Unit) {
 fun ButtonPair(
     secondary: @Composable (Modifier) -> Unit,
     primary: @Composable (Modifier) -> Unit,
+    /** false: side by side at every text size (labels wrap instead), for a footer that must stay small. */
+    stackOnLargeText: Boolean = true,
 ) {
-    val stack = LocalDensity.current.fontScale >= 1.5f
+    val stack = stackOnLargeText && LocalDensity.current.fontScale >= 1.5f
     if (stack) {
         Column(verticalArrangement = Arrangement.spacedBy(Dimens.s)) {
             primary(Modifier.fillMaxWidth().heightIn(min = Dimens.button))
             secondary(Modifier.fillMaxWidth().heightIn(min = Dimens.button))
         }
     } else {
-        Row(horizontalArrangement = Arrangement.spacedBy(Dimens.m), verticalAlignment = Alignment.CenterVertically) {
-            secondary(Modifier.weight(1f).heightIn(min = Dimens.button))
-            primary(Modifier.weight(1f).heightIn(min = Dimens.button))
+        // Equal heights when one label wraps (BLACKBOX-2.0 re-test: «حفظ في الجهاز» was taller than «مشاركة»).
+        Row(Modifier.height(androidx.compose.foundation.layout.IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(Dimens.m), verticalAlignment = Alignment.CenterVertically) {
+            secondary(Modifier.weight(1f).fillMaxHeight().heightIn(min = Dimens.button))
+            primary(Modifier.weight(1f).fillMaxHeight().heightIn(min = Dimens.button))
         }
     }
 }
@@ -261,17 +270,37 @@ private fun RowContent(icon: ImageVector?, title: String, supporting: String?, e
     }
 }
 
-/** Single choice between a few options (format, quality, feedback type). */
+/**
+ * Single choice between a few options (format, quality, feedback type). From 150 % text it is a vertical list of
+ * radio rows, so every label is whole (BLACKBOX-2.0 re-test: «نص T…», «صور J…» at 200 %).
+ */
 @Composable
 fun ChoiceSegmentedRow(options: List<String>, selected: Int, onSelect: (Int) -> Unit, modifier: Modifier = Modifier) {
-    SingleChoiceSegmentedButtonRow(modifier.fillMaxWidth()) {
+    if (LocalDensity.current.fontScale >= 1.5f) {
+        Column(modifier.fillMaxWidth().selectableGroup()) {
+            options.forEachIndexed { i, label ->
+                Row(
+                    Modifier.fillMaxWidth().heightIn(min = Dimens.button)
+                        .selectable(selected = i == selected, onClick = { onSelect(i) }, role = Role.RadioButton)
+                        .padding(vertical = Dimens.xs),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    RadioButton(selected = i == selected, onClick = null)
+                    Spacer(Modifier.width(Dimens.m))
+                    Text(label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                }
+            }
+        }
+        return
+    }
+    SingleChoiceSegmentedButtonRow(modifier.fillMaxWidth().height(androidx.compose.foundation.layout.IntrinsicSize.Min)) {
         options.forEachIndexed { i, label ->
             SegmentedButton(
                 selected = i == selected,
                 onClick = { onSelect(i) },
                 shape = SegmentedButtonDefaults.itemShape(i, options.size),
-                modifier = Modifier.heightIn(min = Dimens.button),
-            ) { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                modifier = Modifier.fillMaxHeight().heightIn(min = Dimens.button),
+            ) { Text(label, maxLines = 2, overflow = TextOverflow.Ellipsis, textAlign = androidx.compose.ui.text.style.TextAlign.Center) } // QC 2.0.0: "Exact si…" at 100 % (English)
         }
     }
 }
@@ -347,12 +376,15 @@ object LocalFormat {
     fun size(ctx: Context, bytes: Long): String {
         val locale = ctx.resources.configuration.locales[0] ?: Locale.getDefault()
         val nf = NumberFormat.getNumberInstance(locale)
-        return if (bytes < 1_000_000L) {
+        // Rounded to the nearest unit (BLACKBOX-2.0 re-test: 2007 bytes said «3 KB»); at least 1 KB.
+        val kb = maxOf(1L, (bytes + 500) / 1000)
+        return if (kb < 1000L) {
             nf.maximumFractionDigits = 0
-            ctx.getString(R.string.size_kb, nf.format(maxOf(1L, (bytes + 999) / 1000)))
+            ctx.getString(R.string.size_kb, nf.format(kb))
         } else {
             nf.maximumFractionDigits = 1
-            ctx.getString(R.string.size_mb, nf.format(bytes / 1_000_000.0))
+            nf.roundingMode = java.math.RoundingMode.HALF_UP
+            ctx.getString(R.string.size_mb, nf.format(java.math.BigDecimal.valueOf(bytes).divide(java.math.BigDecimal.valueOf(1_000_000L))))
         }
     }
 
@@ -361,4 +393,16 @@ object LocalFormat {
 
     /** Isolates a Latin run (document name, A4, AES-256) inside Arabic text. */
     fun isolate(s: String): String = "${0x2068.toChar()}$s${0x2069.toChar()}"
+}
+
+/**
+ * Bottom-sheet handle, drawn only. Material's default handle carries a tooltip anchor without a name, which
+ * TalkBack reaches as an unlabelled control (torture monkey, QC 2.0.0); the scrim («إغلاق الورقة») and Back
+ * already close the sheet.
+ */
+@Composable
+fun KiwiSheetHandle() {
+    Box(Modifier.fillMaxWidth().padding(vertical = 22.dp).clearAndSetSemantics { }, contentAlignment = Alignment.Center) {
+        Box(Modifier.size(width = 32.dp, height = 4.dp).background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f), RoundedCornerShape(2.dp)))
+    }
 }

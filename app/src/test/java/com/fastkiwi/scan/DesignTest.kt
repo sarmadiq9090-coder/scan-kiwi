@@ -43,8 +43,9 @@ private fun assertTouchTargets(rule: androidx.compose.ui.test.junit4.AndroidComp
     val density = rule.activity.resources.displayMetrics.density
     val min = 48f * density - 1f
     val nodes = rule.onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsActions.OnClick), useUnmergedTree = true).fetchSemanticsNodes()
-    val small = nodes.filter { n -> visible(n) && (n.boundsInRoot.width < min || n.boundsInRoot.height < min) }
-        .map { n -> "${n.config.toString().take(80)} ${n.boundsInRoot.width / density}x${n.boundsInRoot.height / density} dp" }
+    // The node's own (unclipped) size: a row cut by the screen edge or the top bar is not a small target.
+    val small = nodes.filter { n -> visible(n) && (n.size.width < min || n.size.height < min) }
+        .map { n -> "${n.config.toString().take(80)} ${n.size.width / density}x${n.size.height / density} dp" }
     assertTrue("$screen: touch targets under 48 dp:\n" + small.joinToString("\n"), small.isEmpty())
 }
 

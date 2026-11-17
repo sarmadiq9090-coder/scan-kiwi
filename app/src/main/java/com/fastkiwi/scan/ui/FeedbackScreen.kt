@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 package com.fastkiwi.scan.ui
 
+import androidx.core.net.toUri
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
@@ -63,9 +64,9 @@ import kotlinx.coroutines.launch
 import java.util.Locale
 
 /**
- * «أبلغنا عن مشكلة أو اقتراح». Nothing is sent from the app (it has no network
- * access): the user's own mail app or browser opens with the text, and the
- * user reviews and sends it there.
+ * «أبلغنا عن مشكلة أو اقتراح». Nothing is sent from the app (its only connection
+ * is the GitHub update check): the user's own mail app or browser opens with the
+ * text, and the user reviews and sends it there.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -82,7 +83,7 @@ fun FeedbackScreen(vm: AppViewModel, start: Screen.Feedback) {
 
     fun open(uri: String, action: String, failMsg: String) {
         try {
-            val intent = Intent(action, Uri.parse(uri)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            val intent = Intent(action, uri.toUri()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             if (action == Intent.ACTION_SENDTO) {
                 // Some mail apps read the extras rather than the mailto: query.
                 val attached = if (attach) info else null

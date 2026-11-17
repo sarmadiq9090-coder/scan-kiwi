@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 2.0-update strings (owner's order 2026-11-15). Arabic (default). Keep keys identical in values/ and values-en/. -->
+<resources>
+    <string name="update_notice_title">الاتصال بالإنترنت للتحديثات فقط</string>
+    <string name="update_notice_ok">حسناً</string>
+    <string name="update_notice_settings">الإعدادات</string>
+    <string name="update_details">يتحقق تلقائياً مرة كل ٧ أيام على الأكثر، عند فتح التطبيق فقط، ويمكنك التحقق يدوياً متى شئت. لا يُثبَّت أي تحديث إلا بعد التأكد من أنه أحدث، وأن بصمته (SHA-256) تطابق ما نُشر معه، وأنه موقّع بمفتاح التطبيق نفسه، ثم بموافقتك في شاشة أندرويد. يرى GitHub عنوان IP الخاص بك كأي موقع.</string>
+    <string name="update_check_now">تحقق من التحديثات</string>
+    <string name="update_auto">التحقق التلقائي من التحديثات</string>
+    <string name="update_auto_hint">مرة كل ٧ أيام على الأكثر، عند فتح التطبيق</string>
+    <string name="update_wifi_only">التنزيل عبر Wi-Fi فقط</string>
+    <string name="update_wifi_only_hint">لا يُنزَّل التحديث عبر بيانات الهاتف</string>
+    <string name="update_checking">جارٍ التحقق…</string>
+    <string name="update_up_to_date">لديك أحدث إصدار.</string>
+    <string name="update_available">الإصدار %1$s متاح</string>
+    <string name="update_available_msg">الإصدار %1$s من ماسح كيوي متاح. للتنزيل: الإعدادات ← التحديثات.</string>
+    <string name="update_download_install">تنزيل وتثبيت</string>
+    <string name="update_downloading">جارٍ التنزيل… %1$s</string>
+    <string name="update_ready">جاهز للتثبيت: أكّد في شاشة أندرويد</string>
+    <string name="update_install_again">تثبيت</string>
+    <string name="update_err_offline">لا يوجد اتصال بالإنترنت. اتصل بشبكة Wi-Fi أو ببيانات الجوال ثم حاول مرة أخرى.</string>
+    <string name="update_err_network">تعذّر الوصول إلى GitHub. حاول لاحقاً.</string>
+    <string name="update_err_no_release">لا يوجد إصدار منشور بعد.</string>
+    <string name="update_err_bad_release">الإصدار المنشور ناقص (لا ملف APK أو SHA256SUMS)، فلم يُنزَّل شيء.</string>
+    <string name="update_err_wifi">التنزيل عبر Wi-Fi فقط مفعّل: اتصل بشبكة Wi-Fi أو أوقف الخيار.</string>
+    <string name="update_err_sha">بصمة الملف المنزَّل لا تطابق المنشور، فحُذف ولم يُثبَّت.</string>
+    <string name="update_err_signature">الملف المنزَّل غير موقّع بمفتاح التطبيق، فحُذف ولم يُثبَّت.</string>
+    <string name="update_err_not_newer">هذا الإصدار ليس أحدث من المثبّت.</string>
+    <string name="update_err_storage">تعذّر حفظ الملف أو فتح المثبّت. حاول مرة أخرى.</string>
+    <string name="update_err_install">لم يُثبَّت التحديث. حاول مرة أخرى.</string>
+    <string name="update_retry">حاول مرة أخرى</string>
+    <string name="update_ready_title">التحديث جاهز للتثبيت</string>
+    <string name="update_ready_body">انتهى تنزيل التحديث. اضغط «تثبيت» ثم أكّد في شاشة أندرويد.</string>
+    <string name="update_later">لاحقاً</string>
+    <string name="update_other_ways">طرق أخرى</string>
+</resources>

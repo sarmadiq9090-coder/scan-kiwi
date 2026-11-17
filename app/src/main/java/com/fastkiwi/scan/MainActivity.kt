@@ -22,7 +22,10 @@ import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.FileProvider
@@ -32,6 +35,7 @@ import com.fastkiwi.scan.ui.CameraScreen
 import com.fastkiwi.scan.ui.CropScreen
 import com.fastkiwi.scan.ui.EditorScreen
 import com.fastkiwi.scan.ui.ExportResult
+import kotlinx.coroutines.launch
 import com.fastkiwi.scan.ui.HomeScreen
 import com.fastkiwi.scan.ui.PageScreen
 import com.fastkiwi.scan.ui.Screen
@@ -61,9 +65,15 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // 2.0-perf: StrictMode (main-thread disk/network, leaks → log) in debug builds only.
+        com.fastkiwi.scan.perf.DebugStrictMode.install(BuildConfig.DEBUG)
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         if (savedInstanceState == null) handleIncoming(intent)
+        // 2.0-update: the automatic check, when the app is opened only, at most once every 7 days.
+        if (savedInstanceState == null) vm.updates.onAppOpened()
+        // BLACKBOX-2.0 #15: automatic document names follow the UI language (also after a language change).
+        vm.localizeDefaultNames(resources)
         // "Remove animations" (animator duration scale 0) also turns off decorative motion.
         val reducedMotion = runCatching {
             android.provider.Settings.Global.getFloat(contentResolver, android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
@@ -75,6 +85,18 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        // 2.0 torture gate: an update confirmation that Android could not open while the app was in the background.
+        com.fastkiwi.scan.update.UpdateInstallEvents.foreground = true
+        vm.updates.refreshInstallStatus()
+    }
+
+    override fun onStop() {
+        com.fastkiwi.scan.update.UpdateInstallEvents.foreground = false
+        super.onStop()
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -106,7 +128,9 @@ class MainActivity : ComponentActivity() {
  * Scan read its own private files, such as the signature image or another
  * document's export, into a new document.
  */
-internal fun isAcceptableIncoming(uri: Uri, ownAuthority: String): Boolean {
+internal fun isAcceptableIncoming(uri: Uri?, ownAuthority: String): Boolean {
+    // A share list from another app may hold a null entry (torture gate: multi-with-null crashed here).
+    if (uri == null) return false
     if (!"content".equals(uri.scheme, ignoreCase = true)) return false
     // "10@authority" addresses the same provider in another user profile.
     val authority = uri.authority?.substringAfterLast('@') ?: return false
@@ -136,15 +160,36 @@ private fun App(vm: AppViewModel) {
             }
         }
     }
+    val exportScope = androidx.compose.runtime.rememberCoroutineScope()
     LaunchedEffect(Unit) {
         vm.exports.collect { r ->
             when (r) {
-                is ExportResult.Share -> share(ctx, r.files, r.mime)
-                is ExportResult.Saved -> snackbar.showSnackbar(
-                    res.getString(R.string.msg_saved, com.fastkiwi.scan.ui.LocalFormat.size(ctx, r.bytes)),
-                )
+                // 2.0.1: a share sheet that cannot open (no FileProvider root, no app) says so.
+                is ExportResult.Share -> try { share(ctx, r.files, r.mime) } catch (e: Exception) { vm.exportFailed(e) }
+                // 2.0.1: shown without holding up this collector. 2.0.0 waited here until the snackbar was gone
+                // (behind every message queued before it), so a Share right after a Save did nothing meanwhile.
+                is ExportResult.Saved -> {
+                    val text = res.getString(R.string.msg_saved, com.fastkiwi.scan.ui.LocalFormat.size(ctx, r.bytes))
+                    vm.exportDone.value = text
+                    exportScope.launch { snackbar.showSnackbar(text) }
+                }
             }
         }
+    }
+
+    // An information snackbar (no action) belongs to the screen it was said on: on the next screen it was
+    // shown and announced again (BLACKBOX-2.0 re-test: «تم الحفظ» on three later screens). A message that
+    // arrives with the navigation (an import that opens the document) is at most a second old and stays;
+    // a snackbar with Undo always stays.
+    var infoSince by remember { mutableLongStateOf(Long.MAX_VALUE) }
+    LaunchedEffect(snackbar) {
+        androidx.compose.runtime.snapshotFlow { snackbar.currentSnackbarData }.collect { d ->
+            infoSince = if (d != null && d.visuals.actionLabel == null) androidx.compose.runtime.withFrameMillis { it } else Long.MAX_VALUE
+        }
+    }
+    LaunchedEffect(vm.screen) {
+        val d = snackbar.currentSnackbarData ?: return@LaunchedEffect
+        if (d.visuals.actionLabel == null && androidx.compose.runtime.withFrameMillis { it } - infoSince >= 1000L) d.dismiss()
     }
 
     BackHandler(enabled = vm.backStack.size > 1) { vm.back() }
@@ -160,7 +205,18 @@ private fun App(vm: AppViewModel) {
             is Screen.Feedback -> com.fastkiwi.scan.ui.FeedbackScreen(vm, s)
             Screen.Settings -> SettingsScreen(vm)
             Screen.Updates -> com.fastkiwi.scan.ui.UpdatesScreen(vm)
+            // 2.0-docs: search, page text, folder contents
+            Screen.Search -> com.fastkiwi.scan.ui.SearchScreen(vm, snackbar)
+            is Screen.Text -> com.fastkiwi.scan.ui.TextScreen(vm, s.docId, s.pageId, s.query, snackbar)
+            is Screen.FolderDocs -> HomeScreen(vm, snackbar, s.folderId)
+            // 2.0-pdf: PDF tools for files from other apps.
+            Screen.PdfTools -> com.fastkiwi.scan.ui.PdfToolsScreen(vm, snackbar)
         }
+        // 2.0-pdf: password prompt when an imported PDF is protected (PDF-14).
+        com.fastkiwi.scan.ui.ImportPasswordPrompt(vm)
+        // 2.0-update: the one-time notice about the update connection.
+        com.fastkiwi.scan.ui.UpdateNoticeDialog(vm)
+        com.fastkiwi.scan.ui.UpdateConfirmDialog(vm)
     }
 }
 

@@ -45,6 +45,9 @@ import androidx.compose.ui.unit.dp
 import com.fastkiwi.scan.BuildConfig
 import com.fastkiwi.scan.R
 import com.fastkiwi.scan.core.Filter
+import com.fastkiwi.scan.ocr.FallbackReason
+import com.fastkiwi.scan.ocr.OcrDiagnostics
+import com.fastkiwi.scan.ocr.OcrMode
 import com.fastkiwi.scan.ui.theme.Dimens
 import com.fastkiwi.scan.ui.theme.ThemeMode
 
@@ -58,6 +61,9 @@ fun SettingsScreen(vm: AppViewModel) {
     var filter by remember { mutableStateOf(s.defaultFilter) }
     var lang by remember { mutableStateOf(currentLanguage(ctx)) }
     var dialog by remember { mutableStateOf<String?>(null) }
+    // 2.0-ocr
+    var ocrMode by remember { mutableStateOf(s.ocrMode) }
+    var ocrAfter by remember { mutableStateOf(s.ocrAfterCapture) }
     val snackbar = remember { SnackbarHostState() }
 
     val langLabels = listOf("" to R.string.language_system, "ar" to R.string.language_arabic, "en" to R.string.language_english)
@@ -103,6 +109,30 @@ fun SettingsScreen(vm: AppViewModel) {
                 }
             }
 
+            // 2.0-ocr: reading mode and background reading
+            SectionHeader(stringResource(R.string.ocr_settings_group))
+            SettingsGroup(2) { i, shape ->
+                when (i) {
+                    0 -> SettingsRow(
+                        KiwiIcons.ocr(), stringResource(R.string.ocr_mode_title),
+                        stringResource(ocrModeLabel(ocrMode)) + " · " + stringResource(ocrModeHint(ocrMode)), shape, { dialog = "ocr_mode" },
+                    )
+                    else -> SettingsSwitchRow(KiwiIcons.ocr(), stringResource(R.string.ocr_after_capture), stringResource(R.string.ocr_after_capture_hint), ocrAfter, shape) {
+                        ocrAfter = it; s.ocrAfterCapture = it
+                    }
+                }
+            }
+
+            // 2.0-perf: low-memory mode (automatic / always on / off)
+            SectionHeader(stringResource(R.string.perf_settings_group))
+            SettingsGroup(1) { _, shape ->
+                SettingsRow(
+                    KiwiIcons.settings(), stringResource(R.string.perf_low_memory_title),
+                    stringResource(lowMemorySummary(vm.lowMemoryMode.value)) + " · " + stringResource(R.string.perf_low_memory_hint),
+                    shape, { dialog = "low_memory" },
+                )
+            }
+
             SectionHeader(stringResource(R.string.privacy_title))
             Surface(color = MaterialTheme.colorScheme.tertiaryContainer, shape = MaterialTheme.shapes.large, modifier = Modifier.fillMaxWidth()) {
                 Row(Modifier.padding(Dimens.l)) {
@@ -116,7 +146,8 @@ fun SettingsScreen(vm: AppViewModel) {
             }
 
             SectionHeader(stringResource(R.string.settings_group_help))
-            SettingsGroup(3) { i, shape ->
+            val diag = remember(dialog) { vm.ocrDiagnostics.snapshot() }
+            SettingsGroup(4) { i, shape ->
                 when (i) {
                     0 -> SettingsRow(KiwiIcons.feedback(), stringResource(R.string.feedback_title), stringResource(R.string.feedback_settings_hint), shape, {
                         vm.open(Screen.Feedback())
@@ -124,6 +155,8 @@ fun SettingsScreen(vm: AppViewModel) {
                     1 -> SettingsRow(KiwiIcons.update(), stringResource(R.string.updates_title), stringResource(R.string.updates_version, BuildConfig.VERSION_NAME), shape, {
                         vm.open(Screen.Updates)
                     })
+                    // 2.0-ocr: local-only diagnostics (last OCR time per page, peak native heap)
+                    2 -> SettingsRow(KiwiIcons.ocr(), stringResource(R.string.ocr_diag_row), ocrDiagSummary(diag), shape, { dialog = "ocr_diag" })
                     else -> SettingsRow(KiwiIcons.info(), stringResource(R.string.about_row), null, shape, { dialog = "about" })
                 }
             }
@@ -148,8 +181,80 @@ fun SettingsScreen(vm: AppViewModel) {
             stringResource(R.string.theme_title), themeLabels.map { stringResource(it.second) }, themeLabels.indexOfFirst { it.first == vm.themeMode.value },
             onDismiss = { dialog = null },
         ) { vm.setThemeMode(themeLabels[it].first); dialog = null }
-        "about" -> AboutDialog { dialog = null }
+        "about" -> AboutDialog(onCheckUpdates = { dialog = null; vm.open(Screen.Updates); vm.updates.checkNow() }) { dialog = null }
+        // 2.0-ocr
+        "ocr_mode" -> ChoiceDialog(
+            stringResource(R.string.ocr_mode_title),
+            OcrMode.entries.map { stringResource(ocrModeLabel(it)) + " — " + stringResource(ocrModeHint(it)) }, OcrMode.entries.indexOf(ocrMode),
+            onDismiss = { dialog = null },
+        ) { ocrMode = OcrMode.entries[it]; s.ocrMode = ocrMode; dialog = null }
+        "ocr_diag" -> OcrDiagnosticsDialog(vm.ocrDiagnostics.snapshot()) { dialog = null }
+        // 2.0-perf
+        "low_memory" -> ChoiceDialog(
+            stringResource(R.string.perf_low_memory_title),
+            com.fastkiwi.scan.perf.MemoryBudget.Mode.entries.map { stringResource(lowMemoryLabel(it)) },
+            com.fastkiwi.scan.perf.MemoryBudget.Mode.entries.indexOf(vm.lowMemoryMode.value),
+            onDismiss = { dialog = null },
+        ) { vm.setLowMemoryMode(com.fastkiwi.scan.perf.MemoryBudget.Mode.entries[it]); dialog = null }
     }
+}
+
+// 2.0-perf: low-memory mode labels
+private fun lowMemoryLabel(m: com.fastkiwi.scan.perf.MemoryBudget.Mode) = when (m) {
+    com.fastkiwi.scan.perf.MemoryBudget.Mode.AUTO -> R.string.perf_low_memory_auto
+    com.fastkiwi.scan.perf.MemoryBudget.Mode.ON -> R.string.perf_low_memory_on
+    com.fastkiwi.scan.perf.MemoryBudget.Mode.OFF -> R.string.perf_low_memory_off
+}
+
+private fun lowMemorySummary(m: com.fastkiwi.scan.perf.MemoryBudget.Mode) =
+    if (m != com.fastkiwi.scan.perf.MemoryBudget.Mode.AUTO) lowMemoryLabel(m)
+    else if (com.fastkiwi.scan.perf.MemoryBudget.deviceLow) R.string.perf_low_memory_auto_on
+    else R.string.perf_low_memory_auto_off
+
+// 2.0-ocr: OCR settings helpers
+private fun ocrModeLabel(m: OcrMode) = if (m == OcrMode.ACCURATE) R.string.ocr_mode_accurate else R.string.ocr_mode_fast
+private fun ocrModeHint(m: OcrMode) = if (m == OcrMode.ACCURATE) R.string.ocr_mode_accurate_hint else R.string.ocr_mode_fast_hint
+
+// The app's own digits (Arabic-Indic in Arabic), like every other number on screen.
+private fun seconds(ms: Long) = String.format(java.util.Locale.getDefault(), "%.1f", ms / 1000.0)
+private fun megabytes(bytes: Long) = LocalFormat.count((bytes / (1024 * 1024)).toInt())
+
+@Composable
+private fun ocrDiagSummary(d: OcrDiagnostics.Snapshot): String =
+    if (!d.hasData) stringResource(R.string.ocr_diag_none)
+    else stringResource(R.string.ocr_diag_summary, seconds(d.lastMillis), megabytes(d.peakNativeHeapBytes))
+
+@Composable
+private fun ocrEngineLabel(d: OcrDiagnostics.Snapshot): String = when (d.fallback) {
+    FallbackReason.LOW_RAM_DEVICE -> stringResource(R.string.ocr_fallback_low_ram)
+    FallbackReason.RUNTIME_MISSING -> stringResource(R.string.ocr_fallback_runtime)
+    FallbackReason.MODEL_MISSING -> stringResource(R.string.ocr_fallback_model)
+    FallbackReason.INIT_FAILED -> stringResource(R.string.ocr_fallback_init)
+    FallbackReason.ENGLISH_ONLY -> stringResource(R.string.ocr_fallback_english)
+    null -> stringResource(ocrModeLabel(d.effective ?: OcrMode.ACCURATE))
+}
+
+/** The diagnostics row's details, for the owner's phone check (Accurate ≤ 8 s per page, heap ≤ 300 MB). */
+@Composable
+private fun OcrDiagnosticsDialog(d: OcrDiagnostics.Snapshot, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.ocr_diag_title)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(Dimens.s)) {
+                if (!d.hasData) {
+                    Text(stringResource(R.string.ocr_diag_none), style = MaterialTheme.typography.bodyMedium)
+                } else {
+                    Text(stringResource(R.string.ocr_diag_last, seconds(d.lastMillis)), style = MaterialTheme.typography.bodyMedium)
+                    Text(stringResource(R.string.ocr_diag_recent, d.recentMillis.joinToString(" · ") { seconds(it) }), style = MaterialTheme.typography.bodyMedium)
+                    Text(stringResource(R.string.ocr_diag_heap, megabytes(d.peakNativeHeapBytes)), style = MaterialTheme.typography.bodyMedium)
+                    Text(stringResource(R.string.ocr_diag_engine, ocrEngineLabel(d)), style = MaterialTheme.typography.bodyMedium)
+                }
+                Text(stringResource(R.string.ocr_diag_note), style = MaterialTheme.typography.bodySmall)
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.close)) } },
+    )
 }
 
 /** Single-choice list in a dialog (56 dp rows). */
@@ -178,7 +283,7 @@ fun ChoiceDialog(title: String, options: List<String>, selected: Int, onDismiss:
 
 /** About: version, network statement and the bundled licence notices. */
 @Composable
-private fun AboutDialog(onDismiss: () -> Unit) {
+private fun AboutDialog(onCheckUpdates: () -> Unit, onDismiss: () -> Unit) {
     val ctx = LocalContext.current
     val notices = remember { runCatching { ctx.assets.open("THIRD_PARTY_NOTICES.txt").bufferedReader().readText() }.getOrDefault("") }
     AlertDialog(
@@ -188,12 +293,15 @@ private fun AboutDialog(onDismiss: () -> Unit) {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(Dimens.m)) {
                 Text(stringResource(R.string.about_body, BuildConfig.VERSION_NAME), style = MaterialTheme.typography.bodyMedium)
                 Text(stringResource(R.string.network_statement), style = MaterialTheme.typography.bodyMedium)
+                Text(stringResource(R.string.update_details), style = MaterialTheme.typography.bodySmall)
                 Text(stringResource(R.string.licenses_body), style = MaterialTheme.typography.bodySmall)
                 Text(stringResource(R.string.show_licenses), style = MaterialTheme.typography.titleSmall)
                 Text(notices, style = MaterialTheme.typography.bodySmall)
             }
         },
         confirmButton = { TextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.close)) } },
+        // 2.0-update: «تحقق من التحديثات» in About.
+        dismissButton = { TextButton(onClick = onCheckUpdates, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.update_check_now)) } },
     )
 }
 

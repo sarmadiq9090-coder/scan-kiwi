@@ -45,7 +45,7 @@ Legend: [x] done · [~] done with a stated limit · [ ] not done
 - [x] English name **Scan Kiwi** (Arabic «ماسح كيوي» unchanged); open source under Apache-2.0
 - [x] Professional redesign per the design council's spec (DECISIONS.md D31), light and dark, Noto Sans Arabic, Material Symbols
 - [x] «أبلغنا عن مشكلة أو اقتراح» by mail or GitHub issue (hand-off only; device info opt-in; never documents)
-- [x] «التحديثات»: Obtainium link and releases page (no network code, no new permissions)
+- [x] «التحديثات»: Obtainium link and releases page; since 2.0 also the in-app GitHub update check (D30)
 - [x] Share: instant progress, real Cancel (stops OCR), identical export reused, cheap size estimate
 - [x] «أرشيفي (PDF/A)»: PDF/A-2b validated with veraPDF
 - [x] Signature stays on the paper after re-crop/rotation; pipe-only PDF providers import; crop preview off the main thread
@@ -59,7 +59,8 @@ Legend: [x] done · [~] done with a stated limit · [ ] not done
 - [x] Material 3 (Compose), light and dark themes, WCAG AA colour pairs
 - [x] TalkBack labels on all icon buttons, page tiles and the shutter; live-region camera status; 48 dp touch targets
 - [x] Full RTL; Arabic default, English included; in-app language switch (system per-app language on Android 13+)
-- [x] **Only permission: CAMERA.** No storage permission. **No INTERNET permission** (stripped)
+- [x] **Permissions: CAMERA**, and since 2.0 INTERNET, ACCESS_NETWORK_STATE and REQUEST_INSTALL_PACKAGES for the
+  GitHub-only update check (D30). No storage permission.
 - [x] No trackers, analytics, ads or accounts; cloud backup and device transfer of documents disabled
 - [x] targetSdk 36, compileSdk 36, minSdk 24
 - [x] Native libraries 16 KB page aligned (Android 15+ devices)

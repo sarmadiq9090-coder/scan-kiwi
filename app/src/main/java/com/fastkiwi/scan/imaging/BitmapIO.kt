@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 package com.fastkiwi.scan.imaging
 
+import androidx.core.graphics.scale
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -34,6 +35,65 @@ object BitmapIO {
         // largeHeap is on, so largeMemoryClass is our real budget (MB).
         val small = am.isLowRamDevice || am.largeMemoryClass < 256
         MAX_SOURCE_SIDE = if (small) 2400 else 3200
+    }
+
+    // 2.0-perf: the source size follows the one budget (MemoryBudget: low-memory mode or a small heap).
+    fun configureForBudget() {
+        MAX_SOURCE_SIDE = com.fastkiwi.scan.perf.MemoryBudget.sourceSide()
+    }
+
+    /**
+     * 2.0-perf: one mutable bitmap that consecutive decodes of the same size reuse (`inBitmap`), so an
+     * export of n pages allocates its page bitmap once instead of n times (on Android 7 page pixels live
+     * on the Java heap, where each new 30 MB bitmap forces a GC). Not thread-safe: one per export.
+     */
+    class Pool : AutoCloseable {
+        private var spare: Bitmap? = null
+
+        internal fun take(minBytes: Int): Bitmap? {
+            val b = spare ?: return null
+            return if (!b.isRecycled && b.isMutable && b.allocationByteCount >= minBytes) { spare = null; b } else null
+        }
+
+        /** Hands [bmp] back for the next decode (keeps the larger one), or recycles it. */
+        fun give(bmp: Bitmap) {
+            if (bmp.isRecycled) return
+            val cur = spare
+            if (!bmp.isMutable || bmp.config != Bitmap.Config.ARGB_8888) { bmp.recycle(); return }
+            if (cur == null) { spare = bmp; return }
+            if (cur === bmp) return
+            if (bmp.allocationByteCount > cur.allocationByteCount) { cur.recycle(); spare = bmp } else bmp.recycle()
+        }
+
+        override fun close() { spare?.recycle(); spare = null }
+    }
+
+    /**
+     * 2.0-perf: as [decodeFile], decoding into [pool]'s spare bitmap when it is large enough. The
+     * result is mutable; give it back to [pool] (not recycle) when done. A sampled decode still larger
+     * than [maxSide] is scaled down as before (that scaled bitmap is new, the decoded one goes back).
+     */
+    fun decodeFile(file: File, maxSide: Int, pool: Pool): Bitmap? {
+        val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(file.absolutePath, opts)
+        if (opts.outWidth <= 0) return null
+        val s = sampleSize(opts.outWidth, opts.outHeight, maxSide)
+        val need = ((opts.outWidth + s - 1) / s) * ((opts.outHeight + s - 1) / s) * 4
+        fun options(reuse: Bitmap?) = BitmapFactory.Options().apply {
+            inSampleSize = s
+            inPreferredConfig = Bitmap.Config.ARGB_8888
+            inMutable = true
+            inBitmap = reuse
+        }
+        val reuse = pool.take(need)
+        val bmp = (if (reuse != null) runCatching { BitmapFactory.decodeFile(file.absolutePath, options(reuse)) }.getOrNull() else null)
+            ?: run { reuse?.let { pool.give(it) }; BitmapFactory.decodeFile(file.absolutePath, options(null)) }
+            ?: return null
+        if (max(bmp.width, bmp.height) <= maxSide) return bmp
+        val k = maxSide.toFloat() / max(bmp.width, bmp.height)
+        val out = bmp.scale(max(1, (bmp.width * k).toInt()), max(1, (bmp.height * k).toInt()))
+        pool.give(bmp)
+        return out
     }
 
     fun decodeFile(file: File, maxSide: Int = MAX_SOURCE_SIDE): Bitmap? {
@@ -75,17 +135,26 @@ object BitmapIO {
         return applyExif(fit(bmp, maxSide), ExifOrientation.transform(orientation))
     }
 
-    private fun sampleSize(w: Int, h: Int, maxSide: Int): Int {
+    /**
+     * Power-of-two sampling for the decode. 2.0 (A8): the decoded intermediate also stays within
+     * [MAX_DECODE_PIXELS], so 48-200 MP photos never allocate a full-size bitmap.
+     */
+    internal fun sampleSize(w: Int, h: Int, maxSide: Int): Int {
         var s = 1
         while (max(w, h) / (s * 2) >= maxSide) s *= 2
+        // 2.0-cam: high-resolution processing within the memory budget (A8).
+        while ((w.toLong() / s) * (h.toLong() / s) > MAX_DECODE_PIXELS) s *= 2
         return s
     }
+
+    /** Largest bitmap a decode may allocate before scaling: 13 MP (a 12.5 MP sensor still decodes whole). */
+    const val MAX_DECODE_PIXELS = com.fastkiwi.scan.perf.MemoryBudget.MAX_DECODE_PIXELS // 2.0-perf: one place
 
     fun fit(bmp: Bitmap, maxSide: Int): Bitmap {
         val m = max(bmp.width, bmp.height)
         if (m <= maxSide) return bmp
         val k = maxSide.toFloat() / m
-        val out = Bitmap.createScaledBitmap(bmp, max(1, (bmp.width * k).toInt()), max(1, (bmp.height * k).toInt()), true)
+        val out = bmp.scale(max(1, (bmp.width * k).toInt()), max(1, (bmp.height * k).toInt()))
         if (out !== bmp) bmp.recycle()
         return out
     }
@@ -128,17 +197,22 @@ object BitmapIO {
     /** Finds the page outline in a bitmap; returns normalised corners or null. */
     fun detect(bmp: Bitmap): Quad? = detectPage(bmp)?.quad
 
-    /** Page outline (normalised 0..1 corners) with its confidence, or null. */
-    fun detectPage(bmp: Bitmap): Detection? {
+    /**
+     * Page outline (normalised 0..1 corners) with its confidence, or null. [headerBand] off for a book spread:
+     * a book's cover edge around the pages is not a printed band of the page.
+     */
+    fun detectPage(bmp: Bitmap, headerBand: Boolean = true): Detection? {
         val k = 480f / max(bmp.width, bmp.height)
-        val small = if (k < 1f) Bitmap.createScaledBitmap(bmp, max(1, (bmp.width * k).toInt()), max(1, (bmp.height * k).toInt()), true) else bmp
+        val small = if (k < 1f) bmp.scale(max(1, (bmp.width * k).toInt()), max(1, (bmp.height * k).toInt())) else bmp
         val px = IntArray(small.width * small.height)
         small.getPixels(px, 0, small.width, 0, 0, small.width, small.height)
         val sw = small.width
         val sh = small.height
-        val det = QuadDetector(workSize = 480).detectBest(
+        val found = QuadDetector(workSize = 480).detectBest(
             listOf({ ImageFilters.toGray(px, sw, sh) }, { ImageFilters.paperMap(px, sw, sh) }),
         )
+        // A dark band printed along the paper's edge (an invoice title bar) stays in the page (content loss otherwise).
+        val det = if (headerBand) com.fastkiwi.scan.core.HeaderBand.extend(found, px, sw, sh) else found
         val w = small.width.toFloat()
         val h = small.height.toFloat()
         if (small !== bmp) small.recycle()

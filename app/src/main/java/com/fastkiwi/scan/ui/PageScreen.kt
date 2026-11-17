@@ -97,6 +97,23 @@ fun PageScreen(vm: AppViewModel, docId: String, startIndex: Int, snackbar: Snack
                             leadingIcon = { Icon(KiwiIcons.rotateLeft(), null) },
                             onClick = { menu = false; vm.editPage(docId, page.id) { it.copy(rotation = (it.rotation + 270) % 360) } },
                         )
+                        // BLACKBOX-2.0 #2, #5: the text screen and glare fusion, by name, from the page itself.
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.docs_text)) },
+                            leadingIcon = { Icon(DocsIcons.copy(), null) },
+                            onClick = { menu = false; vm.open(Screen.Text(docId, page.id)) },
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.glare_remove)) },
+                            leadingIcon = { Icon(KiwiIcons.retake(), null) },
+                            onClick = { menu = false; vm.removeGlare(docId, page.id) },
+                        )
+                        // 2.0-cam2: automatic alignment on demand (PRD §4.2).
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.straighten)) },
+                            leadingIcon = { Icon(KiwiIcons.crop(), null) },
+                            onClick = { menu = false; vm.straightenPage(docId, page.id) },
+                        )
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.delete_page), color = MaterialTheme.colorScheme.error) },
                             leadingIcon = { Icon(KiwiIcons.delete(), null, tint = MaterialTheme.colorScheme.error) },
@@ -119,8 +136,10 @@ fun PageScreen(vm: AppViewModel, docId: String, startIndex: Int, snackbar: Snack
     ) { padding ->
         Column(Modifier.padding(padding).fillMaxSize()) {
             Box(Modifier.weight(1f).fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainerLow)) {
-                HorizontalPager(pager, Modifier.fillMaxSize(), key = { doc.pages[it].id }) { i ->
-                    val p = doc.pages[i]
+                // The pager can lay out once more with the old page count after a page went (torture monkey:
+                // IndexOutOfBounds in the key): an index past the end is skipped for that frame.
+                HorizontalPager(pager, Modifier.fillMaxSize(), key = { doc.pages.getOrNull(it)?.id ?: "gone-$it" }) { i ->
+                    val p = doc.pages.getOrNull(i) ?: return@HorizontalPager
                     val file = vm.store.outFile(docId, p.id)
                     val aspect by androidx.compose.runtime.produceState(0.707f, file, p.revision) {
                         value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
@@ -137,6 +156,14 @@ fun PageScreen(vm: AppViewModel, docId: String, startIndex: Int, snackbar: Snack
                 if (busy > 0) CircularProgressIndicator(Modifier.align(Alignment.Center))
                 if (doc.pages.size > 1) PageDots(doc.pages.size, index, Modifier.align(Alignment.BottomCenter).padding(bottom = Dimens.s))
             }
+            // 2.0-cam: quality warning chip (PRD §4.3): retake, re-crop from the kept original, or dismiss.
+            QualityChip(
+                page.quality,
+                onRetake = { vm.open(Screen.Camera(docId, retakePageId = page.id)) },
+                onRecrop = { vm.open(Screen.Crop(docId, page.id)) },
+                onDismiss = { vm.dismissQuality(docId, page.id) },
+                modifier = Modifier.padding(top = Dimens.s),
+            )
             FilterRow(page.filter, enabled = busy == 0) { f -> if (page.filter != f) vm.editPage(docId, page.id) { it.copy(filter = f) } }
         }
     }

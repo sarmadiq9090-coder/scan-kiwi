@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 2.0 strings: low-memory mode, Android 7, hardening. English. Keep keys identical in values/ and values-en/. -->
+<resources>
+    <string name="perf_settings_group">Performance</string>
+    <string name="perf_low_memory_title">Low-memory mode</string>
+    <string name="perf_low_memory_hint">Pages and text reading at 2000 px, one fast text reader. For phones with less than 3 GB of memory.</string>
+    <string name="perf_low_memory_auto">Automatic</string>
+    <string name="perf_low_memory_on">Always on</string>
+    <string name="perf_low_memory_off">Off</string>
+    <string name="perf_low_memory_auto_on">Automatic · on for this phone</string>
+    <string name="perf_low_memory_auto_off">Automatic · not needed on this phone</string>
+</resources>

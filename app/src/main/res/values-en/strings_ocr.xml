@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 2.0 strings: OCR engines, Accurate/Fast, diagnostics. English. Keep keys identical in values/ and values-en/. -->
+<resources>
+    <!-- Moved here from strings.xml (2.0-ocr): neutral note, no percentage in the UI (roadmap §0 rule 8). -->
+    <string name="ocr_quality_note">Arabic and English text is read on the phone, offline; some words may need correcting. How accuracy was measured, and the results, are published in docs/ocr-benchmark.md in the repository of the app.</string>
+    <string name="ocr_settings_group">Text recognition (OCR)</string>
+    <string name="ocr_mode_title">Reading mode</string>
+    <string name="ocr_mode_accurate">Accurate</string>
+    <string name="ocr_mode_fast">Fast</string>
+    <string name="ocr_mode_accurate_hint">Better for Arabic, tables and numbers; a little slower</string>
+    <string name="ocr_mode_fast_hint">Faster, with the previous reader (Tesseract)</string>
+    <string name="ocr_after_capture">Read text after capture</string>
+    <string name="ocr_after_capture_hint">Reads text in the background, so exports do not wait and search works</string>
+    <string name="ocr_diag_row">OCR diagnostics</string>
+    <string name="ocr_diag_none">No page read yet</string>
+    <string name="ocr_diag_summary">Last page: %1$s s · peak memory: %2$s MB</string>
+    <string name="ocr_diag_title">OCR diagnostics</string>
+    <string name="ocr_diag_last">Last page time: %1$s seconds</string>
+    <string name="ocr_diag_recent">Recent pages (seconds): %1$s</string>
+    <string name="ocr_diag_heap">Peak native memory while reading: %1$s MB</string>
+    <string name="ocr_diag_engine">Engine used: %1$s</string>
+    <string name="ocr_diag_note">Measured on this phone only and kept on it. Nothing is sent, and no text is logged.</string>
+    <string name="ocr_fallback_low_ram">Fast (the phone has less than 3 GB of memory)</string>
+    <string name="ocr_fallback_runtime">Fast (the Accurate engine is not available on this phone)</string>
+    <string name="ocr_fallback_model">Fast (the Accurate model file is missing)</string>
+    <string name="ocr_fallback_init">Fast (the Accurate engine could not start)</string>
+    <string name="ocr_fallback_english">Fast (English only)</string>
+</resources>

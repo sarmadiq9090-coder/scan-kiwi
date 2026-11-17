@@ -20,6 +20,36 @@ data class Stamp(val cx: Float, val cy: Float, val width: Float) {
 }
 
 /**
+ * Image-quality assessment of a captured page (PRD §4.3, 2.0). Values are 0..1 scores where
+ * higher is better, except [glare] (share of clipped highlights) and [skewDegrees].
+ * Warnings never block; [dismissed] remembers that the user chose to keep the page as is.
+ */
+data class PageQuality(
+    val sharpness: Float = 1f,
+    val completeness: Float = 1f,
+    val lighting: Float = 1f,
+    val glare: Float = 0f,
+    val skewDegrees: Float = 0f,
+    val dismissed: Boolean = false,
+) {
+    fun toJson(): JSONObject = JSONObject()
+        .put("sharpness", sharpness.toDouble()).put("completeness", completeness.toDouble())
+        .put("lighting", lighting.toDouble()).put("glare", glare.toDouble())
+        .put("skew", skewDegrees.toDouble()).put("dismissed", dismissed)
+
+    companion object {
+        fun fromJson(o: JSONObject) = PageQuality(
+            sharpness = o.optDouble("sharpness", 1.0).toFloat(),
+            completeness = o.optDouble("completeness", 1.0).toFloat(),
+            lighting = o.optDouble("lighting", 1.0).toFloat(),
+            glare = o.optDouble("glare", 0.0).toFloat(),
+            skewDegrees = o.optDouble("skew", 0.0).toFloat(),
+            dismissed = o.optBoolean("dismissed", false),
+        )
+    }
+}
+
+/**
  * One scanned page. [corners] are normalised (0..1) in the upright source
  * image; [rotation] is applied after the perspective crop.
  */
@@ -31,6 +61,8 @@ data class ScanPage(
     /** Bumped whenever the rendered output changes, to bust image caches. */
     val revision: Int = 0,
     val stamps: List<Stamp> = emptyList(),
+    /** Capture-time quality report (2.0); null for pages from 1.x or imports. */
+    val quality: PageQuality? = null,
 ) {
     fun toJson(): JSONObject = JSONObject()
         .put("id", id)
@@ -39,6 +71,7 @@ data class ScanPage(
         .put("filter", filter.name)
         .put("revision", revision)
         .put("stamps", JSONArray().apply { stamps.forEach { put(it.toJson()) } })
+        .apply { quality?.let { put("quality", it.toJson()) } }
 
     companion object {
         fun fromJson(o: JSONObject): ScanPage {
@@ -52,6 +85,7 @@ data class ScanPage(
                 filter = runCatching { Filter.valueOf(o.optString("filter")) }.getOrDefault(Filter.ORIGINAL),
                 revision = o.optInt("revision", 0),
                 stamps = if (st == null) emptyList() else List(st.length()) { Stamp.fromJson(st.getJSONArray(it)) },
+                quality = o.optJSONObject("quality")?.let { PageQuality.fromJson(it) },
             )
         }
     }
@@ -63,6 +97,10 @@ data class ScanDocument(
     val created: Long,
     val modified: Long,
     val pages: List<ScanPage>,
+    /** Starred on Home (2.0). */
+    val favorite: Boolean = false,
+    /** Folder id from the folder list (2.0); null = top level. */
+    val folderId: String? = null,
 ) {
     fun toJson(): JSONObject = JSONObject()
         .put("version", 1)
@@ -71,6 +109,8 @@ data class ScanDocument(
         .put("created", created)
         .put("modified", modified)
         .put("pages", JSONArray().apply { pages.forEach { put(it.toJson()) } })
+        .put("favorite", favorite)
+        .apply { folderId?.let { put("folderId", it) } }
 
     companion object {
         fun fromJson(o: JSONObject): ScanDocument {
@@ -81,6 +121,8 @@ data class ScanDocument(
                 created = o.optLong("created"),
                 modified = o.optLong("modified"),
                 pages = List(arr.length()) { ScanPage.fromJson(arr.getJSONObject(it)) },
+                favorite = o.optBoolean("favorite", false),
+                folderId = o.optString("folderId").takeIf { it.isNotEmpty() },
             )
         }
     }
