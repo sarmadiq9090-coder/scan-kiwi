@@ -158,10 +158,12 @@ class UpdaterTest {
         requests.clear()
         assertEquals(DownloadResult.Failed(UpdateError.OFFLINE), updater(net = NetworkState.OFFLINE).download(r, wifiOnly = false))
         assertTrue(requests.isEmpty())
-        // The server is gone (no route, refused): a network error, nothing left behind.
+        // The server is gone (no route, refused) while the phone is online: a network error, no request
+        // served, nothing left behind.
         server.close()
-        assertEquals(CheckResult.Failed(UpdateError.NETWORK), updater().check())
-        assertEquals(DownloadResult.Failed(UpdateError.NETWORK), updater().download(r, wifiOnly = false))
+        assertEquals(CheckResult.Failed(UpdateError.NETWORK), updater(net = NetworkState.WIFI).check())
+        assertEquals(DownloadResult.Failed(UpdateError.NETWORK), updater(net = NetworkState.WIFI).download(r, wifiOnly = false))
+        assertTrue("a closed server answered: $requests", requests.isEmpty())
         assertTrue(work.listFiles().orEmpty().isEmpty())
     }
 

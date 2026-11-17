@@ -12,7 +12,12 @@ import java.io.File
  * - **native** = the process's private memory (Windows: commit charge; Linux: RssAnon) minus what the
  *   JVM itself committed (heap + non-heap), sampled every [sampleMs] ms on a background thread; the
  *   peak minus the value at [start] is what the operation's bitmaps and native buffers added. A
- *   calibration bitmap checks the meter can see a 30 MB native allocation at all.
+ *   calibration bitmap checks the meter can see a 30 MB native allocation, and its release, at all.
+ *   Linux needs two settings from the test task (app/build.gradle.kts), checked at [start]: RssAnon
+ *   counts touched pages only, so the heap is pre-touched (-XX:+AlwaysPreTouch: committed = resident);
+ *   and glibc keeps freed large blocks in its arena once its dynamic mmap threshold has risen, so the
+ *   next bitmap would reuse resident memory unseen; GLIBC_TUNABLES pins the threshold (as on Windows,
+ *   whose heap maps and unmaps large blocks, and on Android).
  * - **Java** = an upper bound of the live Java heap at any moment: the live heap after a full GC at a
  *   checkpoint (each page) plus everything allocated since that checkpoint (all threads'
  *   allocated-bytes counters). Garbage is never counted as live, and no peak can hide between samples.
@@ -56,6 +61,14 @@ class MemoryMeter(private val sampleMs: Long = 5) : AutoCloseable {
     private fun rssAnon(f: File): Long? =
         f.readLines().firstOrNull { it.startsWith("RssAnon:") }?.split(Regex("\\s+"))?.getOrNull(1)?.toLongOrNull()?.times(1024)
 
+    /** On Linux, fails unless the two settings the RssAnon reading depends on are in effect. */
+    private fun checkSetup() {
+        if (statusFile == null) return
+        val tunables = System.getenv("GLIBC_TUNABLES").orEmpty()
+        if ("glibc.malloc.mmap_threshold=" !in tunables) throw AssertionError("memory meter: GLIBC_TUNABLES has no mmap_threshold ('$tunables'); freed bitmaps would stay in the malloc arena unseen")
+        if ("-XX:+AlwaysPreTouch" !in Jmx.inputArguments()) throw AssertionError("memory meter: the test JVM needs -XX:+AlwaysPreTouch; untouched heap pages would read as native growth")
+    }
+
     private fun allocated(): Long = Jmx.allocatedBytes()
 
     private fun gcLive(): Long {
@@ -65,6 +78,7 @@ class MemoryMeter(private val sampleMs: Long = 5) : AutoCloseable {
 
     /** Starts measuring: GC, baselines, sampler thread. */
     fun start() {
+        checkSetup()
         javaBase = gcLive()
         liveAtCheckpoint = javaBase
         allocAtCheckpoint = allocated()

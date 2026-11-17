@@ -128,6 +128,14 @@ android {
             // 2.0-perf: the heap tests read native memory as process memory minus the JVM heap; a heap
             // that never shrinks after GC keeps G1's delayed uncommit out of that number.
             it.jvmArgs("-XX:MaxHeapFreeRatio=100")
+            // 2.0.1 (Linux CI): there the meter reads RssAnon, which counts only touched pages. Pre-touch
+            // the heap so committed heap is resident heap (else Java allocations into fresh heap pages
+            // read as native growth), and pin glibc's mmap threshold so large native blocks (page
+            // bitmaps) are mapped and unmapped on every allocation, as on Windows and on Android, instead
+            // of being kept in a malloc arena that the next bitmap reuses unseen (glibc raises the
+            // threshold to 32 MB after the first large free). Ignored on Windows. MemoryMeter checks both.
+            it.jvmArgs("-XX:+AlwaysPreTouch")
+            it.environment("GLIBC_TUNABLES", "glibc.malloc.mmap_threshold=131072:glibc.malloc.trim_threshold=131072")
             // 2.0-perf: the 500-page stress test runs only in perfStressTest (512 MB heap cap).
             it.filter.excludeTestsMatching("com.fastkiwi.scan.perf.StressHeapCapTest")
         }

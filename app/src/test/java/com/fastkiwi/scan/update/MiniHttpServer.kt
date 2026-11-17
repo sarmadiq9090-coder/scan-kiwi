@@ -18,12 +18,12 @@ class MiniHttpServer(private val stallMs: Long = 3_000, private val handler: (pa
     val port: Int get() = socket.localPort
     @Volatile private var open = true
 
-    init {
-        thread(isDaemon = true, name = "mini-http") {
-            while (open) {
-                val s = runCatching { socket.accept() }.getOrNull() ?: break
-                thread(isDaemon = true) { runCatching { serve(s) }; runCatching { s.close() } }
-            }
+    private val acceptor = thread(isDaemon = true, name = "mini-http") {
+        while (open) {
+            val s = runCatching { socket.accept() }.getOrNull() ?: break
+            // Accepted while closing: a server that is gone serves nothing.
+            if (!open) { runCatching { s.close() }; break }
+            thread(isDaemon = true) { runCatching { serve(s) }; runCatching { s.close() } }
         }
     }
 
@@ -59,8 +59,17 @@ class MiniHttpServer(private val stallMs: Long = 3_000, private val handler: (pa
         const val STALL_AFTER = "X-Test-Stall-After"
     }
 
+    /**
+     * Stops listening, and returns only once the port is really closed. On Linux the JDK closes a
+     * server socket that another thread is blocked in accept() on by swapping the descriptor and
+     * signalling that thread; the kernel keeps the socket listening until that accept() returns, so a
+     * connection made right after close() could still be accepted and served. Waiting for the accept
+     * thread to end closes that window (Windows aborts the accept at once).
+     */
     override fun close() {
         open = false
         runCatching { socket.close() }
+        acceptor.join(5_000)
+        check(!acceptor.isAlive) { "mini-http accept thread did not stop" }
     }
 }

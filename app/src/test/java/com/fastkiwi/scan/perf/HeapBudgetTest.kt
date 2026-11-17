@@ -47,7 +47,10 @@ class HeapBudgetTest {
         File("build/perf-heap.txt").appendText(line + "\n")
     }
 
-    /** The meter must see a 30 MB native bitmap, or every budget below would pass for nothing. */
+    /**
+     * The meter must see a 30 MB native bitmap, or every budget below would pass for nothing; and it
+     * must see the bitmap go, or the allocator kept it and the next one would reuse it unseen (Linux).
+     */
     @Test
     fun meterSeesANativeBitmap() {
         val m = MemoryMeter(sampleMs = 2)
@@ -56,9 +59,13 @@ class HeapBudgetTest {
         b.eraseColor(Color.GRAY)
         Thread.sleep(100)
         val r = m.stop()
+        val held = m.nativeNow()
         b.recycle()
-        record("calibration: one 2400x3200 bitmap (29.3 MB) -> native peak ${MemoryMeter.mb(r.nativePeak)} MB")
+        Thread.sleep(100)
+        val released = held - m.nativeNow()
+        record("calibration: one 2400x3200 bitmap (29.3 MB) -> native peak ${MemoryMeter.mb(r.nativePeak)} MB, released ${MemoryMeter.mb(released)} MB")
         assertTrue("meter saw ${r.nativePeak} bytes for a 30.7 MB bitmap", r.nativePeak >= 25L * 1024 * 1024)
+        assertTrue("meter saw ${released} bytes released by recycling a 30.7 MB bitmap", released >= 25L * 1024 * 1024)
     }
 
     @Test

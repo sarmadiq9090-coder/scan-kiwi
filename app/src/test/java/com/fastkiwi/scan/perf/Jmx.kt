@@ -27,6 +27,13 @@ internal object Jmx {
     /** Windows: the process commit charge (private bytes). Linux: virtual size (not used there). */
     fun committedVirtual(): Long? = sunOs?.takeIf { it.isInstance(osBean) }?.getMethod("getCommittedVirtualMemorySize")?.invoke(osBean) as Long?
 
+    /** The test JVM's command-line options (-XX:..., -Xmx...). */
+    @Suppress("UNCHECKED_CAST")
+    fun inputArguments(): List<String> {
+        val bean = factory.getMethod("getRuntimeMXBean").invoke(null)
+        return Class.forName("java.lang.management.RuntimeMXBean").getMethod("getInputArguments").invoke(bean) as List<String>
+    }
+
     /** Bytes allocated by all threads so far (JDK 21+), or by this thread. */
     fun allocatedBytes(): Long {
         val c = sunThreads?.takeIf { it.isInstance(threadBean) } ?: return 0L
