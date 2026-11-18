@@ -68,8 +68,18 @@ object PdfValidator {
         if (!buf.startsWith("xref")) throw Invalid("no xref table at startxref")
         var i = 4
         fun skipWs() { while (i < buf.length && buf[i].isWhitespace()) i++ }
-        val head = Regex("\\G(\\d+)[ \\t]+(\\d+)")
-        val entry = Regex("\\G(\\d{10}) (\\d{5}) ([nf])")
+        // No regex here: Android's ICU engine does not honour \G at a find() start index (the JVM does),
+        // so a \G parser passed every JVM test and rejected every file on a phone ("bad xref subsection").
+        fun digits(max: Int): String? {
+            val st = i
+            while (i < buf.length && i - st < max && buf[i] in '0'..'9') i++
+            return if (i > st) buf.substring(st, i) else null
+        }
+        fun spaces(): Boolean {
+            val st = i
+            while (i < buf.length && (buf[i] == ' ' || buf[i] == '\t')) i++
+            return i > st
+        }
         while (true) {
             skipWs()
             if (i >= buf.length) throw Invalid("xref truncated")
@@ -77,16 +87,19 @@ object PdfValidator {
                 val end = buf.indexOf("startxref", i).let { if (it < 0) buf.length else it }
                 return buf.substring(i, end)
             }
-            val m = head.find(buf, i) ?: throw Invalid("bad xref subsection")
-            val first = m.groupValues[1].toInt()
-            val n = m.groupValues[2].toInt()
-            if (n < 0 || n > 10_000_000) throw Invalid("bad xref count")
-            i = m.range.last + 1
+            val first = digits(10)?.toInt() ?: throw Invalid("bad xref subsection")
+            if (!spaces()) throw Invalid("bad xref subsection")
+            val n = digits(9)?.toInt() ?: throw Invalid("bad xref subsection")
+            if (n > 10_000_000) throw Invalid("bad xref count")
             for (k in 0 until n) {
                 skipWs()
-                val em = entry.find(buf, i) ?: throw Invalid("bad xref entry")
-                if (em.groupValues[3] == "n") offsets.putIfAbsent(first + k, em.groupValues[1].toLong())
-                i = em.range.last + 1
+                val off = digits(10)?.takeIf { it.length == 10 } ?: throw Invalid("bad xref entry")
+                if (i >= buf.length || buf[i] != ' ') throw Invalid("bad xref entry")
+                i++
+                if (digits(5)?.length != 5) throw Invalid("bad xref entry")
+                if (i + 1 >= buf.length || buf[i] != ' ' || buf[i + 1] !in "nf") throw Invalid("bad xref entry")
+                if (buf[i + 1] == 'n') offsets.putIfAbsent(first + k, off.toLong())
+                i += 2
             }
         }
     }

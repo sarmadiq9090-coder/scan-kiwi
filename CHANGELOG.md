@@ -7,6 +7,26 @@ Each release section is written in Arabic first, then English.
 
 ## [Unreleased]
 
+## [2.0.2] - 2026-11-18
+
+### العربية
+
+#### أُصلح
+- **تصدير PDF على الهاتف**: كان كل تصدير PDF يفشل برسالة «تعذّر التصدير: bad xref subsection». الملف نفسه كان سليماً، لكن فاحص الملف استعمل نمط بحث (`\G`) يعمل في Java على الحاسوب ولا يعمل في محرك أندرويد (ICU)، فرفض كل ملف على الهاتف فقط. استُبدل بقارئ بسيط بلا أنماط بحث.
+
+#### تغيّر
+- فحص جديد يمنع استعمال `\G` في كود التطبيق، وفحص أن الفاحص يقرأ جدول xref كما يكتبه التطبيق.
+
+### English
+
+#### Fixed
+- **PDF export on phones**: every PDF export failed with "Export failed: bad xref subsection". The file was fine; the
+  file checker used a `\G` regex anchor, which Java on a PC honours at a search start index and Android's ICU engine
+  does not, so it rejected every file on a phone only. It is now a plain hand-written reader.
+
+#### Changed
+- A new test keeps `\G` out of app code, and checks that the validator reads the xref table the app writes.
+
 ## [2.0.1] - 2026-11-17
 
 ### العربية
