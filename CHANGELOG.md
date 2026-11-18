@@ -15,6 +15,7 @@ Each release section is written in Arabic first, then English.
 - **تصدير PDF على الهاتف**: كان كل تصدير PDF يفشل برسالة «تعذّر التصدير: bad xref subsection». الملف نفسه كان سليماً، لكن فاحص الملف استعمل نمط بحث (`\G`) يعمل في Java على الحاسوب ولا يعمل في محرك أندرويد (ICU)، فرفض كل ملف على الهاتف فقط. استُبدل بقارئ بسيط بلا أنماط بحث.
 
 #### تغيّر
+- **«قراءة النص بعد التصوير» صار مطفأً افتراضياً** (حتى لمن ثبّت 2.0.0 أو 2.0.1)، فلا تزاحم قراءة النص في الخلفية التصويرَ ويصبح الالتقاط أسرع. يُقرأ النص عند التصدير مع OCR، ويمكن تشغيل الخيار من الإعدادات.
 - فحص جديد يمنع استعمال `\G` في كود التطبيق، وفحص أن الفاحص يقرأ جدول xref كما يكتبه التطبيق.
 
 ### English
@@ -25,6 +26,8 @@ Each release section is written in Arabic first, then English.
   does not, so it rejected every file on a phone only. It is now a plain hand-written reader.
 
 #### Changed
+- **"Read text after capture" is now off by default** (also for 2.0.0 and 2.0.1 installs), so background reading no
+  longer competes with capture and capture is faster. Text is read at export with OCR; the option is in Settings.
 - A new test keeps `\G` out of app code, and checks that the validator reads the xref table the app writes.
 
 ## [2.0.1] - 2026-11-17
