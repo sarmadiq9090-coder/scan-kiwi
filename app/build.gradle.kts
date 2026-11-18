@@ -29,8 +29,8 @@ android {
         applicationId = "com.fastkiwi.scan"
         minSdk = 24
         targetSdk = 36
-        versionCode = 6
-        versionName = "2.0.1"
+        versionCode = 7
+        versionName = "2.0.2"
         // Arabic is the default (values/), English in values-en/.
         resourceConfigurations += listOf("ar", "en")
         ndk {

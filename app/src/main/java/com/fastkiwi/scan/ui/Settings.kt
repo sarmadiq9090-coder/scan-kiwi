@@ -66,8 +66,9 @@ class Settings(ctx: Context) {
 
     /** Read each page's text in the background right after capture (cached per page revision). */
     var ocrAfterCapture: Boolean
-        get() = p.getBoolean("ocr_after_capture", true)
-        set(v) = p.edit { putBoolean("ocr_after_capture", v) }
+        // 2.0.2: off by default (owner: capture must be faster). A new key, so 2.0.0/2.0.1 installs start off too.
+        get() = p.getBoolean("ocr_after_capture_v2", false)
+        set(v) = p.edit { putBoolean("ocr_after_capture_v2", v) }
 
     // 2.0-perf
     /** «وضع الذاكرة المنخفضة»: automatic (the phone decides, default), always on, or off. */
