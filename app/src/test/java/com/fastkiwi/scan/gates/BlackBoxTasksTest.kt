@@ -133,6 +133,8 @@ class BlackBoxTasksTest {
      */
     @Test
     fun textCanBeSearchedViewedAndExportedAsTxt() {
+        // 2.0.2: «قراءة النص بعد التصوير» is off by default; this user turned it on in Settings.
+        com.fastkiwi.scan.ui.Settings(RuntimeEnvironment.getApplication()).ocrAfterCapture = true
         val box = session()
         box.importPage("invoice.jpg", "invoice")
         box.ok("wait 3000")
