@@ -15,6 +15,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
+import java.util.Locale
 
 /**
  * 2.0.3: the two distributions. `full` (GitHub) keeps the updater and its three permissions; `fdroid`
@@ -49,5 +50,29 @@ class DistributionTest {
         assertNull(c.checkNow())
         assertFalse(c.noticePending.value)
         assertEquals(UpdateState.Idle, c.state.value)
+    }
+
+    /**
+     * 2.0.3 bug hunt: the fdroid build has no network permission, so no text it shows outside the (unreachable)
+     * Updates screen may say it connects for updates. «privacy_short» (Home and Camera) still did.
+     */
+    @Test
+    fun fdroidTextDoesNotClaimAnUpdateConnection() {
+        if (BuildConfig.UPDATER_ENABLED) return
+        val shown = listOf(
+            com.fastkiwi.scan.R.string.privacy_short,
+            com.fastkiwi.scan.R.string.privacy_body,
+            com.fastkiwi.scan.R.string.network_statement,
+            com.fastkiwi.scan.R.string.update_details,
+        )
+        val claims = listOf("GitHub", "check for updates", "التحقق من التحديثات", "للتحقق", "internet is used", "الاتصال فقط")
+        for (lang in listOf("ar", "en")) {
+            val cfg = android.content.res.Configuration(ctx.resources.configuration).apply { setLocale(Locale.forLanguageTag(lang)) }
+            val res = ctx.createConfigurationContext(cfg).resources
+            for (id in shown) {
+                val text = res.getString(id)
+                for (c in claims) assertFalse("$lang ${res.getResourceEntryName(id)}: \"$text\" mentions \"$c\"", text.contains(c, ignoreCase = true))
+            }
+        }
     }
 }
