@@ -147,7 +147,10 @@ fun SettingsScreen(vm: AppViewModel) {
 
             SectionHeader(stringResource(R.string.settings_group_help))
             val diag = remember(dialog) { vm.ocrDiagnostics.snapshot() }
-            SettingsGroup(4) { i, shape ->
+            // 2.0.3: the fdroid flavor has no updater, so the «التحديثات» row is left out (3 rows instead of 4).
+            val updaterRow = BuildConfig.UPDATER_ENABLED
+            SettingsGroup(if (updaterRow) 4 else 3) { n, shape ->
+                val i = if (updaterRow || n == 0) n else n + 1
                 when (i) {
                     0 -> SettingsRow(KiwiIcons.feedback(), stringResource(R.string.feedback_title), stringResource(R.string.feedback_settings_hint), shape, {
                         vm.open(Screen.Feedback())
@@ -181,7 +184,7 @@ fun SettingsScreen(vm: AppViewModel) {
             stringResource(R.string.theme_title), themeLabels.map { stringResource(it.second) }, themeLabels.indexOfFirst { it.first == vm.themeMode.value },
             onDismiss = { dialog = null },
         ) { vm.setThemeMode(themeLabels[it].first); dialog = null }
-        "about" -> AboutDialog(onCheckUpdates = { dialog = null; vm.open(Screen.Updates); vm.updates.checkNow() }) { dialog = null }
+        "about" -> AboutDialog(onCheckUpdates = if (BuildConfig.UPDATER_ENABLED) ({ dialog = null; vm.open(Screen.Updates); vm.updates.checkNow() }) else null) { dialog = null }
         // 2.0-ocr
         "ocr_mode" -> ChoiceDialog(
             stringResource(R.string.ocr_mode_title),
@@ -283,7 +286,7 @@ fun ChoiceDialog(title: String, options: List<String>, selected: Int, onDismiss:
 
 /** About: version, network statement and the bundled licence notices. */
 @Composable
-private fun AboutDialog(onCheckUpdates: () -> Unit, onDismiss: () -> Unit) {
+private fun AboutDialog(onCheckUpdates: (() -> Unit)?, onDismiss: () -> Unit) {
     val ctx = LocalContext.current
     val notices = remember { runCatching { ctx.assets.open("THIRD_PARTY_NOTICES.txt").bufferedReader().readText() }.getOrDefault("") }
     AlertDialog(
@@ -301,7 +304,7 @@ private fun AboutDialog(onCheckUpdates: () -> Unit, onDismiss: () -> Unit) {
         },
         confirmButton = { TextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.close)) } },
         // 2.0-update: «تحقق من التحديثات» in About.
-        dismissButton = { TextButton(onClick = onCheckUpdates, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.update_check_now)) } },
+        dismissButton = onCheckUpdates?.let { check -> { TextButton(onClick = check, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.update_check_now)) } } },
     )
 }
 

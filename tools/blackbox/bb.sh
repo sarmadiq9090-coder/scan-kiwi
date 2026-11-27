@@ -82,7 +82,7 @@ case "$cmd" in
         setup_env
         (
             cd "$REPO"
-            BB_SESSION=$(winpath "$SESSION") BB_LANG=$lang "$GRADLE" --no-daemon -q :app:testDebugUnitTest \
+            BB_SESSION=$(winpath "$SESSION") BB_LANG=$lang "$GRADLE" --no-daemon -q :app:testFullDebugUnitTest \
                 --tests 'com.fastkiwi.scan.gates.BlackBoxSession' --rerun > "$SESSION/gradle.log" 2>&1 || true
             echo ended > "$SESSION/ended"
         ) &

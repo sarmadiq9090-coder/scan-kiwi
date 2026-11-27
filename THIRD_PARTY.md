@@ -21,7 +21,7 @@ contacts a server at run time. The app ships the full notices in
 | ↳ Leptonica | bundled native | BSD-2-Clause-style (Leptonica licence) | Image library used by Tesseract |
 | ↳ libjpeg-turbo | bundled native | IJG + BSD-3-Clause + zlib | JPEG codec used by Leptonica |
 | ↳ libpng | bundled native | PNG Reference Library License v2 | PNG codec used by Leptonica |
-| MNN (Alibaba) `libMNN.so`, CPU runtime | 3.6.2 (official Android release) | Apache-2.0 | Runs the «دقيق» Accurate OCR models (arm64-v8a, armeabi-v7a) |
+| MNN (Alibaba) `libMNN.so`, CPU runtime | 3.6.2 (official Android release) | Apache-2.0 | Runs the «دقيق» Accurate OCR models (arm64-v8a, armeabi-v7a). Prebuilt, byte for byte from the official release zip; source: <https://github.com/alibaba/MNN/tree/3.6.2> (tag 3.6.2), provenance and hashes in `tools/mnn/README.md`. Not rebuilt from source (a prebuilt binary: IzzyOnDroid accepts it, F-Droid main does not) |
 | LLVM libc++ `libc++_shared.so` | from NDK 27.3.13750724 | Apache-2.0 WITH LLVM-exception | C++ runtime needed by MNN and our JNI glue `libkiwi_mnn.so` |
 | PP-OCRv6 tiny text detector (PaddlePaddle), `PP-OCRv6_det_tiny.fp16.mnn` | PaddleOCR 3 / RapidOCR 3.10.0 ONNX export, converted with MNNConvert 3.6.2 (fp16 weights) | Apache-2.0 | Finds text lines (Accurate mode) |
 | PP-OCRv5 Arabic mobile recogniser (PaddlePaddle), `arabic_PP-OCRv5_rec_mobile.fp16.mnn` + `ppocrv5_arabic_dict.txt` | as above | Apache-2.0 | Reads Arabic lines (Accurate mode) |

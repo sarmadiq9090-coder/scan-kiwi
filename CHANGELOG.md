@@ -7,6 +7,26 @@ Each release section is written in Arabic first, then English.
 
 ## [Unreleased]
 
+## [2.0.3] - 2026-11-27
+
+### العربية
+
+#### أُضيف
+- **نسخة F-Droid / IzzyOnDroid** (`ScanKiwi-X.Y.Z-fdroid.apk`): بلا محدِّث ذاتي، وبلا أذونات INTERNET وACCESS_NETWORK_STATE وREQUEST_INSTALL_PACKAGES (الكاميرا فقط). المعرّف نفسه `com.fastkiwi.scan`، والنسخة العادية على GitHub لم تتغيّر.
+- بيانات المتجر (fastlane) بالإنجليزية.
+
+#### تغيّر
+- أسماء مهام البناء صارت بنكهتين: `testFullDebugUnitTest`/`testFdroidDebugUnitTest` و`assembleFullRelease`/`assembleFdroidRelease`.
+
+### English
+
+#### Added
+- **F-Droid / IzzyOnDroid build** (`ScanKiwi-X.Y.Z-fdroid.apk`): no in-app updater and no INTERNET, ACCESS_NETWORK_STATE or REQUEST_INSTALL_PACKAGES permission (camera only). Same application id `com.fastkiwi.scan`; the GitHub (`full`) build is unchanged.
+- Store metadata (fastlane), English.
+
+#### Changed
+- Gradle tasks now carry a flavor: `testFullDebugUnitTest` / `testFdroidDebugUnitTest`, `assembleFullRelease` / `assembleFdroidRelease`. CI checks the exact permission list of each flavor.
+
 ## [2.0.2] - 2026-11-18
 
 ### العربية

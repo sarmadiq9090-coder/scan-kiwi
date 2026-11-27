@@ -38,11 +38,13 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
 
-      - name: Unit tests (JVM + Robolectric)
-        run: ./gradlew --no-daemon :app:testDebugUnitTest
+      # Two distributions of one source tree: `full` (GitHub, with the in-app updater) and `fdroid`
+      # (no updater, no INTERNET / ACCESS_NETWORK_STATE / REQUEST_INSTALL_PACKAGES).
+      - name: Unit tests (JVM + Robolectric), both flavors
+        run: ./gradlew --no-daemon :app:testFullDebugUnitTest :app:testFdroidDebugUnitTest
 
-      - name: Build unsigned release APK and run lint
-        run: ./gradlew --no-daemon :app:assembleRelease :app:lintDebug
+      - name: Build unsigned release APKs (both flavors) and run lint
+        run: ./gradlew --no-daemon :app:assembleFullRelease :app:assembleFdroidRelease :app:lintFullDebug
 
       # 2.0.1: 2.0.0's release build failed on a phone while every debug test passed. These run the
       # R8-shrunk release program itself: what it reaches by name, then Export / Share / Save (PDF checked
@@ -55,17 +57,26 @@ jobs:
           sudo sysctl -w net.ipv4.ip_unprivileged_port_start=443
           ./gradlew --no-daemon -PguardSdks=26,29,33,36 :app:releaseGuardTest :app:releaseUpdateGuardTest
 
-      - name: Check permissions (exact list)
+      - name: Check permissions (exact list per flavor)
         run: |
-          APK=$(ls app/build/outputs/apk/release/*.apk | head -n 1)
           AAPT2=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -n 1)aapt2
-          "$AAPT2" dump permissions "$APK" | tee permissions.txt
-          # Allowed system permissions: CAMERA, and since 2.0 (owner's order 2026-11-15) INTERNET,
-          # ACCESS_NETWORK_STATE and REQUEST_INSTALL_PACKAGES for the GitHub-only update check.
-          # The app-internal signature permission added by androidx.core
+          # Allowed in both: CAMERA. The app-internal signature permission added by androidx.core
           # (DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION) is not a system permission.
-          others=$(grep '^uses-permission:' permissions.txt             | grep -v "name='android.permission.CAMERA'"             | grep -v "name='android.permission.INTERNET'"             | grep -v "name='android.permission.ACCESS_NETWORK_STATE'"             | grep -v "name='android.permission.REQUEST_INSTALL_PACKAGES'"             | grep -v "name='com.fastkiwi.scan.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION'" || true)
-          if [ -n "$others" ]; then echo "Unexpected permissions:"; echo "$others"; exit 1; fi
+          check() { # $1 = flavor, $2... = extra allowed (and required) permissions
+            flavor=$1; shift
+            APK=$(ls app/build/outputs/apk/$flavor/release/*.apk | head -n 1)
+            "$AAPT2" dump permissions "$APK" | tee permissions-$flavor.txt
+            allowed="CAMERA $*"
+            others=$(grep '^uses-permission:' permissions-$flavor.txt | grep -v "name='com.fastkiwi.scan.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION'" || true)
+            for p in $allowed; do others=$(echo "$others" | grep -v "name='android.permission.$p'" || true); done
+            if [ -n "$others" ]; then echo "Unexpected permissions in $flavor:"; echo "$others"; exit 1; fi
+            for p in $allowed; do grep -q "name='android.permission.$p'" permissions-$flavor.txt || { echo "Missing $p in $flavor"; exit 1; }; done
+          }
+          # full: since 2.0 (owner's order 2026-11-15) INTERNET, ACCESS_NETWORK_STATE and
+          # REQUEST_INSTALL_PACKAGES for the GitHub-only update check.
+          check full INTERNET ACCESS_NETWORK_STATE REQUEST_INSTALL_PACKAGES
+          # fdroid: CAMERA only (no updater, no network).
+          check fdroid
           # The update client is the only network code: no other URL connection in the sources.
           hits=$(grep -rln 'openConnection\|HttpURLConnection\|java.net.Socket\|okhttp' app/src/main/java | grep -v 'update/UpdateClient.kt' || true)
           if [ -n "$hits" ]; then echo "Network code outside update/UpdateClient.kt:"; echo "$hits"; exit 1; fi
@@ -76,7 +87,8 @@ jobs:
         with:
           name: unsigned-apk-and-reports
           path: |
-            app/build/outputs/apk/release/*.apk
+            app/build/outputs/apk/full/release/*.apk
+            app/build/outputs/apk/fdroid/release/*.apk
             app/build/reports/
           retention-days: 14
 

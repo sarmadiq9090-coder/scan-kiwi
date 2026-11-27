@@ -1,0 +1,22 @@
+Scan Kiwi turns your phone camera into a document scanner. Everything happens on your phone: no accounts, no ads, no tracking, no watermark.
+
+<b>Features</b>
+<ul>
+<li>Camera scanning with live page detection and auto capture; easy manual crop with corner and side handles and a magnifier.</li>
+<li>Perspective correction and looks: Original, Enhanced colour, Remove shadows, Grayscale, Black &amp; white.</li>
+<li>Multi-page documents: reorder, rotate, delete, retake, undo.</li>
+<li>Import images and PDFs and merge them. Add a signature. Two-sided ID-card copy.</li>
+<li>PDF export in A4, Letter, Legal, A5 or fit-to-image, with a small WhatsApp-friendly size, searchable text (offline Arabic and English OCR), AES-256 password protection and an archival PDF/A-2b option. JPG export too.</li>
+<li>Arabic first, with English; full right-to-left layout and TalkBack support.</li>
+</ul>
+
+<b>Private by design</b>
+Documents stay in the app's private storage and are excluded from cloud backup. A file leaves your phone only when you choose Share or Save. OCR runs offline on the device.
+
+<b>Free and open source</b>
+Scan Kiwi is free software under the Apache-2.0 licence. Source code: https://github.com/sarmadiq9090-coder/scan-kiwi
+
+<b>No internet permission</b>
+This build has no updater and does not request the INTERNET, ACCESS_NETWORK_STATE or REQUEST_INSTALL_PACKAGES permissions. The only permission is the camera. Updates come from the store you installed it from.
+
+Requires Android 7.0 or newer. Part of the FastKiwi app suite.

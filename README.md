@@ -87,7 +87,7 @@ Android 7.0+ (API 24+). Permissions: CAMERA, and since 2.0, for the update check
 
 ### Privacy
 - Scan Kiwi connects to the internet only to check for and download updates from GitHub. It sends no file, photo or data about you. You can turn this off in Settings.
-- CI checks the exact permission list on every build, and that `update/UpdateClient.kt` (GitHub only, HTTPS only)
+- CI checks the exact permission list of each flavor on every build, and that `update/UpdateClient.kt` (GitHub only, HTTPS only)
   is the only network code.
 - Documents stay in the app's private storage and are excluded from cloud backup. A file leaves the phone only
   when you choose Share or Save.
@@ -95,7 +95,9 @@ Android 7.0+ (API 24+). Permissions: CAMERA, and since 2.0, for the update check
 - "Report a problem or suggestion" opens your own mail app or browser with a text you review before sending;
   documents and images are never attached.
 
-**Updates (since 2.0):** the app checks its GitHub releases at most once every 7 days when you open it (you can turn this off), and with «Check for updates» in Settings → Updates or About. Nothing is downloaded without your tap, and only over Wi-Fi by default. An update is installed only if it is newer, its fingerprint (SHA-256) matches the SHA256SUMS file of the same release and it is signed with this app's own key, and then only when you confirm on Android's screen. Requests carry no device identifier; GitHub sees your IP address, as with any website. You can still use Obtainium or update by hand from the releases page.
+**F-Droid / IzzyOnDroid build (since 2.0.3):** `ScanKiwi-X.Y.Z-fdroid.apk` has no updater and no INTERNET, ACCESS_NETWORK_STATE or REQUEST_INSTALL_PACKAGES permission (CAMERA only); updates come from the store. Build it with `./gradlew :app:assembleFdroidRelease`. It ships the prebuilt MNN library (see THIRD_PARTY.md), which F-Droid's main repository does not accept.
+
+**Updates (since 2.0, GitHub build):** the app checks its GitHub releases at most once every 7 days when you open it (you can turn this off), and with «Check for updates» in Settings → Updates or About. Nothing is downloaded without your tap, and only over Wi-Fi by default. An update is installed only if it is newer, its fingerprint (SHA-256) matches the SHA256SUMS file of the same release and it is signed with this app's own key, and then only when you confirm on Android's screen. Requests carry no device identifier; GitHub sees your IP address, as with any website. You can still use Obtainium or update by hand from the releases page.
 
 ### Install (not on Google Play)
 Scan Kiwi is not published on Google Play. Download `ScanKiwi-X.Y.Z.apk` from the
@@ -132,8 +134,8 @@ Requirements: JDK 21 (Temurin), Android SDK platform 36 and build-tools 36.0.0.
 ```
 git clone https://github.com/sarmadiq9090-coder/scan-kiwi.git
 cd scan-kiwi
-./gradlew :app:testDebugUnitTest     # JVM + Robolectric tests (screenshots go to screenshots/)
-./gradlew :app:assembleRelease       # unsigned APK unless keystore/keystore.properties exists
+./gradlew :app:testFullDebugUnitTest     # JVM + Robolectric tests (screenshots go to screenshots/)
+./gradlew :app:assembleFullRelease     # unsigned APK unless keystore/keystore.properties exists
 ./gradlew :app:releaseSbom           # dist/ScanKiwi-<version>.cdx.json
 ```
 

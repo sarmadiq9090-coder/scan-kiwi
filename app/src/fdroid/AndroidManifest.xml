@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  SPDX-FileCopyrightText: 2026 FastKiwi
+  SPDX-License-Identifier: Apache-2.0
+-->
+<!-- 2.0.3 `fdroid` flavor (F-Droid / IzzyOnDroid): no in-app updater, so none of the update permissions.
+     Only CAMERA remains. The merger drops what src/main declares for the GitHub build. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission android:name="android.permission.INTERNET" tools:node="remove" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" tools:node="remove" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" tools:node="remove" />
+
+    <application>
+        <receiver
+            android:name=".update.UpdateInstallReceiver"
+            tools:node="remove" />
+    </application>
+</manifest>

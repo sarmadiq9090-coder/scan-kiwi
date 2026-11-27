@@ -1,0 +1,1 @@
+New: a build for F-Droid and IzzyOnDroid with no updater and no internet, network-state or install-packages permission (camera only). The GitHub build is unchanged.

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  SPDX-FileCopyrightText: 2026 FastKiwi
+  SPDX-License-Identifier: Apache-2.0
+-->
+<!-- fdroid flavor: replaces the update/network wording of the GitHub build (English). -->
+<resources>
+    <string name="privacy_body">The app uploads no document, photo or text anywhere, and does not even request the internet permission. No accounts, no ads, no tracking, no watermark. Documents are kept in the app\'s private storage and excluded from cloud backup. A file only leaves when you choose Share or Save.</string>
+    <string name="network_statement">This build has no internet permission and never connects to any network. It sends no file, photo or data about you.</string>
+    <string name="update_details">This build contains no update code; updates come from the store you installed it from.</string>
+</resources>
