@@ -5,6 +5,7 @@
 -->
 <!-- fdroid flavor: replaces the update/network wording of the GitHub build (Arabic, the default language). -->
 <resources>
+    <string name="privacy_short">ملفاتك تبقى على هاتفك؛ لا اتصال بالإنترنت أبداً</string>
     <string name="privacy_body">لا يرفع التطبيق أي مستند أو صورة أو نص إلى أي مكان، ولا يطلب إذن الإنترنت أصلاً. لا حسابات ولا إعلانات ولا تتبّع ولا علامة مائية. المستندات محفوظة داخل مساحة التطبيق الخاصة، والنسخ الاحتياطي السحابي معطّل لها. لا يخرج ملف إلا عندما تختار أنت «مشاركة» أو «حفظ».</string>
     <string name="network_statement">هذه النسخة لا تملك إذن الإنترنت ولا تتصل بأي شبكة. لا يُرسل أي ملف أو صورة أو بيانات عنك.</string>
     <string name="update_details">لا يحتوي هذا الإصدار على أي كود تحديث؛ تصلك التحديثات من المتجر الذي ثبّتّه منه.</string>
