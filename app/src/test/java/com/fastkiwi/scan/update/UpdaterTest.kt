@@ -219,7 +219,7 @@ class UpdaterTest {
         // The automatic check at app open survives it too.
         stallPath = "/repos/x/releases/latest"
         val settings = Settings(RuntimeEnvironment.getApplication()).apply { updateNoticeShown = true; autoUpdateCheck = true; lastUpdateCheck = 0L }
-        val c = UpdateController(RuntimeEnvironment.getApplication(), settings, CoroutineScope(Dispatchers.Unconfined), slow(), { 5L })
+        val c = UpdateController(RuntimeEnvironment.getApplication(), settings, CoroutineScope(Dispatchers.Unconfined), slow(), { 5L }, enabled = true)
         runBlocking { c.onAppOpened()?.join() }
         runBlocking { c.checkNow()?.join() }
         assertEquals(UpdateState.Failed(UpdateError.NETWORK), c.state.value)
@@ -267,7 +267,7 @@ class UpdaterTest {
         var now = 1_000 * day
         var net = NetworkState.WIFI
         var offered: Release? = null
-        val c = UpdateController(app, settings, CoroutineScope(Dispatchers.Unconfined), Updater(client(), "2.0.0", { true }, work) { net }, { now }, { offered = it })
+        val c = UpdateController(app, settings, CoroutineScope(Dispatchers.Unconfined), Updater(client(), "2.0.0", { true }, work) { net }, { now }, { offered = it }, enabled = true)
         fun open() = runBlocking { c.onAppOpened()?.join() }
         fun checks() = requests.count { it == "/repos/x/releases/latest" }
         open()
@@ -307,7 +307,7 @@ class UpdaterTest {
         val settings = Settings(app).apply { updateNoticeShown = false; autoUpdateCheck = true; lastUpdateCheck = 0L }
         UpdateController.showNoticeInTests = true
         try {
-            val c = UpdateController(app, settings, CoroutineScope(Dispatchers.Unconfined), updater(), { 5L })
+            val c = UpdateController(app, settings, CoroutineScope(Dispatchers.Unconfined), updater(), { 5L }, enabled = true)
             assertTrue(c.noticePending.value)
             runBlocking { c.onAppOpened()?.join() }
             assertTrue("no check before the notice", requests.isEmpty())
@@ -317,7 +317,7 @@ class UpdaterTest {
             runBlocking { c.onAppOpened()?.join() }
             assertEquals(1, requests.size)
             // Shown once: a new controller (next start) does not show it again.
-            assertFalse(UpdateController(app, settings, CoroutineScope(Dispatchers.Unconfined), updater(), { 5L }).noticePending.value)
+            assertFalse(UpdateController(app, settings, CoroutineScope(Dispatchers.Unconfined), updater(), { 5L }, enabled = true).noticePending.value)
         } finally {
             UpdateController.showNoticeInTests = false
         }

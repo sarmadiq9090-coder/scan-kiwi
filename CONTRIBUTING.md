@@ -19,8 +19,8 @@
 ## Building and testing
 
 ```
-./gradlew :app:testDebugUnitTest      # JVM + Robolectric tests
-./gradlew :app:assembleRelease        # unsigned unless keystore/keystore.properties exists
+./gradlew :app:testFullDebugUnitTest      # JVM + Robolectric tests
+./gradlew :app:assembleFullRelease      # unsigned unless keystore/keystore.properties exists
 ```
 
 JDK 21, Android SDK platform 36 and build-tools 36.0.0. See README for details.

@@ -182,6 +182,7 @@ class BlackBoxTasksTest {
     /** BLACKBOX-2.0 #13, #14, #15 (U3): the offline message is announced with a hint; names follow the language. */
     @Test
     fun offlineIsAnnouncedAndTheDefaultNameFollowsTheLanguage() {
+        org.junit.Assume.assumeTrue("the fdroid flavor has no updater", com.fastkiwi.scan.BuildConfig.UPDATER_ENABLED)
         val box = session()
         box.importPage("memo.jpg", "mixed-memo")
         box.ok("back")

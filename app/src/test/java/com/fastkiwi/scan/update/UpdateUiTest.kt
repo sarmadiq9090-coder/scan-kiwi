@@ -14,6 +14,7 @@ import androidx.compose.ui.unit.dp
 import com.fastkiwi.scan.MainActivity
 import com.fastkiwi.scan.ui.Screen
 import org.junit.AfterClass
+import org.junit.Assume.assumeTrue
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -42,7 +43,10 @@ class UpdateUiTest {
 
         @JvmStatic
         @BeforeClass
-        fun showNotice() { UpdateController.showNoticeInTests = true }
+        fun showNotice() {
+            assumeTrue("the fdroid flavor has no updater", com.fastkiwi.scan.BuildConfig.UPDATER_ENABLED)
+            UpdateController.showNoticeInTests = true
+        }
 
         @JvmStatic
         @AfterClass

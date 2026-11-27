@@ -15,6 +15,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -39,6 +40,9 @@ class UpdateInstallTest {
 
     private val ctx = RuntimeEnvironment.getApplication()
     private val release = Release(SemVer.parse("2.0.1")!!, "v2.0.1", "ScanKiwi-2.0.1.apk", "https://github.com/x/ScanKiwi-2.0.1.apk", 10, "https://github.com/x/SHA256SUMS.txt")
+
+    @Before
+    fun onlyWithUpdater() = assumeTrue("the fdroid flavor has no updater", com.fastkiwi.scan.BuildConfig.UPDATER_ENABLED)
 
     @Before
     fun reset() {

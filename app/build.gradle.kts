@@ -29,8 +29,8 @@ android {
         applicationId = "com.fastkiwi.scan"
         minSdk = 24
         targetSdk = 36
-        versionCode = 7
-        versionName = "2.0.2"
+        versionCode = 8
+        versionName = "2.0.3"
         // Arabic is the default (values/), English in values-en/.
         resourceConfigurations += listOf("ar", "en")
         ndk {
@@ -54,6 +54,22 @@ android {
                 keyAlias = keystoreProps.getProperty("keyAlias")
                 keyPassword = keystoreProps.getProperty("keyPassword")
             }
+        }
+    }
+
+    // 2.0.3: one source tree, two distributions. `full` (default) is the GitHub build with the in-app
+    // updater. `fdroid` (F-Droid / IzzyOnDroid) has no updater and no INTERNET, ACCESS_NETWORK_STATE or
+    // REQUEST_INSTALL_PACKAGES permission (src/fdroid/AndroidManifest.xml removes them). Same applicationId.
+    flavorDimensions += "distribution"
+    productFlavors {
+        create("full") {
+            dimension = "distribution"
+            isDefault = true
+            buildConfigField("boolean", "UPDATER_ENABLED", "true")
+        }
+        create("fdroid") {
+            dimension = "distribution"
+            buildConfigField("boolean", "UPDATER_ENABLED", "false")
         }
     }
 
@@ -153,11 +169,11 @@ kotlin {
 
 // 2.0-perf (ROADMAP 1.7.0): "no OutOfMemoryError in a 500-page synthetic stress test on the JVM with a
 // 512 MB heap cap". The stress class runs in its own test JVM capped at 512 MB, after every debug
-// unit-test run; the main unit-test JVM (3 GB) excludes it.
+// unit-test run (either flavor); the main unit-test JVM (3 GB) excludes it.
 val perfStressTest = tasks.register<Test>("perfStressTest") {
     description = "500-page export stress test with a 512 MB heap cap (2.0-perf)."
     group = "verification"
-    val unit = tasks.named<Test>("testDebugUnitTest").get()
+    val unit = tasks.named<Test>("testFullDebugUnitTest").get()
     testClassesDirs = unit.testClassesDirs
     classpath = unit.classpath
     systemProperties(unit.systemProperties)
@@ -174,7 +190,8 @@ val perfStressTest = tasks.register<Test>("perfStressTest") {
 val filteredRun = gradle.startParameter.taskRequests.any { r -> r.args.any { it.startsWith("--tests") } }
 perfStressTest.configure { onlyIf { !filteredRun || gradle.startParameter.taskNames.any { it.endsWith("perfStressTest") } } }
 afterEvaluate {
-    tasks.named("testDebugUnitTest") { finalizedBy(perfStressTest) }
+    tasks.named("testFullDebugUnitTest") { finalizedBy(perfStressTest) }
+    tasks.named("testFdroidDebugUnitTest") { finalizedBy(perfStressTest) }
 }
 
 dependencies {
@@ -222,7 +239,7 @@ dependencies {
 // the Noto Sans Arabic UI font and the Material Symbols icons.
 // ---------------------------------------------------------------------------
 tasks.named<org.cyclonedx.gradle.CyclonedxDirectTask>("cyclonedxDirectBom") {
-    includeConfigs.set(listOf("releaseRuntimeClasspath"))
+    includeConfigs.set(listOf("fullReleaseRuntimeClasspath"))
     projectType.set(org.cyclonedx.model.Component.Type.APPLICATION)
     componentGroup.set("com.fastkiwi")
     componentName.set("scan-kiwi")
@@ -354,17 +371,17 @@ val releaseGuardJars = releaseGuardRuntime.incoming.artifactView {
 }.files
 
 val releaseGuardShrink = tasks.register("releaseGuardShrink") {
-    description = "Shrinks the release program with R8 to class files (same inputs and rules as minifyReleaseWithR8)."
-    dependsOn("minifyReleaseWithR8")
+    description = "Shrinks the release program with R8 to class files (same inputs and rules as minifyFullReleaseWithR8)."
+    dependsOn("minifyFullReleaseWithR8")
     val outJar = layout.buildDirectory.file("releaseGuard/release-r8.jar")
     val work = layout.buildDirectory.dir("releaseGuard/in")
-    val cfg = layout.buildDirectory.file("outputs/mapping/release/configuration.txt")
+    val cfg = layout.buildDirectory.file("outputs/mapping/fullRelease/configuration.txt")
     // Re-run whenever the release program changes (minifyReleaseWithR8's outputs stand for its inputs).
-    inputs.files(tasks.named("minifyReleaseWithR8").map { it.outputs.files })
+    inputs.files(tasks.named("minifyFullReleaseWithR8").map { it.outputs.files })
     outputs.file(outJar)
     doLast {
-        val r8Task = tasks.getByName("minifyReleaseWithR8") as com.android.build.gradle.internal.tasks.ProguardConfigurableTask
-        val r8 = tasks.getByName("minifyReleaseWithR8") as com.android.build.gradle.internal.tasks.R8Task
+        val r8Task = tasks.getByName("minifyFullReleaseWithR8") as com.android.build.gradle.internal.tasks.ProguardConfigurableTask
+        val r8 = tasks.getByName("minifyFullReleaseWithR8") as com.android.build.gradle.internal.tasks.R8Task
         val workDir = work.get().asFile.apply { deleteRecursively(); mkdirs() }
         // R8 takes jars: class directories are zipped first.
         val program = r8Task.classes.files.filter { it.exists() }.mapIndexed { i, f ->
@@ -401,9 +418,9 @@ val releaseGuardCompile = tasks.register<JavaCompile>("releaseGuardCompile") {
 // The release resources with the release assets inside, as in the APK (Robolectric reads assets from it):
 // files only, aligned like an APK (Android 8's package parser is strict about both).
 val releaseGuardResources = tasks.register("releaseGuardResources") {
-    dependsOn("optimizeReleaseResources", "mergeReleaseAssets")
-    val res = layout.buildDirectory.file("intermediates/optimized_processed_res/release/optimizeReleaseResources/resources-release-optimize.ap_")
-    val assets = layout.buildDirectory.dir("intermediates/assets/release/mergeReleaseAssets")
+    dependsOn("optimizeFullReleaseResources", "mergeFullReleaseAssets")
+    val res = layout.buildDirectory.file("intermediates/optimized_processed_res/fullRelease/optimizeFullReleaseResources/resources-full-release-optimize.ap_")
+    val assets = layout.buildDirectory.dir("intermediates/assets/fullRelease/mergeFullReleaseAssets")
     val unaligned = layout.buildDirectory.file("releaseGuard/release-resources-unaligned.ap_")
     val aligned = layout.buildDirectory.file("releaseGuard/release-resources.ap_")
     val zipalign = File(android.sdkDirectory, "build-tools/${android.buildToolsVersion}/" + if (System.getProperty("os.name").startsWith("Windows")) "zipalign.exe" else "zipalign")
@@ -422,7 +439,7 @@ val releaseGuardResources = tasks.register("releaseGuardResources") {
 }
 
 val releaseGuardConfig = tasks.register("releaseGuardConfig") {
-    dependsOn(releaseGuardResources, "processReleaseManifestForPackage")
+    dependsOn(releaseGuardResources, "processFullReleaseManifestForPackage")
     val dir = layout.buildDirectory.dir("releaseGuard/config")
     val build = layout.buildDirectory
     outputs.dir(dir)
@@ -432,8 +449,8 @@ val releaseGuardConfig = tasks.register("releaseGuardConfig") {
         val f = File(dir.get().asFile, "com/android/tools/test_config.properties").apply { parentFile.mkdirs() }
         fun p(rel: String) = File(b, rel).absolutePath.replace("\\", "/")
         f.writeText(
-            "android_merged_manifest=" + p("intermediates/packaged_manifests/release/processReleaseManifestForPackage/AndroidManifest.xml") + "\n" +
-                "android_merged_assets=" + p("intermediates/assets/release/mergeReleaseAssets") + "\n" +
+            "android_merged_manifest=" + p("intermediates/packaged_manifests/fullRelease/processFullReleaseManifestForPackage/AndroidManifest.xml") + "\n" +
+                "android_merged_assets=" + p("intermediates/assets/fullRelease/mergeFullReleaseAssets") + "\n" +
                 "android_resource_apk=" + p("releaseGuard/release-resources.ap_") + "\n" +
                 "android_custom_package=com.fastkiwi.scan\n",
         )
@@ -513,9 +530,9 @@ tasks.register<Test>("releaseUpdateGuardTest") {
 tasks.register("releaseKeepCheck") {
     description = "Checks that R8 and resource shrinking kept what the release app needs by name (2.0.1)."
     group = "verification"
-    dependsOn("assembleRelease")
-    val mapping = layout.buildDirectory.file("outputs/mapping/release/mapping.txt")
-    val apkDir = layout.buildDirectory.dir("outputs/apk/release")
+    dependsOn("assembleFullRelease")
+    val mapping = layout.buildDirectory.file("outputs/mapping/fullRelease/mapping.txt")
+    val apkDir = layout.buildDirectory.dir("outputs/apk/full/release")
     doLast {
         val problems = ArrayList<String>()
         // Classes that must keep their names: manifest components, JNI, the share sheet's FileProvider.

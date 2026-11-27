@@ -46,11 +46,16 @@ class UpdateController(
     private val now: () -> Long = System::currentTimeMillis,
     /** Called when the automatic check finds a newer version (the app shows a message). */
     private val onAvailable: (Release) -> Unit = {},
+    /**
+     * 2.0.3: false in the `fdroid` flavor (no updater, no network permissions): every entry point
+     * below does nothing and the one-time notice is never pending.
+     */
+    private val enabled: Boolean = BuildConfig.UPDATER_ENABLED,
 ) {
     private val _state = mutableStateOf<UpdateState>(UpdateState.Idle)
     val state: State<UpdateState> = _state
 
-    private val _noticePending = mutableStateOf(!settings.updateNoticeShown && (showNoticeInTests || !isRobolectric()))
+    private val _noticePending = mutableStateOf(enabled && !settings.updateNoticeShown && (showNoticeInTests || !isRobolectric()))
     /** The one-time notice about the update connection is waiting to be shown. */
     val noticePending: State<Boolean> = _noticePending
 
@@ -63,6 +68,7 @@ class UpdateController(
 
     /** At app start: the weekly automatic check, if it is due. Returns the job (tests wait on it). */
     fun onAppOpened(): Job? {
+        if (!enabled) return null
         if (job?.isActive == true) return null
         val t = now()
         // A check recorded while the clock ran ahead would switch the automatic check off until that date:
@@ -89,6 +95,7 @@ class UpdateController(
 
     /** «تحقق من التحديثات»: any time. */
     fun checkNow(): Job? {
+        if (!enabled) return null
         if (job?.isActive == true) return null
         _state.value = UpdateState.Checking
         return scope.launch {
@@ -103,6 +110,7 @@ class UpdateController(
 
     /** «تنزيل وتثبيت»: download, verify (version, sha256, certificate), then hand to Android's installer. */
     fun downloadAndInstall(release: Release): Job? {
+        if (!enabled) return null
         if (job?.isActive == true) return null
         _state.value = UpdateState.Downloading(release, 0, release.apkSize)
         return scope.launch {
@@ -123,6 +131,7 @@ class UpdateController(
 
     /** Opens Android's install confirmation for a verified file (again, if the user backed out). */
     fun install(apk: File, release: Release) {
+        if (!enabled) return
         lastInstall = apk to release
         UpdateInstallEvents.failed = false
         if (!apk.exists()) { _state.value = UpdateState.Failed(UpdateError.STORAGE, release); return }
@@ -136,6 +145,7 @@ class UpdateController(
      * download (never a storage error for a file that was simply cleaned).
      */
     fun retryInstall(release: Release): Job? {
+        if (!enabled) return null
         if (job?.isActive == true) return null
         val last = lastInstall
         if (last != null && last.second.apkName == release.apkName && last.first.exists()) {
@@ -153,6 +163,7 @@ class UpdateController(
 
     /** The app came to the front (or the installer just reported): show the banner / failure message if one is due. */
     fun refreshInstallStatus() {
+        if (!enabled) return
         _confirmPending.value = UpdateInstallEvents.pending != null
         if (UpdateInstallEvents.failed) {
             UpdateInstallEvents.failed = false
@@ -173,7 +184,7 @@ class UpdateController(
 
     fun dismissPendingConfirm() { _confirmPending.value = false }
 
-    init { UpdateInstallEvents.listener = { refreshInstallStatus() } }
+    init { if (enabled) UpdateInstallEvents.listener = { refreshInstallStatus() } }
 
     @VisibleForTesting
     internal var installer: (File) -> Boolean = { f -> runCatching { UpdateInstaller.install(ctx, f) }.isSuccess }
