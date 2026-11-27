@@ -82,7 +82,9 @@ case "$cmd" in
         setup_env
         (
             cd "$REPO"
-            BB_SESSION=$(winpath "$SESSION") BB_LANG=$lang "$GRADLE" --no-daemon -q :app:testFullDebugUnitTest \
+            # BB_FLAVOR: full (default, with the updater) or fdroid (the F-Droid build).
+            case "${BB_FLAVOR:-full}" in full) T=testFullDebugUnitTest ;; fdroid) T=testFdroidDebugUnitTest ;; *) echo "BB_FLAVOR must be full or fdroid" > "$SESSION/gradle.log"; echo ended > "$SESSION/ended"; exit 2 ;; esac
+            BB_SESSION=$(winpath "$SESSION") BB_LANG=$lang "$GRADLE" --no-daemon -q ":app:$T" \
                 --tests 'com.fastkiwi.scan.gates.BlackBoxSession' --rerun > "$SESSION/gradle.log" 2>&1 || true
             echo ended > "$SESSION/ended"
         ) &
